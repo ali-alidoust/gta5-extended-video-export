@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <fstream>
+#include <mutex>
 extern "C" {
 	#include <libavutil\error.h>
 }
@@ -10,19 +11,28 @@ class Logger {
 public:
 	template <class T> void writeLine(const T& value) {
 		if (this->filestream.is_open()) {
-			filestream << object << std::endl;
+			{
+				std::lock_guard<std::mutex> guard(mtx);
+				filestream << object << std::endl;
+			}
 		}
 	}
 
 	template <typename T> void write(const T& value) {
 		if (this->filestream.is_open()) {
-			filestream << value;
+			{
+				std::lock_guard<std::mutex> guard(mtx);
+				filestream << value;
+			}
 		}
 	}
 
 	template <typename T, typename... Targs> void write(const T& value, const Targs&... args) {
 		if (this->filestream.is_open()) {
-			filestream << value;
+			{
+				std::lock_guard<std::mutex> guard(mtx);
+				filestream << value;
+			}
 			this->write(args...);
 		}
 	}
@@ -41,6 +51,7 @@ public:
 private:
 	Logger();
 	~Logger();
+	std::mutex mtx;
 	static Logger *logger;
 	std::ofstream filestream;
 };
@@ -77,6 +88,6 @@ private:
 #endif
 
 #ifndef LOG_IF_FAILED_AV
-#define LOG_IF_FAILED_AV(o, m, r) {LOG_CALL(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error);}}
+#define LOG_IF_FAILED_AV(o, m) {LOG_CALL(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error);}}
 #endif
 

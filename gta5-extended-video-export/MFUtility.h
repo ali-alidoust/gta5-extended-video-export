@@ -49,6 +49,13 @@ template <class T> inline void SafeRelease(T*& pT)
 	}
 }
 
+void GUIDToString(const GUID& guidId, LPSTR buffer, int length) {
+	sprintf_s(buffer, length, "%08lX-%04hX-%04hX-%02hX%02hX-%02hX%02hX%02hX%02hX%02hX%02hX",
+		guidId.Data1, guidId.Data2, guidId.Data3,
+		guidId.Data4[0], guidId.Data4[1], guidId.Data4[2], guidId.Data4[3],
+		guidId.Data4[4], guidId.Data4[5], guidId.Data4[6], guidId.Data4[7]);
+}
+
 LPCSTR STRING_FROM_GUID(GUID Attr)
 {
 	LPCSTR pAttrStr = NULL;
@@ -261,15 +268,8 @@ std::string GetMediaTypeDescription(IMFMediaType * pMediaType)
 		}
 		else
 		{
-			
-			wchar_t guidStr[64];
-			wsprintf(guidStr, L"%08lX-%04hX-%04hX-%02hX%02hX-%02hX%02hX%02hX%02hX%02hX%02hX",
-				guidId.Data1, guidId.Data2, guidId.Data3,
-				guidId.Data4[0], guidId.Data4[1], guidId.Data4[2], guidId.Data4[3],
-				guidId.Data4[4], guidId.Data4[5], guidId.Data4[6], guidId.Data4[7]);
-			char buffer[64] = { 0 };
-			size_t size;
-			wcstombs_s(&size, buffer, guidStr, 64);
+			char buffer[64];
+			GUIDToString(guidId, buffer, 64);
 			description << buffer;
 		}
 
@@ -337,11 +337,9 @@ std::string GetMediaTypeDescription(IMFMediaType * pMediaType)
 			}
 			else
 			{
-				LPOLESTR guidStr = NULL;
-				StringFromCLSID(Val, &guidStr);
-				description << guidStr;
-
-				CoTaskMemFree(guidStr);
+				char buffer[64];
+				GUIDToString(guidId, buffer, 64);
+				description << buffer;
 			}
 
 			break;

@@ -19,4 +19,4 @@ template <class B, class A> B ForceCast(A a) {
 }
 
 void ScriptMain();
-void unhookAllVirtual();
+void unhookAll();

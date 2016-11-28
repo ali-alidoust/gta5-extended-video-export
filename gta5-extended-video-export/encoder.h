@@ -8,6 +8,7 @@
 
 #include <Windows.h>
 #include <mfidl.h>
+#include <mutex>
 extern "C" {
 #include <libavcodec\avcodec.h>
 #include <libavformat\avformat.h>
@@ -18,31 +19,51 @@ extern "C" {
 namespace Encoder {
 	class Session {
 	public:
-		AVCodec *codec;
-		AVCodecContext *codecContext = NULL;
 		AVOutputFormat *oformat;
 		AVFormatContext *fmtContext;
-		AVFrame *frame;
-		AVStream *stream;
+		
+		AVCodec *videoCodec;
+		AVCodecContext *videoCodecContext = NULL;
+		AVFrame *videoFrame;
+		AVStream *videoStream;
+
+		AVCodec *audioCodec;
+		AVCodecContext *audioCodecContext = NULL;
+		AVFrame *audioFrame;
+		AVStream *audioStream;
+
+		bool isVideoFinished = false;
+		bool isAudioFinished = false;
+		bool isSessionFinished = false;
+
+		std::mutex endMutex;
+		std::mutex writeFrameMutex;
+
 		UINT width;
 		UINT height;
 		UINT framerate;
-		UINT pts = 0;
+		UINT audioBlockAlign;
 		AVPixelFormat pixelFormat;
 		AVPixelFormat inputFramePixelFormat;
+		AVSampleFormat inputAudioSampleFormat;
+		char filename[MAX_PATH];
 		//LPWSTR *outputDir;
 		//LPWSTR *outputFile;
-		FILE *file;
+		//FILE *file;
 
 		Session();
 
 		~Session();
 
-		HRESULT createContext(LPCSTR filepath, UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den);
+		HRESULT createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den);
+		HRESULT createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align);
+		HRESULT createFormatContext(LPCSTR filename);
 
-		HRESULT writeFrame(BYTE *pData, int length);
+		HRESULT writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime);
+		HRESULT writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime);
 
-		HRESULT endSession();
+		HRESULT finishVideo();
+		HRESULT finishAudio();
 
 		HRESULT convertNV12toYUV420P(const BYTE* image_src, BYTE* image_dst,
 			int image_width, int image_height) {
@@ -57,10 +78,13 @@ namespace Encoder {
 			}
 			return S_OK;
 		}
+
+	private:
+		HRESULT endSession();
 	};
 
-	HRESULT createSession(IMFTransform* pTransform);
+	/*HRESULT createSession(IMFTransform* pTransform);
 	HRESULT getSession(IMFTransform* pTransform, Session** ppEncoder);
 	HRESULT deleteSession(IMFTransform* pTransform);
-	BOOL    hasSession(IMFTransform* pTransform);
+	BOOL    hasSession(IMFTransform* pTransform);*/
 }

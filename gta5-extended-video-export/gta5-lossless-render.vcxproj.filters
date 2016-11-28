@@ -25,9 +25,6 @@
     <ClInclude Include="script.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="pvfindex.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\PolyHook\PolyHook\PolyHook.h">
       <Filter>Header Files</Filter>
     </ClInclude>

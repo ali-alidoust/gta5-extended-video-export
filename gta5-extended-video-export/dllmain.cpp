@@ -17,7 +17,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		scriptRegister(hModule, ScriptMain);
 		break;
 	case DLL_PROCESS_DETACH:
-		unhookAllVirtual();
+		unhookAll();
 		scriptUnregister(hModule);
 		break;
 	}
