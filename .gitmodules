@@ -1,3 +1,6 @@
 [submodule "PolyHook"]
 	path = PolyHook
 	url = https://github.com/stevemk14ebr/PolyHook
+[submodule "inih"]
+	path = inih
+	url = https://github.com/benhoyt/inih
