@@ -27,6 +27,7 @@ extern "C" {
 #include "MFUtility.h"
 #include "encoder.h"
 #include "logger.h"
+#include "config.h"
 
 
 namespace {
@@ -193,13 +194,17 @@ void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 
 
 void ScriptMain() {
-	hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL);
-	hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance);
-
-	av_register_all();
-	avcodec_register_all();
-	av_log_set_level(AV_LOG_TRACE);
-	av_log_set_callback(&avlog_callback);
+	if (Config::config().GetBoolean(CFG_XVX_SECTION, CFG_LOSSLESS_RENDER, true)) {
+		av_register_all();
+		avcodec_register_all();
+		av_log_set_level(AV_LOG_TRACE);
+		av_log_set_callback(&avlog_callback);
+		hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL);
+		hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance);
+	}
+	else {
+		LOG("Lossless render is disabled in the config file");
+	}
 
 	while (true) {
 		WAIT(0);
@@ -265,9 +270,18 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 			LOG("Input media type: ",GetMediaTypeDescription(pType).c_str());
 			if (session->videoCodecContext == NULL) {
 				char buffer[MAX_PATH];
-				LOG_IF_FAILED(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.", E_FAIL);
+				std::string cfg_outputFolder = Config::config().Get(CFG_XVX_SECTION, CFG_OUTPUT_DIR, "");
 				std::stringstream stream;
-				stream << buffer;
+
+				if ((!cfg_outputFolder.empty()) && (cfg_outputFolder.find_first_not_of(' ') != std::string::npos))
+				{
+					LOG_IF_FAILED(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.", E_FAIL);
+					stream << buffer;
+				}
+				else {
+					stream << cfg_outputFolder;
+				}
+
 				stream << "\\";
 				stream << "XVX-";
 				time_t rawtime;
@@ -277,8 +291,6 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 				strftime(buffer, 2048, "%Y%m%d%H%M%S", &timeinfo);
 				stream << buffer;
 				stream << ".avi";
-
-
 
 				UINT width, height, fps_num, fps_den;
 				MFGetAttribute2UINT32asUINT64(pType, MF_MT_FRAME_SIZE, &width, &height);

@@ -52,7 +52,6 @@ private:
 	Logger();
 	~Logger();
 	std::mutex mtx;
-	static Logger *logger;
 	std::ofstream filestream;
 };
 

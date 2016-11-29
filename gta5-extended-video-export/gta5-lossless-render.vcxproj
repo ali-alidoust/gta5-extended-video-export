@@ -88,7 +88,7 @@
     <LinkIncremental>false</LinkIncremental>
     <LibraryPath>C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\inih;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -163,6 +163,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\PolyHook\PolyHook\PolyHook.h" />
+    <ClInclude Include="config.h" />
     <ClInclude Include="encoder.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="MFUtility.h" />
@@ -170,6 +171,8 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\inih\cpp\INIReader.cpp" />
+    <ClCompile Include="..\inih\ini.c" />
     <ClCompile Include="..\PolyHook\PolyHook\PolyHook.cpp" />
     <ClCompile Include="dllmain.cpp">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
