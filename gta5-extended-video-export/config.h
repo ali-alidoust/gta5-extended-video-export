@@ -1,33 +1,87 @@
 #pragma once
 
-#include <ini.h>
-#include <cpp\INIReader.h>
+#include <ini.hpp>
+#include <string>
+#include <algorithm>
+#include <sstream>
+#include <ShlObj.h>
+#include <regex>
 
 #define CFG_XVX_SECTION "XVX"
-#define CFG_LOSSLESS_RENDER "lossless_render"
+#define CFG_LOSSLESS_EXPORT "lossless_export"
 #define CFG_OUTPUT_DIR "output_folder"
 #define INI_FILE_NAME TARGET_NAME ".ini"
 
 class Config {
 public:
 
-	static INIReader& config() {
-		return instance().ini;
+	bool isLosslessExportEnabled() {
+		std::string stringValue = parser.top()[CFG_LOSSLESS_EXPORT];
+		if (stringValue.empty()) {
+			return true;
+		}
+		std::transform(stringValue.begin(), stringValue.end(), stringValue.begin(), ::tolower);
+
+		bool value;
+		std::istringstream(stringValue) >> std::boolalpha >> value;
+		return value;
+	}
+
+	std::stringstream outputDir() {
+		std::stringstream stream;
+
+		std::string stringValue = parser.top()[CFG_OUTPUT_DIR];
+		stringValue = std::regex_replace(stringValue, std::regex("(^\\s*)|(\\s*$)"), "");
+
+		if ((!stringValue.empty()) && (stringValue.find_first_not_of(' ') != std::string::npos))
+		{
+			stream << stringValue;
+		} else {
+			char buffer[MAX_PATH];
+			LOG_IF_FAILED(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
+			stream << buffer;
+		}
+
+		
+
+		return stream;
+	}
+
+	static Config& instance()
+	{
+		static Config cfg;
+		return cfg;
 	}
 
 	Config(Config const&) = delete;
 	void operator=(Config const&) = delete;
 
 private:
+	INI::Parser parser = INI::Parser(INI_FILE_NAME);
 
 	Config() {};
 	~Config() {};
 
-	INIReader ini = INIReader(INI_FILE_NAME);
-
-	static Config& instance()
+	static HRESULT GetVideosDirectory(LPSTR output)
 	{
-		static Config cfg;
-		return cfg;
+		PWSTR vidPath = NULL;
+
+		RET_IF_FAILED((SHGetKnownFolderPath(FOLDERID_Videos, 0, NULL, &vidPath) != S_OK), "Failed to get Videos directory for the current user.", E_FAIL);
+
+		int pathlen = lstrlenW(vidPath);
+
+		int buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, NULL, 0, NULL, NULL);
+		if (buflen <= 0)
+		{
+			return E_FAIL;
+		}
+
+		buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, output, buflen, NULL, NULL);
+
+		output[buflen] = 0;
+
+		CoTaskMemFree(vidPath);
+
+		return S_OK;
 	}
 };

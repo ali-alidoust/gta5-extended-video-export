@@ -1,6 +1,5 @@
 #include "encoder.h"
 #include <sstream>
-#include <unordered_map>
 #include "logger.h"
 
 
@@ -17,6 +16,7 @@ namespace Encoder {
 	}
 
 	HRESULT Session::createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den) {
+		std::lock_guard<std::mutex> guard(this->mxVideoContext);
 		this->inputFramePixelFormat = inputFramePixelFormat;
 
 		AVCodecID videoCodecId = AV_CODEC_ID_FFV1;
@@ -48,11 +48,15 @@ namespace Encoder {
 		videoFrame->format = this->videoCodecContext->pix_fmt;
 		videoFrame->width = width;
 		videoFrame->height = height;
+		LOG("Video context was created successfully.");
+		this->isVideoContextCreated = true;
+		this->cvVideoContext.notify_all();
 		return S_OK;
 	}
 
 	HRESULT Session::createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align)
 	{
+		std::lock_guard<std::mutex> guard(this->mxAudioContext);
 		AVCodecID audioCodecId = AV_CODEC_ID_PCM_S16LE;
 		this->audioCodec = avcodec_find_encoder(audioCodecId);
 		this->audioCodecContext = avcodec_alloc_context3(this->audioCodec);
@@ -70,12 +74,34 @@ namespace Encoder {
 		audioFrame->format = sampleFormat;
 		audioFrame->sample_rate = sampleRate;
 		audioFrame->channels = numChannels;
-
+		LOG("Audio context was created successfully.");
+		this->isAudioContextCreated = true;
+		this->cvAudioContext.notify_all();
 		return S_OK;
 	}
 
 	HRESULT Session::createFormatContext(LPCSTR filename)
 	{
+		// Wait until video context is created
+		LOG("Waiting for videoContext to be created...")
+		{
+			std::unique_lock<std::mutex> lk(this->mxVideoContext);
+			while(!isVideoContextCreated) {
+				this->cvVideoContext.wait_for(lk, std::chrono::milliseconds(100));
+			}
+		}
+		
+		// Wait until audio context is created
+		LOG("Waiting for videoContext to be created...")
+		{
+			std::unique_lock<std::mutex> lk(this->mxAudioContext);
+			while(!isAudioContextCreated) {
+				this->cvAudioContext.wait_for(lk, std::chrono::milliseconds(100));
+			}
+		}
+
+		//std::lock_guard<std::mutex> guard(this->mxFormatContext);
+
 		strcpy_s(this->filename, filename);
 		LOG("Exporting to file: ", this->filename);
 
@@ -114,11 +140,22 @@ namespace Encoder {
 		RET_IF_FAILED_AV(avio_open(&this->fmtContext->pb, filename, AVIO_FLAG_WRITE), "Could not open output file", E_FAIL);
 		RET_IF_NULL(this->fmtContext->pb, "Could not open output file", E_FAIL);
 		RET_IF_FAILED_AV(avformat_write_header(this->fmtContext, NULL), "Could not write header", E_FAIL);
-
+		LOG("Format context was created successfully.");
+		this->isFormatContextCreated = true;
+		this->cvFormatContext.notify_all();
 		return S_OK;
 	}
 
 	HRESULT Session::writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
+		// Wait until format context is created
+		{
+			std::unique_lock<std::mutex> lk(this->mxFormatContext);
+			while (!isFormatContextCreated) {
+				this->cvFormatContext.wait_for(lk, std::chrono::milliseconds(100));
+			}
+		}
+
+
 		int bufferLength = av_image_get_buffer_size(this->inputFramePixelFormat, this->width, this->height, 1);
 		if (length != bufferLength) {
 			LOG("IMFSample buffer size != av_image_get_buffer_size: ", length, " vs ", bufferLength);
@@ -168,6 +205,13 @@ namespace Encoder {
 
 	HRESULT Session::writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime)
 	{
+		// Wait until format context is created
+		{
+			std::unique_lock<std::mutex> lk(this->mxFormatContext);
+			while (!isFormatContextCreated) {
+				this->cvFormatContext.wait_for(lk, std::chrono::milliseconds(100));
+			}
+		}
 		int numSamples = length / av_samples_get_buffer_size(NULL, this->audioCodecContext->channels, 1, this->audioCodecContext->sample_fmt, this->audioBlockAlign);
 
 		this->audioFrame->nb_samples = numSamples;

@@ -36,6 +36,19 @@ namespace Encoder {
 		bool isAudioFinished = false;
 		bool isSessionFinished = false;
 
+		std::mutex mxVideoContext;
+		std::mutex mxAudioContext;
+		std::mutex mxFormatContext;
+		std::condition_variable cvVideoContext;
+		std::condition_variable cvAudioContext;
+		std::condition_variable cvFormatContext;
+
+		bool isVideoContextCreated = false;
+		bool isAudioContextCreated = false;
+		bool isFormatContextCreated = false;
+
+		//std::condition_variable cvFormatContext;
+
 		std::mutex endMutex;
 		std::mutex writeFrameMutex;
 
@@ -82,9 +95,4 @@ namespace Encoder {
 	private:
 		HRESULT endSession();
 	};
-
-	/*HRESULT createSession(IMFTransform* pTransform);
-	HRESULT getSession(IMFTransform* pTransform, Session** ppEncoder);
-	HRESULT deleteSession(IMFTransform* pTransform);
-	BOOL    hasSession(IMFTransform* pTransform);*/
 }

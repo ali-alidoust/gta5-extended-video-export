@@ -1,6 +1,6 @@
 [submodule "PolyHook"]
 	path = PolyHook
 	url = https://github.com/stevemk14ebr/PolyHook
-[submodule "inih"]
-	path = inih
-	url = https://github.com/benhoyt/inih
+[submodule "ini-parser"]
+	path = ini-parser
+	url = https://github.com/Poordeveloper/ini-parser

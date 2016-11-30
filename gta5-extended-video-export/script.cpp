@@ -18,10 +18,9 @@ extern "C" {
 #include <mfidl.h>
 #include <mfreadwrite.h>
 
-#include <ShlObj.h>
-
 #include "script.h"
 #include <string>
+#include <regex>
 #include <codecapi.h>
 #include <wmcodecdsp.h>
 #include "MFUtility.h"
@@ -41,29 +40,6 @@ namespace {
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);	
 	Encoder::Session* session;
-}
-
-HRESULT GetVideosDirectory(LPSTR output)
-{
-	PWSTR vidPath = NULL;
-
-	RET_IF_FAILED((SHGetKnownFolderPath(FOLDERID_Videos, 0, NULL, &vidPath) != S_OK), "Failed to get Videos directory for the current user.", E_FAIL);
-
-	int pathlen = lstrlenW(vidPath);
-
-	int buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, NULL, 0, NULL, NULL);
-	if (buflen <= 0)
-	{
-		return E_FAIL;
-	}
-
-	buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, output, buflen, NULL, NULL);
-
-	output[buflen] = 0;
-
-	CoTaskMemFree(vidPath);
-
-	return S_OK;
 }
 
 static HRESULT Hook_CoCreateInstance(
@@ -181,7 +157,7 @@ tIMFSinkWriter_Finalize oIMFSinkWriter_Finalize;
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	static char msg[8192];
 	vsnprintf_s(msg, sizeof(msg), fmt, vargs);
-	Logger::instance().write("AVCODEC: ");
+	Logger::instance().write(Logger::instance().getTimestamp(), "AVCODEC: ");
 	if (ptr)
 	{
 		AVClass *avc = *(AVClass**)ptr;
@@ -194,18 +170,20 @@ void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 
 
 void ScriptMain() {
-	if (Config::config().GetBoolean(CFG_XVX_SECTION, CFG_LOSSLESS_RENDER, true)) {
-		av_register_all();
-		avcodec_register_all();
-		av_log_set_level(AV_LOG_TRACE);
-		av_log_set_callback(&avlog_callback);
-		hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL);
-		hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance);
-	}
-	else {
-		LOG("Lossless render is disabled in the config file");
+	LOG("Starting script...");
+	if (Config::instance().isLosslessExportEnabled()) {
+		LOG_IF_FAILED(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
+		LOG_IF_FAILED(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
+		
+		LOG_CALL(av_register_all());
+		LOG_CALL(avcodec_register_all());
+		LOG_CALL(av_log_set_level(AV_LOG_TRACE));
+		LOG_CALL(av_log_set_callback(&avlog_callback));
+	} else {
+		LOG("Lossless export is disabled in the config file");
 	}
 
+	LOG("Starting main loop");
 	while (true) {
 		WAIT(0);
 	}
@@ -231,10 +209,13 @@ static HRESULT Hook_CoCreateInstance(
 
 		if (SUCCEEDED(unk->QueryInterface<IMFTransform>(&h264encoder))) {
 			session = new Encoder::Session();
+			if (session != NULL) {
+				LOG("Session created.")
+			}
 		}
 
-		hookVirtualFunction((*ppv), 23, &Hook_IMFTransform_ProcessMessage, &oIMFTransform_ProcessMessage, hkIMFTransform_ProcessMessage);
-		hookVirtualFunction((*ppv), 24, &Hook_IMFTransform_ProcessInput, &oIMFTransform_ProcessInput, hkIMFTransform_ProcessInput);
+		LOG_IF_FAILED(hookVirtualFunction((*ppv), 23, &Hook_IMFTransform_ProcessMessage, &oIMFTransform_ProcessMessage, hkIMFTransform_ProcessMessage), "Failed to hook IMFTransform::ProcessMessage");
+		LOG_IF_FAILED(hookVirtualFunction((*ppv), 24, &Hook_IMFTransform_ProcessInput, &oIMFTransform_ProcessInput, hkIMFTransform_ProcessInput), "Failed to hook IMFTransform::ProcessInput");
 	}
 
 	return result;
@@ -248,10 +229,10 @@ static HRESULT Hook_MFCreateSinkWriterFromURL(
 	) {
 	HRESULT result = oMFCreateSinkWriterFromURL(pwszOutputURL, pByteStream, pAttributes, ppSinkWriter);
 	if (SUCCEEDED(result)) {
-		hookVirtualFunction(*ppSinkWriter, 3, &Hook_IMFSinkWriter_AddStream, &oIMFSinkWriter_AddStream, hkIMFSinkWriter_AddStream);
-		hookVirtualFunction(*ppSinkWriter, 4, &IMFSinkWriter_SetInputMediaType, &oIMFSinkWriter_SetInputMediaType, hkIMFSinkWriter_SetInputMediaType);
-		hookVirtualFunction(*ppSinkWriter, 6, &Hook_IMFSinkWriter_WriteSample, &oIMFSinkWriter_WriteSample, hkIMFSinkWriter_WriteSample);
-		hookVirtualFunction(*ppSinkWriter, 11, &Hook_IMFSinkWriter_Finalize, &oIMFSinkWriter_Finalize, hkIMFSinkWriter_Finalize);
+		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 3, &Hook_IMFSinkWriter_AddStream, &oIMFSinkWriter_AddStream, hkIMFSinkWriter_AddStream), "Failed to hook IMFSinkWriter::AddStream");
+		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 4, &IMFSinkWriter_SetInputMediaType, &oIMFSinkWriter_SetInputMediaType, hkIMFSinkWriter_SetInputMediaType), "Failed to hook IMFSinkWriter::SetInputMediaType");
+		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 6, &Hook_IMFSinkWriter_WriteSample, &oIMFSinkWriter_WriteSample, hkIMFSinkWriter_WriteSample), "Failed to hook IMFSinkWriter::WriteSample");
+		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 11, &Hook_IMFSinkWriter_Finalize, &oIMFSinkWriter_Finalize, hkIMFSinkWriter_Finalize), "Failed to hook IMFSinkWriter::Finalize");
 	}
 
 	return result;
@@ -263,6 +244,7 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 	ULONG_PTR        ulParam
 	) {
 	if (eMessage == MFT_MESSAGE_NOTIFY_START_OF_STREAM) {
+		LOG("MFT_MESSAGE_NOTIFY_START_OF_STREAM");
 		IMFMediaType* pType;
 		pThis->GetInputCurrentType(0, &pType);
 
@@ -270,17 +252,7 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 			LOG("Input media type: ",GetMediaTypeDescription(pType).c_str());
 			if (session->videoCodecContext == NULL) {
 				char buffer[MAX_PATH];
-				std::string cfg_outputFolder = Config::config().Get(CFG_XVX_SECTION, CFG_OUTPUT_DIR, "");
-				std::stringstream stream;
-
-				if ((!cfg_outputFolder.empty()) && (cfg_outputFolder.find_first_not_of(' ') != std::string::npos))
-				{
-					LOG_IF_FAILED(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.", E_FAIL);
-					stream << buffer;
-				}
-				else {
-					stream << cfg_outputFolder;
-				}
+				std::stringstream stream = Config::instance().outputDir();
 
 				stream << "\\";
 				stream << "XVX-";
@@ -292,6 +264,10 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 				stream << buffer;
 				stream << ".avi";
 
+				std::string filename = std::regex_replace(stream.str(), std::regex("\\\\+"), "\\");
+
+				LOG("Output file: ", filename);
+
 				UINT width, height, fps_num, fps_den;
 				MFGetAttribute2UINT32asUINT64(pType, MF_MT_FRAME_SIZE, &width, &height);
 				MFGetAttributeRatio(pType, MF_MT_FRAME_RATE, &fps_num, &fps_den);
@@ -300,11 +276,11 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 				pType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
 				if (IsEqualGUID(pixelFormat, MFVideoFormat_IYUV)) {
-					session->createVideoContext(width, height, AV_PIX_FMT_YUV420P, fps_num, fps_den);
-					session->createFormatContext(stream.str().c_str());
+					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_YUV420P, fps_num, fps_den));
+					LOG_CALL(session->createFormatContext(filename.c_str()));
 				} else if (IsEqualGUID(pixelFormat, MFVideoFormat_NV12)) {
-					session->createVideoContext(width, height, AV_PIX_FMT_NV12, fps_num, fps_den);
-					session->createFormatContext(stream.str().c_str());
+					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_NV12, fps_num, fps_den));
+					LOG_CALL(session->createFormatContext(filename.c_str()));
 				}
 				else {
 					char buffer[64];
@@ -317,7 +293,8 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 		pType->Release();
 
 	} else if ((eMessage == MFT_MESSAGE_NOTIFY_END_OF_STREAM) && (session != NULL)) {
-		session->finishVideo();
+		LOG("MFT_MESSAGE_NOTIFY_END_OF_STREAM");
+		LOG_CALL(session->finishVideo());
 		if (session->isSessionFinished) {
 			delete session;
 			session = NULL;
@@ -351,7 +328,7 @@ static HRESULT Hook_IMFTransform_ProcessInput(
 		RET_IF_FAILED(mediaBuffer->GetCurrentLength(&length), "Could not get buffer length", E_FAIL);
 		RET_IF_FAILED(mediaBuffer->Lock(&pData, NULL, NULL), "Could not lock the buffer", E_FAIL);
 		
-		session->writeVideoFrame(pData, length, sampleTime);
+		LOG_CALL(session->writeVideoFrame(pData, length, sampleTime));
 
 		LOG_IF_FAILED(mediaBuffer->Unlock(), "Could not unlock the video buffer");
 		mediaBuffer->Release();
@@ -390,7 +367,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 			pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
 
 			if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
-				session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment);
+				LOG_CALL(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment));
 			}
 			else {
 				char buffer[64];
@@ -419,7 +396,7 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 		pBuffer->GetCurrentLength(&length);
 		BYTE *buffer;
 		if (SUCCEEDED(pBuffer->Lock(&buffer, NULL, NULL))) {
-			session->writeAudioFrame(buffer, length, sampleTime);
+			LOG_CALL(session->writeAudioFrame(buffer, length, sampleTime));
 		}
 		pBuffer->Unlock();
 		pBuffer->Release();
@@ -432,7 +409,7 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
 	) {
-	session->finishAudio();
+	LOG_CALL(session->finishAudio());
 	if (session->isSessionFinished) {
 		delete session;
 		session = NULL;

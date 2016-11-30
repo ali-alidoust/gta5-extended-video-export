@@ -78,7 +78,7 @@
     <LinkIncremental>true</LinkIncremental>
     <LibraryPath>C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\Program Files %28x86%29\Windows Kits\8.1\Lib\winv6.3\um\x64;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -88,7 +88,7 @@
     <LinkIncremental>false</LinkIncremental>
     <LibraryPath>C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\inih;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -112,12 +112,17 @@
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalOptions>/LTCG %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/LTCG /ignore:4091,4099 %(AdditionalOptions)</AdditionalOptions>
+      <IgnoreSpecificDefaultLibraries>libcmt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -156,6 +161,9 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Text Include="AVCodecContextParams.txt" />
@@ -171,8 +179,6 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\inih\cpp\INIReader.cpp" />
-    <ClCompile Include="..\inih\ini.c" />
     <ClCompile Include="..\PolyHook\PolyHook\PolyHook.cpp" />
     <ClCompile Include="dllmain.cpp">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
@@ -192,6 +198,12 @@
     <ClCompile Include="encoder.cpp" />
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="script.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="default.ini">
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

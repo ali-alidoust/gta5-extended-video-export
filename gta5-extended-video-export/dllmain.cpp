@@ -12,18 +12,14 @@ BOOL APIENTRY DllMain( HMODULE hModule,
                        LPVOID lpReserved
 					 )
 {
-	std::stringstream stream;
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		LOG("Starting up...");
-		LOG("Loading config...");
-		stream << TARGET_NAME;
-		stream << ".ini";
+		LOG("Registering script...");
 		scriptRegister(hModule, ScriptMain);
 		break;
 	case DLL_PROCESS_DETACH:
-		unhookAll();
+		LOG_CALL(unhookAll());
 		scriptUnregister(hModule);
 		break;
 	}

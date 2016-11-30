@@ -38,6 +38,8 @@ public:
 	}
 
 	void writeLine();
+
+	std::string getTimestamp();
 	
 	static Logger& instance()
 	{
@@ -56,11 +58,15 @@ private:
 };
 
 #ifndef LOG
-#define LOG(...) Logger::instance().write(__FILENAME__, " (line ", __LINE__, "): ", __VA_ARGS__, std::endl<char,std::char_traits<char>>);
+#define LOG(...) Logger::instance().write(Logger::instance().getTimestamp(), __FILENAME__, " (line ", __LINE__, "): ", __VA_ARGS__, std::endl<char,std::char_traits<char>>);
 #endif // ! LOG // Logger::instance().write(__LINE__); Logger::instance().writeLine(x);
 
 #ifndef LOG_CALL
-#define LOG_CALL(o) {LOG("Executing ",#o);}
+#define LOG_CALL(o) {LOG("Executing ",#o); o;}
+#endif
+
+#ifndef LOG_CALL_DONT_USE
+#define LOG_CALL_BUT_NOT_INVOKE_IT(o) {LOG("Executing ",#o);}
 #endif
 
 #ifndef LOG_IF_NULL
@@ -68,7 +74,7 @@ private:
 #endif
 
 #ifndef LOG_IF_FAILED
-#define LOG_IF_FAILED(o, m) {LOG_CALL(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result);}}
+#define LOG_IF_FAILED(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result);}}
 #endif
 
 #ifndef RET_IF_NULL
@@ -76,17 +82,17 @@ private:
 #endif
 
 #ifndef RET_IF_FAILED
-#define RET_IF_FAILED(o, m, r) {LOG_CALL(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result); return r;}}
+#define RET_IF_FAILED(o, m, r) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result); return r;}}
 #endif
 
 // TODO: replace this with something less stupid.
 #define av_err2str2(errnum) char __av_error[AV_ERROR_MAX_STRING_SIZE]; av_make_error_string(__av_error, AV_ERROR_MAX_STRING_SIZE, errnum);
 
 #ifndef RET_IF_FAILED_AV
-#define RET_IF_FAILED_AV(o, m, r) {LOG_CALL(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error); return r;}}
+#define RET_IF_FAILED_AV(o, m, r) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error); return r;}}
 #endif
 
 #ifndef LOG_IF_FAILED_AV
-#define LOG_IF_FAILED_AV(o, m) {LOG_CALL(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error);}}
+#define LOG_IF_FAILED_AV(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error);}}
 #endif
 
