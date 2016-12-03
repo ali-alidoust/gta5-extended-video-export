@@ -1,5 +1,8 @@
 #pragma once
 
+#include <dxgi.h>
+#include <d3d11.h>
+
 template <class T> void SafeRelease(T **ppT)
 {
 	if (*ppT)
@@ -19,4 +22,5 @@ template <class B, class A> B ForceCast(A a) {
 }
 
 void ScriptMain();
+void onPresent(IDXGISwapChain *swapChain);
 void unhookAll();

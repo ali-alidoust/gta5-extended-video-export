@@ -15,12 +15,12 @@ namespace Encoder {
 		LOG("Deleting session...");
 	}
 
-	HRESULT Session::createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den) {
+	HRESULT Session::createVideoContext(UINT width, UINT height, AVPixelFormat inputPixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat) {
 		std::lock_guard<std::mutex> guard(this->mxVideoContext);
-		this->inputFramePixelFormat = inputFramePixelFormat;
+		this->inputPixelFormat = inputPixelFormat;
 
 		AVCodecID videoCodecId = AV_CODEC_ID_FFV1;
-		this->pixelFormat = AV_PIX_FMT_YUV420P;
+		this->outputPixelFormat = outputPixelFormat;
 
 		this->videoCodec = avcodec_find_encoder(videoCodecId);
 		RET_IF_NULL(this->videoCodec, "Could not create codec", E_FAIL);
@@ -35,7 +35,7 @@ namespace Encoder {
 		this->videoCodecContext->codec = this->videoCodec;
 		this->videoCodecContext->codec_id = videoCodecId;
 
-		this->videoCodecContext->pix_fmt = pixelFormat;
+		this->videoCodecContext->pix_fmt = outputPixelFormat;
 		this->videoCodecContext->width = this->width;
 		this->videoCodecContext->height = this->height;
 		this->videoCodecContext->time_base = av_make_q(fps_den, fps_num);
@@ -83,7 +83,7 @@ namespace Encoder {
 	HRESULT Session::createFormatContext(LPCSTR filename)
 	{
 		// Wait until video context is created
-		LOG("Waiting for videoContext to be created...")
+		LOG("Waiting for video context to be created...")
 		{
 			std::unique_lock<std::mutex> lk(this->mxVideoContext);
 			while(!isVideoContextCreated) {
@@ -92,7 +92,7 @@ namespace Encoder {
 		}
 		
 		// Wait until audio context is created
-		LOG("Waiting for videoContext to be created...")
+		LOG("Waiting for audio context to be created...")
 		{
 			std::unique_lock<std::mutex> lk(this->mxAudioContext);
 			while(!isAudioContextCreated) {
@@ -141,6 +141,7 @@ namespace Encoder {
 		RET_IF_NULL(this->fmtContext->pb, "Could not open output file", E_FAIL);
 		RET_IF_FAILED_AV(avformat_write_header(this->fmtContext, NULL), "Could not write header", E_FAIL);
 		LOG("Format context was created successfully.");
+		this->isCapturing = true;
 		this->isFormatContextCreated = true;
 		this->cvFormatContext.notify_all();
 		return S_OK;
@@ -156,29 +157,31 @@ namespace Encoder {
 		}
 
 
-		int bufferLength = av_image_get_buffer_size(this->inputFramePixelFormat, this->width, this->height, 1);
+		int bufferLength = av_image_get_buffer_size(this->inputPixelFormat, this->width, this->height, 1);
 		if (length != bufferLength) {
 			LOG("IMFSample buffer size != av_image_get_buffer_size: ", length, " vs ", bufferLength);
 			return E_FAIL;
 		}
 
-		BYTE *pDataYUV420P = new BYTE[length];
-		switch (this->inputFramePixelFormat) {
+		BYTE *pDataTarget = new BYTE[length];
+		switch (this->inputPixelFormat) {
+		
+		case AV_PIX_FMT_ARGB:
 		case AV_PIX_FMT_YUV420P:
-			memcpy_s(pDataYUV420P, length, pData, length);
+			memcpy_s(pDataTarget, length, pData, length);
 			break;
 
 		case AV_PIX_FMT_NV12:
-			this->convertNV12toYUV420P(pData, pDataYUV420P, this->width, this->height);
+			this->convertNV12toYUV420P(pData, pDataTarget, this->width, this->height);
 			break;
 			
 		default:
 			LOG("Could not recognize pixel format.");
-			delete[] pDataYUV420P;
+			delete[] pDataTarget;
 			return E_FAIL;
 		}
-
-		RET_IF_FAILED(av_image_fill_arrays(videoFrame->data, videoFrame->linesize, pDataYUV420P, pixelFormat, this->width, this->height, 1), "Could not fill the frame with data from the buffer", E_FAIL);
+		LOG("filling image arrays", pData, pDataTarget);
+		RET_IF_FAILED(av_image_fill_arrays(videoFrame->data, videoFrame->linesize, pDataTarget, this->outputPixelFormat, this->width, this->height, 1), "Could not fill the frame with data from the buffer", E_FAIL);
 		videoFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->videoStream->time_base);
 		
 		AVPacket pkt;
@@ -190,12 +193,12 @@ namespace Encoder {
 		int got_packet;
 		avcodec_encode_video2(this->videoCodecContext, &pkt, videoFrame, &got_packet);
 		if (got_packet != 0) {
-			std::lock_guard<std::mutex> guard(this->writeFrameMutex);
+			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
 			pkt.stream_index = this->videoStream->index;
 			av_interleaved_write_frame(this->fmtContext, &pkt);
 		}
 
-		delete[] pDataYUV420P;
+		delete[] pDataTarget;
 
 		av_free_packet(&pkt);
 		av_packet_unref(&pkt);
@@ -229,7 +232,7 @@ namespace Encoder {
 		int got_packet;
 		avcodec_encode_audio2(this->audioCodecContext, &pkt, this->audioFrame, &got_packet);
 		if (got_packet != 0) {
-			std::lock_guard<std::mutex> guard(this->writeFrameMutex);
+			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
 			pkt.stream_index = this->audioStream->index;
 			av_interleaved_write_frame(this->fmtContext, &pkt);
 		}
@@ -242,7 +245,7 @@ namespace Encoder {
 
 	HRESULT Session::finishVideo()
 	{
-		std::lock_guard<std::mutex> guard(this->endMutex);
+		std::lock_guard<std::mutex> guard(this->mxFinish);
 		this->isVideoFinished = true;
 		this->endSession();
 		return S_OK;
@@ -250,7 +253,7 @@ namespace Encoder {
 
 	HRESULT Session::finishAudio()
 	{
-		std::lock_guard<std::mutex> guard(this->endMutex);
+		std::lock_guard<std::mutex> guard(this->mxFinish);
 		this->isAudioFinished = true;
 		this->endSession();
 		return S_OK;
@@ -258,6 +261,7 @@ namespace Encoder {
 
 	HRESULT Session::endSession() {
 		if (this->isVideoFinished && this->isAudioFinished) {
+			this->isCapturing = false;
 			LOG("Ending session...");
 
 			LOG("Closing files...");

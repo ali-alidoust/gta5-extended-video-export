@@ -35,6 +35,7 @@ namespace Encoder {
 		bool isVideoFinished = false;
 		bool isAudioFinished = false;
 		bool isSessionFinished = false;
+		bool isCapturing = false;
 
 		std::mutex mxVideoContext;
 		std::mutex mxAudioContext;
@@ -49,15 +50,15 @@ namespace Encoder {
 
 		//std::condition_variable cvFormatContext;
 
-		std::mutex endMutex;
-		std::mutex writeFrameMutex;
+		std::mutex mxFinish;
+		std::mutex mxWriteFrame;
 
 		UINT width;
 		UINT height;
 		UINT framerate;
 		UINT audioBlockAlign;
-		AVPixelFormat pixelFormat;
-		AVPixelFormat inputFramePixelFormat;
+		AVPixelFormat outputPixelFormat;
+		AVPixelFormat inputPixelFormat;
 		AVSampleFormat inputAudioSampleFormat;
 		char filename[MAX_PATH];
 		//LPWSTR *outputDir;
@@ -68,7 +69,7 @@ namespace Encoder {
 
 		~Session();
 
-		HRESULT createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den);
+		HRESULT createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat);
 		HRESULT createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align);
 		HRESULT createFormatContext(LPCSTR filename);
 

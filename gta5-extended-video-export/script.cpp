@@ -27,6 +27,11 @@ extern "C" {
 #include "encoder.h"
 #include "logger.h"
 #include "config.h"
+#include <wrl.h>
+
+#include "..\DirectXTex\DirectXTex\DirectXTex.h"
+
+using namespace Microsoft::WRL;
 
 
 namespace {
@@ -40,6 +45,8 @@ namespace {
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);	
 	Encoder::Session* session;
+	DirectX::ScratchImage latestImage;
+	std::mutex mxLatestImage;
 }
 
 static HRESULT Hook_CoCreateInstance(
@@ -168,6 +175,24 @@ void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	Logger::instance().write(msg);
 }
 
+void onPresent(IDXGISwapChain *swapChain) {
+	if ((session != NULL) && session->isCapturing) {
+		try {
+			std::lock_guard<std::mutex> lock_guard(mxLatestImage);
+			ComPtr<ID3D11Device> pDevice;
+			ComPtr<ID3D11DeviceContext> pDeviceContext;
+			ComPtr<ID3D11Texture2D> texture;
+			REQUIRE(swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)texture.GetAddressOf()), "Failed to get the texture buffer", std::exception());
+			REQUIRE(swapChain->GetDevice(__uuidof(ID3D11Device), (void**)pDevice.GetAddressOf()), "Failed to get the D3D11 device", std::exception());
+			pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
+			NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context", std::exception());
+			REQUIRE(DirectX::CaptureTexture(pDevice.Get(), pDeviceContext.Get(), texture.Get(), latestImage), "Failed to capture the texture", std::exception());
+		} catch (std::exception& ex) {
+			latestImage.Release();
+		}
+	}
+}
+
 
 void ScriptMain() {
 	LOG("Starting script...");
@@ -275,11 +300,15 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 				GUID pixelFormat;
 				pType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
-				if (IsEqualGUID(pixelFormat, MFVideoFormat_IYUV)) {
-					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_YUV420P, fps_num, fps_den));
+				if (Config::instance().isUseD3DCaptureEnabled()) {
+					//latestImage.Initialize2D(DXGI_FORMAT_B8G8R8A8_TYPELESS, width, height, )
+					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_ARGB, fps_num, fps_den, AV_PIX_FMT_BGRA));
+					LOG_CALL(session->createFormatContext(filename.c_str()));
+				} else if (IsEqualGUID(pixelFormat, MFVideoFormat_IYUV)) {
+					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_YUV420P, fps_num, fps_den, AV_PIX_FMT_YUV420P));
 					LOG_CALL(session->createFormatContext(filename.c_str()));
 				} else if (IsEqualGUID(pixelFormat, MFVideoFormat_NV12)) {
-					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_NV12, fps_num, fps_den));
+					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_NV12, fps_num, fps_den, AV_PIX_FMT_YUV420P));
 					LOG_CALL(session->createFormatContext(filename.c_str()));
 				}
 				else {
@@ -317,21 +346,34 @@ static HRESULT Hook_IMFTransform_ProcessInput(
 	mediaType->Release();
 
 	if (session != NULL) {
-		IMFMediaBuffer *mediaBuffer = NULL;
 		DWORD length;
 
 		BYTE *pData = NULL;
 
 		LONGLONG sampleTime;
 		pSample->GetSampleTime(&sampleTime);
-		RET_IF_FAILED(pSample->ConvertToContiguousBuffer(&mediaBuffer), "Could not convert IMFSample to contagiuous buffer", E_FAIL);
-		RET_IF_FAILED(mediaBuffer->GetCurrentLength(&length), "Could not get buffer length", E_FAIL);
-		RET_IF_FAILED(mediaBuffer->Lock(&pData, NULL, NULL), "Could not lock the buffer", E_FAIL);
 		
-		LOG_CALL(session->writeVideoFrame(pData, length, sampleTime));
+		if (Config::instance().isUseD3DCaptureEnabled()) {
+			std::lock_guard<std::mutex> lock_guard(mxLatestImage);
+			if (latestImage.GetImageCount() == 0) {
+				LOG("There is no image to capture.");
+			}
+			const DirectX::Image* image = latestImage.GetImage(0, 0, 0);
+			RET_IF_NULL(image, "Could not get current frame.", E_FAIL);
+			RET_IF_NULL(image->pixels, "Could not get current frame.", E_FAIL);
 
-		LOG_IF_FAILED(mediaBuffer->Unlock(), "Could not unlock the video buffer");
-		mediaBuffer->Release();
+
+			LOG_CALL(session->writeVideoFrame(image->pixels, image->width*image->height*4, sampleTime));
+		} else {
+			IMFMediaBuffer *mediaBuffer = NULL;
+			RET_IF_FAILED(pSample->ConvertToContiguousBuffer(&mediaBuffer), "Could not convert IMFSample to contagiuous buffer", E_FAIL);
+			RET_IF_FAILED(mediaBuffer->GetCurrentLength(&length), "Could not get buffer length", E_FAIL);
+			RET_IF_FAILED(mediaBuffer->Lock(&pData, NULL, NULL), "Could not lock the buffer", E_FAIL);
+
+			LOG_CALL(session->writeVideoFrame(pData, length, sampleTime));
+			LOG_IF_FAILED(mediaBuffer->Unlock(), "Could not unlock the video buffer");
+			mediaBuffer->Release();
+		}
 	}
 
 	return oIMFTransform_ProcessInput(pThis, dwInputStreamID, pSample, dwFlags);

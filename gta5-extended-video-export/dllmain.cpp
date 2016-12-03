@@ -16,11 +16,18 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	{
 	case DLL_PROCESS_ATTACH:
 		LOG("Registering script...");
-		scriptRegister(hModule, ScriptMain);
+		if (Config::instance().isUseD3DCaptureEnabled()) {
+			LOG_CALL(presentCallbackRegister((void(*)(void*))onPresent));
+		}
+		LOG_CALL(scriptRegister(hModule, ScriptMain));
 		break;
 	case DLL_PROCESS_DETACH:
+		LOG("Unregistering DXGI callback");
+		if (Config::instance().isUseD3DCaptureEnabled()) {
+			LOG_CALL(presentCallbackUnregister((void(*)(void*))onPresent));
+		}
 		LOG_CALL(unhookAll());
-		scriptUnregister(hModule);
+		LOG_CALL(scriptUnregister(hModule));
 		break;
 	}
 	return TRUE;

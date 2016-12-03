@@ -96,3 +96,10 @@ private:
 #define LOG_IF_FAILED_AV(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error);}}
 #endif
 
+#ifndef REQUIRE
+#define REQUIRE(o, m, ex) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result); throw ex;}}
+#endif
+
+#ifndef NOT_NULL
+#define NOT_NULL(o, m, ex) {if ((o) == NULL) {LOG(m); throw ex;}}
+#endif

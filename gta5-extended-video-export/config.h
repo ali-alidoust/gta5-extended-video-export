@@ -10,21 +10,19 @@
 #define CFG_XVX_SECTION "XVX"
 #define CFG_LOSSLESS_EXPORT "lossless_export"
 #define CFG_OUTPUT_DIR "output_folder"
+#define CFG_USE_D3D_CAPTURE "use_d3d_capture"
 #define INI_FILE_NAME TARGET_NAME ".ini"
 
 class Config {
 public:
 
 	bool isLosslessExportEnabled() {
-		std::string stringValue = parser.top()[CFG_LOSSLESS_EXPORT];
-		if (stringValue.empty()) {
-			return true;
-		}
-		std::transform(stringValue.begin(), stringValue.end(), stringValue.begin(), ::tolower);
+		return stringToBoolean(parser.top()[CFG_LOSSLESS_EXPORT], true);
+	}
 
-		bool value;
-		std::istringstream(stringValue) >> std::boolalpha >> value;
-		return value;
+	bool isUseD3DCaptureEnabled() {
+		return stringToBoolean(parser.top()[CFG_USE_D3D_CAPTURE], false);
+		
 	}
 
 	std::stringstream outputDir() {
@@ -83,5 +81,16 @@ private:
 		CoTaskMemFree(vidPath);
 
 		return S_OK;
+	}
+
+	static bool stringToBoolean(std::string booleanString, bool defaultValue) {
+		if (booleanString.empty()) {
+			return defaultValue;
+		}
+		std::transform(booleanString.begin(), booleanString.end(), booleanString.begin(), ::tolower);
+
+		bool value;
+		std::istringstream(booleanString) >> std::boolalpha >> value;
+		return value;
 	}
 };
