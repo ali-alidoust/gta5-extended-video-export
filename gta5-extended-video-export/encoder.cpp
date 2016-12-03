@@ -180,7 +180,6 @@ namespace Encoder {
 			delete[] pDataTarget;
 			return E_FAIL;
 		}
-		LOG("filling image arrays", pData, pDataTarget);
 		RET_IF_FAILED(av_image_fill_arrays(videoFrame->data, videoFrame->linesize, pDataTarget, this->outputPixelFormat, this->width, this->height, 1), "Could not fill the frame with data from the buffer", E_FAIL);
 		videoFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->videoStream->time_base);
 		
