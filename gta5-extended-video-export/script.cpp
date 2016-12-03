@@ -12,6 +12,9 @@ extern "C" {
 }
 
 #include "inc\main.h"
+#include "inc\nativeCaller.h"
+#include "inc\natives.h"
+
 #include "custom-hooks.h"
 
 #include <mfapi.h>
@@ -210,6 +213,8 @@ void ScriptMain() {
 
 	LOG("Starting main loop");
 	while (true) {
+		//UI::DISPLAY_HUD(TRUE);
+		
 		WAIT(0);
 	}
 }
@@ -234,9 +239,7 @@ static HRESULT Hook_CoCreateInstance(
 
 		if (SUCCEEDED(unk->QueryInterface<IMFTransform>(&h264encoder))) {
 			session = new Encoder::Session();
-			if (session != NULL) {
-				LOG("Session created.")
-			}
+			LOG_IF_NULL(session, "Could not create the session.");
 		}
 
 		LOG_IF_FAILED(hookVirtualFunction((*ppv), 23, &Hook_IMFTransform_ProcessMessage, &oIMFTransform_ProcessMessage, hkIMFTransform_ProcessMessage), "Failed to hook IMFTransform::ProcessMessage");
@@ -268,15 +271,15 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 	MFT_MESSAGE_TYPE eMessage,
 	ULONG_PTR        ulParam
 	) {
-	if (eMessage == MFT_MESSAGE_NOTIFY_START_OF_STREAM) {
+	if (eMessage == MFT_MESSAGE_NOTIFY_START_OF_STREAM && (session != NULL)) {
 		LOG("MFT_MESSAGE_NOTIFY_START_OF_STREAM");
-		IMFMediaType* pType;
-		pThis->GetInputCurrentType(0, &pType);
+		ComPtr<IMFMediaType> pType;
+		pThis->GetInputCurrentType(0, pType.GetAddressOf());
 
-		if ((pType != NULL) && (session != NULL)) {
-			LOG("Input media type: ",GetMediaTypeDescription(pType).c_str());
+		if (pType.Get() != NULL) {
+			LOG("Input media type: ",GetMediaTypeDescription(pType.Get()).c_str());
 			if (session->videoCodecContext == NULL) {
-				char buffer[MAX_PATH];
+				char buffer[128];
 				std::stringstream stream = Config::instance().outputDir();
 
 				stream << "\\";
@@ -285,7 +288,7 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 				struct tm timeinfo;
 				time(&rawtime);
 				localtime_s(&timeinfo, &rawtime);
-				strftime(buffer, 2048, "%Y%m%d%H%M%S", &timeinfo);
+				strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
 				stream << buffer;
 				stream << ".avi";
 
@@ -294,14 +297,13 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 				LOG("Output file: ", filename);
 
 				UINT width, height, fps_num, fps_den;
-				MFGetAttribute2UINT32asUINT64(pType, MF_MT_FRAME_SIZE, &width, &height);
-				MFGetAttributeRatio(pType, MF_MT_FRAME_RATE, &fps_num, &fps_den);
+				MFGetAttribute2UINT32asUINT64(pType.Get(), MF_MT_FRAME_SIZE, &width, &height);
+				MFGetAttributeRatio(pType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
 
 				GUID pixelFormat;
 				pType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
 				if (Config::instance().isUseD3DCaptureEnabled()) {
-					//latestImage.Initialize2D(DXGI_FORMAT_B8G8R8A8_TYPELESS, width, height, )
 					LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_ARGB, fps_num, fps_den, AV_PIX_FMT_BGRA));
 					LOG_CALL(session->createFormatContext(filename.c_str()));
 				} else if (IsEqualGUID(pixelFormat, MFVideoFormat_IYUV)) {
@@ -318,9 +320,6 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 				}
 			}
 		}
-
-		pType->Release();
-
 	} else if ((eMessage == MFT_MESSAGE_NOTIFY_END_OF_STREAM) && (session != NULL)) {
 		LOG("MFT_MESSAGE_NOTIFY_END_OF_STREAM");
 		LOG_CALL(session->finishVideo());
@@ -340,39 +339,42 @@ static HRESULT Hook_IMFTransform_ProcessInput(
 	DWORD			dwFlags
 	) {
 
-	IMFMediaType* mediaType;
-	pThis->GetInputCurrentType(dwInputStreamID, &mediaType);
-	LOG("IMFTransform::ProcessInput: ", GetMediaTypeDescription(mediaType).c_str());
-	mediaType->Release();
+	ComPtr<IMFMediaType> mediaType;
+	pThis->GetInputCurrentType(dwInputStreamID, mediaType.GetAddressOf());
+	LOG("IMFTransform::ProcessInput: ", GetMediaTypeDescription(mediaType.Get()).c_str());
 
 	if (session != NULL) {
-		DWORD length;
-
-		BYTE *pData = NULL;
-
 		LONGLONG sampleTime;
 		pSample->GetSampleTime(&sampleTime);
 		
 		if (Config::instance().isUseD3DCaptureEnabled()) {
-			std::lock_guard<std::mutex> lock_guard(mxLatestImage);
-			if (latestImage.GetImageCount() == 0) {
-				LOG("There is no image to capture.");
+			try {
+				std::lock_guard<std::mutex> lock_guard(mxLatestImage);
+				if (latestImage.GetImageCount() == 0) {
+					LOG("There is no image to capture.");
+				}
+				const DirectX::Image* image = latestImage.GetImage(0, 0, 0);
+				NOT_NULL(image, "Could not get current frame.", std::exception());
+				NOT_NULL(image->pixels, "Could not get current frame.", std::exception());
+
+				LOG_CALL(session->writeVideoFrame(image->pixels, image->width*image->height * 4, sampleTime));
+			} catch (std::exception& ex) {
+				LOG("Writing video frame from D3D Device failed.");
 			}
-			const DirectX::Image* image = latestImage.GetImage(0, 0, 0);
-			RET_IF_NULL(image, "Could not get current frame.", E_FAIL);
-			RET_IF_NULL(image->pixels, "Could not get current frame.", E_FAIL);
-
-
-			LOG_CALL(session->writeVideoFrame(image->pixels, image->width*image->height*4, sampleTime));
 		} else {
-			IMFMediaBuffer *mediaBuffer = NULL;
-			RET_IF_FAILED(pSample->ConvertToContiguousBuffer(&mediaBuffer), "Could not convert IMFSample to contagiuous buffer", E_FAIL);
-			RET_IF_FAILED(mediaBuffer->GetCurrentLength(&length), "Could not get buffer length", E_FAIL);
-			RET_IF_FAILED(mediaBuffer->Lock(&pData, NULL, NULL), "Could not lock the buffer", E_FAIL);
+			try {
+				DWORD length;
+				BYTE *pData = NULL;
+				ComPtr<IMFMediaBuffer> mediaBuffer;
+				REQUIRE(pSample->ConvertToContiguousBuffer(mediaBuffer.GetAddressOf()), "Could not convert IMFSample to contagiuous buffer", std::exception());
+				REQUIRE(mediaBuffer->GetCurrentLength(&length), "Could not get buffer length", std::exception());
+				REQUIRE(mediaBuffer->Lock(&pData, NULL, NULL), "Could not lock the buffer", std::exception());
 
-			LOG_CALL(session->writeVideoFrame(pData, length, sampleTime));
-			LOG_IF_FAILED(mediaBuffer->Unlock(), "Could not unlock the video buffer");
-			mediaBuffer->Release();
+				LOG_CALL(session->writeVideoFrame(pData, length, sampleTime));
+				REQUIRE(mediaBuffer->Unlock(), "Could not unlock the video buffer", std::exception());
+			} catch (std::exception& ex){
+				LOG("Writing video frame from IMFSample failed.");
+			}
 		}
 	}
 
@@ -409,9 +411,12 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 			pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
 
 			if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
-				LOG_CALL(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment));
-			}
-			else {
+				try {
+					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment), "Failed to create audio context.", std::exception());
+				} catch (std::exception& ex) {
+					// Do nothing
+				}
+			} else {
 				char buffer[64];
 				GUIDToString(subType, buffer, 64);
 				LOG("Unsupported input audio format: ", buffer);
@@ -429,10 +434,10 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 	) {
 
 	if (dwStreamIndex == 1) {
-		IMFMediaBuffer *pBuffer;
+		ComPtr<IMFMediaBuffer> pBuffer;
 		LONGLONG sampleTime;
 		pSample->GetSampleTime(&sampleTime);
-		pSample->ConvertToContiguousBuffer(&pBuffer);
+		pSample->ConvertToContiguousBuffer(pBuffer.GetAddressOf());
 
 		DWORD length;
 		pBuffer->GetCurrentLength(&length);
@@ -441,20 +446,20 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 			LOG_CALL(session->writeAudioFrame(buffer, length, sampleTime));
 		}
 		pBuffer->Unlock();
-		pBuffer->Release();
 	}
 
-	HRESULT result = oIMFSinkWriter_WriteSample(pThis, dwStreamIndex, pSample);
-	return result;
+	return oIMFSinkWriter_WriteSample(pThis, dwStreamIndex, pSample);
 }
 
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
 	) {
-	LOG_CALL(session->finishAudio());
-	if (session->isSessionFinished) {
-		delete session;
-		session = NULL;
+	if (session != NULL) {
+		LOG_CALL(session->finishAudio());
+		if (session->isSessionFinished) {
+			delete session;
+			session = NULL;
+		}
 	}
 	return oIMFSinkWriter_Finalize(pThis);
 }
