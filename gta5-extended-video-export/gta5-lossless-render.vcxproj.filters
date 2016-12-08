@@ -82,6 +82,9 @@
     <ClInclude Include="SafeQueue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -167,5 +170,6 @@
     <None Include="default.ini">
       <Filter>ini</Filter>
     </None>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

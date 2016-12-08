@@ -36,3 +36,5 @@ Debug/
 gta5-extended-video-export/Debug/
 gta5-extended-video-export/x64/
 .vs/
+ipch/
+packages/

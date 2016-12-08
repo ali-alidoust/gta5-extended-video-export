@@ -1,5 +1,5 @@
+#include "stdafx.h"
 #include "encoder.h"
-#include <sstream>
 #include "logger.h"
 
 

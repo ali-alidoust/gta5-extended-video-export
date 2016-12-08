@@ -1,6 +1,5 @@
+#include "stdafx.h"
 #include "logger.h"
-
-#include <sstream>
 
 Logger::Logger() {
 	this->filestream.open(TARGET_NAME ".log");

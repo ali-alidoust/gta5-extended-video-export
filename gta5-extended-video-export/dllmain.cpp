@@ -1,8 +1,5 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
-
-#pragma comment(lib, "lib\\ScriptHookV.lib")
-#include <sstream>
-#include "inc\main.h"
+#include "stdafx.h"
 #include "script.h"
 #include "logger.h"
 #include "config.h"

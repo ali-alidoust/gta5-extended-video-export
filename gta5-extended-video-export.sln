@@ -5,6 +5,8 @@ VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gta5-extended-video-export", "gta5-extended-video-export\gta5-lossless-render.vcxproj", "{12CCEE33-46E0-40E7-9F53-3699F5D5A761}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libyara", "yara\windows\vs2015\libyara\libyara.vcxproj", "{E236CE39-D8F3-4DB6-985C-F2794FF17746}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{12CCEE33-46E0-40E7-9F53-3699F5D5A761}.Release|x64.Build.0 = Release|x64
 		{12CCEE33-46E0-40E7-9F53-3699F5D5A761}.Release|x86.ActiveCfg = Release|Win32
 		{12CCEE33-46E0-40E7-9F53-3699F5D5A761}.Release|x86.Build.0 = Release|Win32
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Debug|x64.ActiveCfg = Debug|x64
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Debug|x64.Build.0 = Debug|x64
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Debug|x86.ActiveCfg = Debug|Win32
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Debug|x86.Build.0 = Debug|Win32
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Release|x64.ActiveCfg = Release|x64
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Release|x64.Build.0 = Release|x64
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Release|x86.ActiveCfg = Release|Win32
+		{E236CE39-D8F3-4DB6-985C-F2794FF17746}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -7,3 +7,6 @@
 [submodule "DirectXTex"]
 	path = DirectXTex
 	url = https://github.com/Microsoft/DirectXTex
+[submodule "yara"]
+	path = yara
+	url = https://github.com/VirusTotal/yara

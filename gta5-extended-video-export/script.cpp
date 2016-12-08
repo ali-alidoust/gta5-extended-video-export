@@ -1,44 +1,18 @@
 // script.cpp : Defines the exported functions for the DLL application.
 //
 
-#pragma comment(lib, "mfplat.lib")
-#pragma comment(lib, "mfreadwrite.lib")
-#pragma comment(lib, "mfuuid.lib")
-#pragma comment(lib, "wmcodecdspuuid.lib")
-#pragma comment(lib, "avcodec.lib")
-#pragma comment(lib, "d3d11.lib")
-
-extern "C" {
-#include "libavcodec\avcodec.h"
-}
-
-#include "inc\main.h"
-#include "inc\nativeCaller.h"
-#include "inc\natives.h"
-
+#include "stdafx.h"
 #include "custom-hooks.h"
-
-#include <mfapi.h>
-#include <mfidl.h>
-#include <mfreadwrite.h>
-
-
 #include "script.h"
-#include <string>
-#include <regex>
-#include <codecapi.h>
-#include <wmcodecdsp.h>
 #include "MFUtility.h"
 #include "encoder.h"
 #include "logger.h"
 #include "config.h"
 #include "util.h"
-#include <wrl.h>
 
 #include "..\DirectXTex\DirectXTex\DirectXTex.h"
 
 using namespace Microsoft::WRL;
-
 
 namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkIMFTransform_ProcessInput(new PLH::VFuncDetour);
@@ -68,7 +42,7 @@ namespace {
 	std::map<std::thread::id, ID3D11RenderTargetView*> createdRTVs;
 	std::map<std::thread::id, ID3D11DepthStencilView*> createdDSVs;
 	std::thread::id mainThreadId;
-
+	ComPtr<IDXGISwapChain> mainSwapChain;
 
 	struct ExportContext {
 		bool captureRenderTargetViewReference = false;
@@ -90,7 +64,6 @@ namespace {
 	ExportContext* exportContext;
 
 }
-
 
 
 static HRESULT CreateObjectFromURL(
@@ -374,6 +347,9 @@ void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 }
 
 void onPresent(IDXGISwapChain *swapChain) {
+
+	mainSwapChain = swapChain;
+
 	static bool once = true;
 	if (once) {
 		LOG("once");
@@ -775,6 +751,13 @@ static HRESULT Hook_MFCreateSinkWriterFromURL(
 	IMFAttributes *pAttributes,
 	IMFSinkWriter **ppSinkWriter
 	) {
+
+	/*if (mainSwapChain != NULL) {
+		DXGI_SWAP_CHAIN_DESC desc;
+		REQUIRE(mainSwapChain->GetDesc(&desc), "Failed to get swap chain's describer", std::exception());
+		REQUIRE(mainSwapChain->ResizeBuffers(desc.BufferCount, 1920, 1080, DXGI_FORMAT_R8G8B8A8_UNORM, desc.Flags), "Failed to resize swapchain buffers", std::exception());
+	}*/
+
 	LOG(__func__);
 	LOG("CreateSWFU: ", std::this_thread::get_id());
 	LOG(" rtv:", (uint32_t)createdRTVs[std::this_thread::get_id()]);
@@ -1058,8 +1041,14 @@ static HRESULT Hook_CreateTexture2D(
 	const D3D11_SUBRESOURCE_DATA *pInitialData,
 	ID3D11Texture2D        **ppTexture2D
 	) {
+	/*static bool count = 0;
+	if ((std::this_thread::get_id() == mainThreadId) && (count++ < 7)) {
+		D3D11_TEXTURE2D_DESC* desc = (D3D11_TEXTURE2D_DESC*)pDesc;
+		desc->Width = Config::instance().exportResolution().first;
+		desc->Height = Config::instance().exportResolution().second;
+	}*/
 
-	// Detect render buffer creation
+	// Detect export buffer creation
 	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId)) {
 		SafeDelete(exportContext);
 		SafeDelete(session);
