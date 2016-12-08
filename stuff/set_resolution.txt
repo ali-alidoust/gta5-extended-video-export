@@ -1,0 +1,14 @@
+00007FF63C930994 | 89 ?? ?? ?? ?? ??            | mov dword ptr ds:[7FF63E3492DC],eax                                                           |
+00007FF63C93099A | 41 8B C0                     | mov eax,r8d                                                                                   |
+00007FF63C93099D | 0F 45 C1                     | cmovne eax,ecx                                                                                |
+00007FF63C9309A0 | 89 ?? ?? ?? ?? ??            | mov dword ptr ds:[7FF63E34932C],eax                                                           |
+00007FF63C9309A6 | 41 8B C1                     | mov eax,r9d                                                                                   |
+00007FF63C9309A9 | 44 0F 45 CA                  | cmovne r9d,edx                                                                                |
+00007FF63C9309AD | 0F 45 C2                     | cmovne eax,edx                                                                                |
+00007FF63C9309B0 | 44 89 ?? ?? ?? ?? ??         | mov dword ptr ds:[7FF63E34937C],r9d                                                           |
+00007FF63C9309B7 | 89 ?? ?? ?? ?? ??            | mov dword ptr ds:[7FF63E3491EC],eax                                                           |
+00007FF63C9309BD | 41 8B C0                     | mov eax,r8d                                                                                   |
+00007FF63C9309C0 | 44 0F 45 C1                  | cmovne r8d,ecx                                                                                |
+00007FF63C9309C4 | 0F 45 C1                     | cmovne eax,ecx                                                                                |
+00007FF63C9309C7 | 44 89 ?? ?? ?? ?? ??         | mov dword ptr ds:[7FF63E3493CC],r8d                                                           |
+00007FF63C9309CE | 89 ?? ?? ?? ?? ??            | mov dword ptr ds:[7FF63E34923C],eax                                                           |
