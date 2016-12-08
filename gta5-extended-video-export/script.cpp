@@ -16,7 +16,6 @@ extern "C" {
 #include "inc\nativeCaller.h"
 #include "inc\natives.h"
 
-#include "NullStream.h"
 #include "custom-hooks.h"
 
 #include <mfapi.h>
