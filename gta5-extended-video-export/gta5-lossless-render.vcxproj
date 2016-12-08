@@ -186,8 +186,10 @@
     <ClInclude Include="encoder.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="MFUtility.h" />
+    <ClInclude Include="SafeQueue.h" />
     <ClInclude Include="script.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\DirectXTex\DirectXTex\BC.cpp" />

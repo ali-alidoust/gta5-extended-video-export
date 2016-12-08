@@ -7,7 +7,7 @@ namespace Encoder {
 	
 	const AVRational MF_TIME_BASE = { 1, 10000000 };
 
-	Session::Session() {
+	Session::Session() : videoFrameQueue(8) {
 		LOG("Creating session...");
 	}
 
@@ -51,6 +51,10 @@ namespace Encoder {
 		LOG("Video context was created successfully.");
 		this->isVideoContextCreated = true;
 		this->cvVideoContext.notify_all();
+
+		thread_video_encoder = std::thread(&Session::encodingThread, this);
+
+		//std::async(std::launch::async, &Session::encodingThread, this);
 		return S_OK;
 	}
 
@@ -147,6 +151,26 @@ namespace Encoder {
 		return S_OK;
 	}
 
+	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
+		auto pVector = std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(pData, pData + length));
+		frameQueueItem item(pVector, sampleTime);
+		this->videoFrameQueue.enqueue(item);
+		return S_OK;
+	}
+
+	void Session::encodingThread() {
+		LOG(__func__);
+		std::lock_guard<std::mutex> lock(this->mxEncodingThread);
+		frameQueueItem item = this->videoFrameQueue.dequeue();
+		while (item.data != nullptr) {
+			LOG("Encoding frame: ", item.sampletime);
+			this->writeVideoFrame(item.data->data(), item.data->size(), item.sampletime);
+			item = this->videoFrameQueue.dequeue();
+		}
+		this->isEncodingThreadFinished = true;
+		this->cvEncodingThreadFinished.notify_all();
+	}
+
 	HRESULT Session::writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
 		// Wait until format context is created
 		{
@@ -181,7 +205,8 @@ namespace Encoder {
 			return E_FAIL;
 		}
 		RET_IF_FAILED(av_image_fill_arrays(videoFrame->data, videoFrame->linesize, pDataTarget, this->outputPixelFormat, this->width, this->height, 1), "Could not fill the frame with data from the buffer", E_FAIL);
-		videoFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->videoStream->time_base);
+		//videoFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->videoStream->time_base);
+		videoFrame->pts = av_rescale_q(sampleTime, this->videoCodecContext->time_base, this->videoStream->time_base);
 		
 		AVPacket pkt;
 
@@ -193,6 +218,7 @@ namespace Encoder {
 		avcodec_encode_video2(this->videoCodecContext, &pkt, videoFrame, &got_packet);
 		if (got_packet != 0) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
+			pkt.dts = videoFrame->pts;
 			pkt.stream_index = this->videoStream->index;
 			av_interleaved_write_frame(this->fmtContext, &pkt);
 		}
@@ -244,9 +270,22 @@ namespace Encoder {
 
 	HRESULT Session::finishVideo()
 	{
-		std::lock_guard<std::mutex> guard(this->mxFinish);
-		this->isVideoFinished = true;
-		this->endSession();
+
+
+		// Wait until the video encoding thread is finished.
+		{
+			// Write end of the stream object with a nullptr
+			this->videoFrameQueue.enqueue(frameQueueItem(nullptr, -1));
+			std::unique_lock<std::mutex> lock(this->mxEncodingThread);
+			while (!this->isEncodingThreadFinished) {
+				this->cvEncodingThreadFinished.wait(lock);
+			}
+		}
+		thread_video_encoder.join();
+		{
+			std::lock_guard<std::mutex> guard(this->mxFinish);
+			this->isVideoFinished = true;
+		}
 		return S_OK;
 	}
 
@@ -254,11 +293,11 @@ namespace Encoder {
 	{
 		std::lock_guard<std::mutex> guard(this->mxFinish);
 		this->isAudioFinished = true;
-		this->endSession();
 		return S_OK;
 	}
 
 	HRESULT Session::endSession() {
+		std::lock_guard<std::mutex> guard(this->mxFinish);
 		if (this->isVideoFinished && this->isAudioFinished) {
 			this->isCapturing = false;
 			LOG("Ending session...");

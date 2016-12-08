@@ -10,7 +10,8 @@
 #define CFG_XVX_SECTION "XVX"
 #define CFG_LOSSLESS_EXPORT "lossless_export"
 #define CFG_OUTPUT_DIR "output_folder"
-#define CFG_USE_D3D_CAPTURE "use_d3d_capture"
+//#define CFG_USE_D3D_CAPTURE "use_d3d_capture"
+#define CFG_EXPORT_RESOLUTION "resolution"
 #define INI_FILE_NAME TARGET_NAME ".ini"
 
 class Config {
@@ -20,9 +21,29 @@ public:
 		return stringToBoolean(parser.top()[CFG_LOSSLESS_EXPORT], true);
 	}
 
-	bool isUseD3DCaptureEnabled() {
+	/*bool isUseD3DCaptureEnabled() {
 		return stringToBoolean(parser.top()[CFG_USE_D3D_CAPTURE], false);
 		
+	}*/
+
+	std::pair<uint32_t, uint32_t> exportResolution() {
+		std::string string = parser.top()[CFG_EXPORT_RESOLUTION];
+		string = std::regex_replace(string, std::regex("\\s+"), "");
+
+		if (string.empty()) {
+			return std::make_pair(0, 0);
+		}
+
+		std::smatch match;
+		if (!std::regex_match(string, match, std::regex("^(\\d+)x(\\d+)$"))) {
+			LOG("Could not parse resolution: ", string);
+			return std::make_pair(0, 0);
+		}
+
+		uint32_t width  = std::stoul(match[1]);
+		uint32_t height = std::stoul(match[2]);
+
+		return std::make_pair(width, height);
 	}
 
 	std::stringstream outputDir() {

@@ -4,6 +4,7 @@
 
 #include "..\PolyHook\PolyHook\PolyHook.h"
 #include "..\PolyHook\Capstone\include\x86.h"
+#include "logger.h"
 
 #pragma comment(lib, "..\\PolyHook\\Capstone\\msvc\\x64\\Release\\capstone.lib")
 
@@ -30,6 +31,7 @@ namespace {
 		}
 		IATHook_ex->SetupHook(dllname, funcName, (BYTE*)hookFunc);
 		if (!IATHook_ex->Hook()) {
+			LOG(IATHook_ex->GetLastError().GetString());
 			return E_FAIL;
 		}
 		*originalFunc = IATHook_ex->GetOriginal<FUNC_TYPE>();

@@ -20,7 +20,7 @@ template <class B, class A> B ForceCast(A a) {
 	x.a = a;
 	return x.b;
 }
-
+void initialize();
 void ScriptMain();
 void onPresent(IDXGISwapChain *swapChain);
 void unhookAll();

@@ -76,6 +76,12 @@
     <ClInclude Include="..\DirectXTex\DirectXTex\scoped.h">
       <Filter>Submodules\DirectXTex\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="util.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SafeQueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

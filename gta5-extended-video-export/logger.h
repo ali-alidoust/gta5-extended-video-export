@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <fstream>
 #include <mutex>
+#include <iomanip>
 extern "C" {
 	#include <libavutil\error.h>
 }
@@ -18,24 +19,16 @@ public:
 		}
 	}
 
-	template <typename T> void write(const T& value) {
+	template <typename... Targs> void write(const Targs&... args) {
 		if (this->filestream.is_open()) {
 			{
 				std::lock_guard<std::mutex> guard(mtx);
-				filestream << value;
+				this->_write(args...);
 			}
 		}
 	}
 
-	template <typename T, typename... Targs> void write(const T& value, const Targs&... args) {
-		if (this->filestream.is_open()) {
-			{
-				std::lock_guard<std::mutex> guard(mtx);
-				filestream << value;
-			}
-			this->write(args...);
-		}
-	}
+	
 
 	void writeLine();
 
@@ -51,6 +44,21 @@ public:
 	void operator=(Logger const&) = delete;
 
 private:
+	template <typename T, typename... Targs> void _write(const T& value, const Targs&... args) {
+		if (this->filestream.is_open()) {
+			//std::lock_guard<std::mutex> guard(mtx);
+			filestream << value;
+			this->_write(args...);
+		}
+	}
+
+	template <typename T> void _write(const T& value) {
+		if (this->filestream.is_open()) {
+			//std::lock_guard<std::mutex> guard(mtx);
+			filestream << value;
+		}
+	}
+
 	Logger();
 	~Logger();
 	std::mutex mtx;
@@ -58,7 +66,24 @@ private:
 };
 
 #ifndef LOG
-#define LOG(...) Logger::instance().write(Logger::instance().getTimestamp(), __FILENAME__, " (line ", __LINE__, "): ", __VA_ARGS__, std::endl<char,std::char_traits<char>>);
+#define LOG(...) Logger::instance().write(\
+	Logger::instance().getTimestamp(),\
+	"0x",\
+	std::uppercase,\
+	std::setfill('0'),\
+	std::setw(4),\
+	std::hex,\
+	std::this_thread::get_id(),\
+	std::dec,\
+	std::setw(0),\
+	std::setfill(' '),\
+	" ",\
+	__FILENAME__,\
+	" (line ",\
+	__LINE__,\
+	"): ",\
+	__VA_ARGS__,\
+	std::endl<char,std::char_traits<char>>);
 #endif // ! LOG // Logger::instance().write(__LINE__); Logger::instance().writeLine(x);
 
 #ifndef LOG_CALL

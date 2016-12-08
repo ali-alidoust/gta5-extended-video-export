@@ -9,6 +9,8 @@
 #include <Windows.h>
 #include <mfidl.h>
 #include <mutex>
+#include <future>
+#include "SafeQueue.h"
 extern "C" {
 #include <libavcodec\avcodec.h>
 #include <libavformat\avformat.h>
@@ -44,9 +46,25 @@ namespace Encoder {
 		std::condition_variable cvAudioContext;
 		std::condition_variable cvFormatContext;
 
+		struct frameQueueItem {
+			frameQueueItem(std::shared_ptr<std::vector<uint8_t>> bytes, int64_t sampletime) :
+				data(bytes),
+				sampletime(sampletime)
+				{}
+
+			std::shared_ptr<std::vector<uint8_t>> data;
+			int64_t sampletime;
+		};
+
+		SafeQueue<frameQueueItem> videoFrameQueue;
+
 		bool isVideoContextCreated = false;
 		bool isAudioContextCreated = false;
 		bool isFormatContextCreated = false;
+		bool isEncodingThreadFinished = false;
+		std::condition_variable cvEncodingThreadFinished;
+		std::mutex mxEncodingThread;
+		std::thread thread_video_encoder;
 
 		//std::condition_variable cvFormatContext;
 
@@ -73,6 +91,10 @@ namespace Encoder {
 		HRESULT createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align);
 		HRESULT createFormatContext(LPCSTR filename);
 
+		HRESULT enqueueVideoFrame(BYTE * pData, int length, LONGLONG sampleTime);
+
+		void encodingThread();
+
 		HRESULT writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime);
 		HRESULT writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime);
 
@@ -93,7 +115,8 @@ namespace Encoder {
 			return S_OK;
 		}
 
-	private:
 		HRESULT endSession();
+
+	private:
 	};
 }
