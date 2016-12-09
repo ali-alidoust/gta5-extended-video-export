@@ -9,6 +9,7 @@
 #include "logger.h"
 #include "config.h"
 #include "util.h"
+#include "yara-patterns.h"
 
 #include "..\DirectXTex\DirectXTex\DirectXTex.h"
 
@@ -62,7 +63,7 @@ namespace {
 	};
 
 	ExportContext* exportContext;
-
+	YR_COMPILER* pYrCompiler;
 }
 
 
@@ -443,6 +444,11 @@ void initialize() {
 
 			REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll", std::exception());
 			REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll", std::exception());
+
+			
+			LOG_CALL(yr_initialize());
+			REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.", std::exception());
+			REQUIRE(yr_compiler_add_string(pYrCompiler, yara_resolution_fields.c_str(), NULL), "Failed to compile yara rule", std::exception());
 
 
 			LOG_CALL(av_register_all());
@@ -924,7 +930,9 @@ static HRESULT Hook_IMFSinkWriter_Finalize(
 }
 
 
-void unhookAll() {
+void finalize() {
+	LOG_CALL(yr_compiler_destroy(pYrCompiler));
+	LOG_CALL(yr_finalize());
 	hkCoCreateInstance->UnHook();
 	hkMFCreateSinkWriterFromURL->UnHook();
 	hkIMFTransform_ProcessInput->UnHook();

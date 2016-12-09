@@ -24,7 +24,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		//if (Config::instance().isUseD3DCaptureEnabled()) {
 		LOG_CALL(presentCallbackUnregister((void(*)(void*))onPresent));
 		//}
-		LOG_CALL(unhookAll());
+		LOG_CALL(finalize());
 		LOG_CALL(scriptUnregister(hModule));
 		break;
 	}

@@ -25,7 +25,8 @@
 #include <wrl.h>
 
 
-
 extern "C" {
 #include "libavcodec\avcodec.h"
+#include <yara\libyara.h>
+#include <yara\compiler.h>
 }

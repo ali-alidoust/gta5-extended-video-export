@@ -23,4 +23,4 @@ template <class B, class A> B ForceCast(A a) {
 void initialize();
 void ScriptMain();
 void onPresent(IDXGISwapChain *swapChain);
-void unhookAll();
+void finalize();
