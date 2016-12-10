@@ -493,7 +493,7 @@ void onPresent(IDXGISwapChain *swapChain) {
 void initialize() {
 	//hookNamedFunction("kernel32.dll", "LoadLibraryA", &Hook_LoadLibraryA, &oLoadLibraryA, hkLoadLibraryA);
 	//hookNamedFunction("kernel32.dll", "EnterCriticalSection", &Hook_RtlEnterCriticalSection, &oRtlEnterCriticalSection, hkHook_RtlEnterCriticalSection);
-	if (Config::instance().isLosslessExportEnabled()) {
+	if (Config::instance().isModEnabled()) {
 		try {
 			mainThreadId = std::this_thread::get_id();
 			ComPtr<IMFSourceResolver> pSourceResolver;
@@ -561,14 +561,6 @@ static HRESULT Hook_CoCreateInstance(
 	LOG("CoCreateInstance: ", buffer);
 
 	if (IsEqualCLSID(rclsid, CLSID_CMSH264EncoderMFT)) {
-		/*IUnknown* unk = (IUnknown*)(*ppv);
-		IMFTransform* h264encoder;
-
-		if (SUCCEEDED(unk->QueryInterface<IMFTransform>(&h264encoder))) {
-			session = new Encoder::Session();
-			LOG_IF_NULL(session, "Could not create the session.");
-		}*/
-
 		LOG_IF_FAILED(hookVirtualFunction((*ppv), 23, &Hook_IMFTransform_ProcessMessage, &oIMFTransform_ProcessMessage, hkIMFTransform_ProcessMessage), "Failed to hook IMFTransform::ProcessMessage");
 		LOG_IF_FAILED(hookVirtualFunction((*ppv), 24, &Hook_IMFTransform_ProcessInput, &oIMFTransform_ProcessInput, hkIMFTransform_ProcessInput), "Failed to hook IMFTransform::ProcessInput");
 	}
@@ -833,11 +825,13 @@ static void Hook_OMSetRenderTargets(
 			NOT_NULL(image->pixels, "Could not get current frame.", std::exception());
 
 			//LOG_CALL(session->writeVideoFrame(image->pixels, image->width * image->height * 4, exportContext->pts++));
-			LOG_CALL(session->enqueueVideoFrame(image->pixels, image->width * image->height * 4, exportContext->pts++));
+			REQUIRE(session->enqueueVideoFrame(image->pixels, image->width * image->height * 4, exportContext->pts++), "Failed to enqueue frame", std::exception());
 			exportContext->latestImage->Release();
 		} catch (std::exception& ex) {
 			LOG("Reading video frame from D3D Device failed.");
 			exportContext->latestImage->Release();
+			SafeDelete(session);
+			SafeDelete(exportContext);
 		}
 	}
 	oOMSetRenderTargets(pThis, NumViews, ppRenderTargetViews, pDepthStencilView);
@@ -882,40 +876,46 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 		ComPtr<IMFMediaType> pType;
 		pThis->GetInputCurrentType(0, pType.GetAddressOf());
 
-		if (pType.Get() != NULL) {
-			LOG("Input media type: ", GetMediaTypeDescription(pType.Get()).c_str());
-			if (session->videoCodecContext == NULL) {
-				char buffer[128];
-				std::string output_file = Config::instance().outputDir();
+		try {
+			if (pType.Get() != NULL) {
+				LOG("Input media type: ", GetMediaTypeDescription(pType.Get()).c_str());
+				if (session->videoCodecContext == NULL) {
+					char buffer[128];
+					std::string output_file = Config::instance().outputDir();
 
-				output_file += "\\XVX-";
-				time_t rawtime;
-				struct tm timeinfo;
-				time(&rawtime);
-				localtime_s(&timeinfo, &rawtime);
-				strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
-				output_file += buffer;
-				output_file += ".mkv";
+					output_file += "\\XVX-";
+					time_t rawtime;
+					struct tm timeinfo;
+					time(&rawtime);
+					localtime_s(&timeinfo, &rawtime);
+					strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
+					output_file += buffer;
+					output_file += ".mkv";
 
-				std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
+					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
 
-				LOG("Output file: ", filename);
+					LOG("Output file: ", filename);
 
-				UINT width, height, fps_num, fps_den;
-				MFGetAttribute2UINT32asUINT64(pType.Get(), MF_MT_FRAME_SIZE, &width, &height);
-				MFGetAttributeRatio(pType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
+					UINT width, height, fps_num, fps_den;
+					MFGetAttribute2UINT32asUINT64(pType.Get(), MF_MT_FRAME_SIZE, &width, &height);
+					MFGetAttributeRatio(pType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
 
-				GUID pixelFormat;
-				pType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
+					GUID pixelFormat;
+					pType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
-				if ((exportContext->width != 0) && (exportContext->height != 0)) {
-					width = exportContext->width;
-					height = exportContext->height;
+					if ((exportContext->width != 0) && (exportContext->height != 0)) {
+						width = exportContext->width;
+						height = exportContext->height;
+					}
+
+					//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
+					REQUIRE(session->createVideoContext(width, height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context", std::exception());
+					REQUIRE(session->createFormatContext(filename.c_str()), "Failed to create format context", std::exception());
 				}
-				//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
-				LOG_CALL(session->createVideoContext(width, height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()));
-				LOG_CALL(session->createFormatContext(filename.c_str()));
 			}
+		} catch (std::exception& ex) {
+			SafeDelete(session);
+			SafeDelete(exportContext);
 		}
 	} 
 	return oIMFTransform_ProcessMessage(pThis, eMessage, ulParam);
@@ -931,8 +931,7 @@ static HRESULT Hook_IMFTransform_ProcessInput(
 	pThis->GetInputCurrentType(dwInputStreamID, mediaType.GetAddressOf());
 	LOG("IMFTransform::ProcessInput: ", GetMediaTypeDescription(mediaType.Get()).c_str());
 
-	return S_OK;
-	//return oIMFTransform_ProcessInput(pThis, dwInputStreamID, pSample, dwFlags);
+	return oIMFTransform_ProcessInput(pThis, dwInputStreamID, pSample, dwFlags);
 }
 
 static HRESULT Hook_IMFSinkWriter_AddStream(
@@ -968,7 +967,8 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 				try {
 					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment), "Failed to create audio context.", std::exception());
 				} catch (std::exception& ex) {
-					// Do nothing for now
+					SafeDelete(session);
+					SafeDelete(exportContext);
 				}
 			} else {
 				char buffer[64];
@@ -988,31 +988,42 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 	) {
 
 	if ((session != NULL) && (dwStreamIndex == 1)) {
-		ComPtr<IMFMediaBuffer> pBuffer;
-		LONGLONG sampleTime;
-		pSample->GetSampleTime(&sampleTime);
-		pSample->ConvertToContiguousBuffer(pBuffer.GetAddressOf());
+		ComPtr<IMFMediaBuffer> pBuffer = NULL;
+		try {
+			LONGLONG sampleTime;
+			pSample->GetSampleTime(&sampleTime);
+			pSample->ConvertToContiguousBuffer(pBuffer.GetAddressOf());
 
-		DWORD length;
-		pBuffer->GetCurrentLength(&length);
-		BYTE *buffer;
-		if (SUCCEEDED(pBuffer->Lock(&buffer, NULL, NULL))) {
-			LOG_CALL(session->writeAudioFrame(buffer, length, sampleTime));
+			DWORD length;
+			pBuffer->GetCurrentLength(&length);
+			BYTE *buffer;
+			if (SUCCEEDED(pBuffer->Lock(&buffer, NULL, NULL))) {
+				LOG_CALL(session->writeAudioFrame(buffer, length, sampleTime));
+			}
+			
+		} catch (std::exception&) {
+			SafeDelete(session);
+			SafeDelete(exportContext);
+			if (pBuffer != NULL) {
+				pBuffer->Unlock();
+			}
 		}
-		pBuffer->Unlock();
 	}
 
-	//return oIMFSinkWriter_WriteSample(pThis, dwStreamIndex, pSample);
-	return S_OK;
+	return oIMFSinkWriter_WriteSample(pThis, dwStreamIndex, pSample);
 }
 
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
 	) {
-	if (session != NULL) {
-		LOG_CALL(session->finishAudio());
-		LOG_CALL(session->finishVideo());
-		LOG_CALL(session->endSession());
+	try {
+		if (session != NULL) {
+			LOG_CALL(session->finishAudio());
+			LOG_CALL(session->finishVideo());
+			LOG_CALL(session->endSession());
+		}
+	} catch (std::exception&) {
+		// Do nothing
 	}
 	SafeDelete(session);
 	SafeDelete(exportContext);

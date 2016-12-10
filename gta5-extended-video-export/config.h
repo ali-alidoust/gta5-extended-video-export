@@ -8,7 +8,8 @@
 #include <regex>
 
 #define CFG_XVX_SECTION "XVX"
-#define CFG_LOSSLESS_EXPORT "lossless_export"
+#define CFG_AUTO_RELOAD_CONFIG "auto_reload_config"
+#define CFG_ENABLE_XVX "enable_mod"
 #define CFG_OUTPUT_DIR "output_folder"
 #define CFG_EXPORT_RESOLUTION "resolution"
 #define CFG_VIDEO_ENC "video_enc"
@@ -21,8 +22,8 @@
 class Config {
 public:
 
-	bool isLosslessExportEnabled() {
-		return this->is_lossless_export_enabled;
+	bool isModEnabled() {
+		return this->is_mod_enabled;
 	}
 
 	std::pair<uint32_t, uint32_t> exportResolution() {
@@ -49,6 +50,7 @@ public:
 		parser.reset(new INI::Parser(INI_FILE_NAME));
 
 		this->parse_lossless_export();
+		this->parse_auto_reload_config();
 		this->parse_output_dir();
 		this->parse_resolution();
 		this->parse_video_enc();
@@ -73,7 +75,8 @@ private:
 	};
 	~Config() {};
 
-	bool                            is_lossless_export_enabled = false;
+	bool                            is_mod_enabled             = true;
+	bool							auto_reload_config         = true;
 	std::pair<uint32_t, uint32_t>   resolution                 = std::make_pair(0, 0);
 	std::string                     output_dir                 = "";
 	std::string                     video_enc                  = "";
@@ -82,7 +85,11 @@ private:
 
 
 	void parse_lossless_export() {
-		is_lossless_export_enabled = stringToBoolean(parser->top()[CFG_LOSSLESS_EXPORT], true);
+		is_mod_enabled = stringToBoolean(parser->top()[CFG_ENABLE_XVX], true);
+	}
+
+	void parse_auto_reload_config() {
+		auto_reload_config = stringToBoolean(parser->top()[CFG_AUTO_RELOAD_CONFIG], true);
 	}
 
 	void parse_resolution() {

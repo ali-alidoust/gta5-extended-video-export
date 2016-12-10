@@ -7,12 +7,31 @@ namespace Encoder {
 	
 	const AVRational MF_TIME_BASE = { 1, 10000000 };
 
-	Session::Session() : videoFrameQueue(8) {
+	Session::Session() :
+		thread_video_encoder(),
+		videoFrameQueue(16)
+	{
 		LOG("Creating session...");
 	}
 
 	Session::~Session() {
 		LOG("Deleting session...");
+		this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, -1));
+		this->finishVideo();
+		this->finishAudio();
+		this->endSession();
+
+		LOG_CALL(av_free(this->oformat));
+		LOG_CALL(av_free(this->fmtContext));
+		LOG_CALL(av_free(this->videoCodecContext));
+		LOG_CALL(av_free(this->inputFrame));
+		LOG_CALL(av_free(this->outputFrame));
+		LOG_CALL(sws_freeContext(this->pSwsContext));
+		if (this->videoOptions) {
+			LOG_CALL(av_dict_free(&this->videoOptions));
+		}
+		LOG_CALL(av_free(this->audioCodecContext));
+		LOG_CALL(av_free(this->audioFrame));
 	}
 
 	HRESULT Session::createVideoContext(UINT width, UINT height, AVPixelFormat inputPixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat) {
@@ -27,7 +46,7 @@ namespace Encoder {
 		AVCodecID videoCodecId = AV_CODEC_ID_FFV1;
 
 		this->videoCodec = avcodec_find_encoder(videoCodecId);
-		RET_IF_NULL(this->videoCodec, "Could not create codec", E_FAIL);
+		RET_IF_NULL(this->videoCodec, "Could not find video codec", E_FAIL);
 
 		
 		this->videoCodecContext = avcodec_alloc_context3(this->videoCodec);
@@ -78,7 +97,7 @@ namespace Encoder {
 		this->createVideoFrames(width, height, this->inputPixelFormat, width, height, this->outputPixelFormat);
 
 		this->videoCodec = avcodec_find_encoder_by_name(vcodec.c_str());
-		RET_IF_NULL(this->videoCodec, "Could not create codec", E_FAIL);
+		RET_IF_NULL(this->videoCodec, "Could not find video codec:" + vcodec, E_FAIL);
 
 		this->videoCodecContext = avcodec_alloc_context3(this->videoCodec);
 		RET_IF_NULL(this->videoCodecContext, "Could not allocate context for the codec", E_FAIL);
@@ -91,8 +110,8 @@ namespace Encoder {
 		
 
 		//av_opt_set_from_string(this->videoCodecContext, preset.c_str(), NULL, "=", ":");
-
 		av_dict_parse_string(&this->videoOptions, preset.c_str(), "=", "/", 0);
+
 
 		this->videoCodecContext->pix_fmt = this->outputPixelFormat;
 		this->videoCodecContext->width = width;
@@ -100,7 +119,7 @@ namespace Encoder {
 		this->videoCodecContext->time_base = av_make_q(fps_den, fps_num);
 		this->videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
 		
-		thread_video_encoder = std::thread(&Session::encodingThread, this);
+		this->thread_video_encoder = std::thread(&Session::encodingThread, this);
 
 		LOG("Video context was created successfully.");
 		this->isVideoContextCreated = true;
@@ -165,7 +184,7 @@ namespace Encoder {
 		//this->oformat->video_codec = AV_CODEC_ID_FFV1;
 		//this->oformat->audio_codec = AV_CODEC_ID_PCM_S16LE;
 
-		RET_IF_FAILED_AV(avformat_alloc_output_context2(&fmtContext, this->oformat, NULL, NULL), "Could not allocate format context", E_FAIL);
+		RET_IF_FAILED_AV(avformat_alloc_output_context2(&this->fmtContext, this->oformat, NULL, NULL), "Could not allocate format context", E_FAIL);
 		RET_IF_NULL(this->fmtContext, "Could not allocate format context", E_FAIL);
 
 		this->fmtContext->oformat = this->oformat;
@@ -212,11 +231,16 @@ namespace Encoder {
 	void Session::encodingThread() {
 		LOG(__func__);
 		std::lock_guard<std::mutex> lock(this->mxEncodingThread);
-		frameQueueItem item = this->videoFrameQueue.dequeue();
-		while (item.data != nullptr) {
-			LOG("Encoding frame: ", item.sampletime);
-			this->writeVideoFrame(item.data->data(), item.data->size(), item.sampletime);
-			item = this->videoFrameQueue.dequeue();
+		try {
+			frameQueueItem item = this->videoFrameQueue.dequeue();
+			while (item.data != nullptr) {
+				LOG("Encoding frame: ", item.sampletime);
+				this->writeVideoFrame(item.data->data(), item.data->size(), item.sampletime);
+				item = this->videoFrameQueue.dequeue();
+			}
+			
+		} catch (...) {
+			// Do nothing
 		}
 		this->isEncodingThreadFinished = true;
 		this->cvEncodingThreadFinished.notify_all();
@@ -240,7 +264,7 @@ namespace Encoder {
 
 		//BYTE *pDataTarget = new BYTE[length];
 		/*switch (this->inputPixelFormat) {
-		
+
 		case AV_PIX_FMT_ARGB:
 		case AV_PIX_FMT_YUV420P:
 			memcpy_s(pDataTarget, length, pData, length);
@@ -249,7 +273,7 @@ namespace Encoder {
 		case AV_PIX_FMT_NV12:
 			this->convertNV12toYUV420P(pData, pDataTarget, this->width, this->height);
 			break;
-			
+
 		default:
 			LOG("Could not recognize pixel format.");
 			delete[] pDataTarget;
@@ -261,27 +285,21 @@ namespace Encoder {
 		sws_scale(pSwsContext, inputFrame->data, inputFrame->linesize, 0, this->height, outputFrame->data, outputFrame->linesize);
 		//outputFrame->pts = av_rescale_q(sampleTime, this->videoCodecContext->time_base, this->videoStream->time_base);
 		outputFrame->pts = sampleTime;
-		
-		AVPacket pkt;
 
-		av_init_packet(&pkt);
-		pkt.data = NULL;
-		pkt.size = 0;
+		std::shared_ptr<AVPacket> pPkt(new AVPacket(), av_packet_unref);
+
+		av_init_packet(pPkt.get());
+		pPkt->data = NULL;
+		pPkt->size = 0;
 
 		int got_packet;
-		avcodec_encode_video2(this->videoCodecContext, &pkt, outputFrame, &got_packet);
+		avcodec_encode_video2(this->videoCodecContext, pPkt.get(), outputFrame, &got_packet);
 		if (got_packet != 0) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-			av_packet_rescale_ts(&pkt, this->videoCodecContext->time_base, this->videoStream->time_base);
-			//pkt.dts = outputFrame->pts;
-			pkt.stream_index = this->videoStream->index;
-			av_interleaved_write_frame(this->fmtContext, &pkt);
+			av_packet_rescale_ts(pPkt.get(), this->videoCodecContext->time_base, this->videoStream->time_base);
+			pPkt->stream_index = this->videoStream->index;
+			av_interleaved_write_frame(this->fmtContext, pPkt.get());
 		}
-
-		//delete[] pDataTarget;
-
-		av_free_packet(&pkt);
-		av_packet_unref(&pkt);
 
 		return S_OK;
 	}
@@ -305,31 +323,31 @@ namespace Encoder {
 		//audioFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->audioStream->time_base);
 		audioFrame->pts = AV_NOPTS_VALUE;
 
-		AVPacket pkt;
+		std::shared_ptr<AVPacket> pPkt(new AVPacket(), av_packet_unref);
 
-		av_init_packet(&pkt);
-		pkt.data = NULL;
-		pkt.size = 0;
+		av_init_packet(pPkt.get());
+		pPkt->data = NULL;
+		pPkt->size = 0;
 
 		int got_packet;
-		avcodec_encode_audio2(this->audioCodecContext, &pkt, this->audioFrame, &got_packet);
+		avcodec_encode_audio2(this->audioCodecContext, pPkt.get(), this->audioFrame, &got_packet);
 		if (got_packet != 0) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
 			//av_packet_rescale_ts(&pkt, this->audioCodecContext->time_base, this->audioStream->time_base);
-			pkt.dts = audioFrame->pts;
-			pkt.stream_index = this->audioStream->index;
-			av_interleaved_write_frame(this->fmtContext, &pkt);
+			//pPkt->dts = audioFrame->pts;
+			pPkt->stream_index = this->audioStream->index;
+			av_interleaved_write_frame(this->fmtContext, pPkt.get());
 		}
-
-		av_free_packet(&pkt);
-		av_packet_unref(&pkt);
 
 		return S_OK;
 	}
 
 	HRESULT Session::finishVideo()
 	{
-
+		std::lock_guard<std::mutex> guard(this->mxFinish);
+		if (this->isVideoFinished) {
+			return S_OK;
+		}
 
 		// Wait until the video encoding thread is finished.
 		{
@@ -340,7 +358,10 @@ namespace Encoder {
 				this->cvEncodingThreadFinished.wait(lock);
 			}
 		}
-		thread_video_encoder.join();
+
+		if (thread_video_encoder.joinable()) {
+			thread_video_encoder.join();
+		}
 
 		// Write delayed frames
 		{
@@ -365,16 +386,16 @@ namespace Encoder {
 			av_packet_unref(&pkt);
 		}
 
-		{
-			std::lock_guard<std::mutex> guard(this->mxFinish);
-			this->isVideoFinished = true;
-		}
+		this->isVideoFinished = true;
 		return S_OK;
 	}
 
 	HRESULT Session::finishAudio()
 	{
 		std::lock_guard<std::mutex> guard(this->mxFinish);
+		if (this->isAudioFinished) {
+			return S_OK;
+		}
 
 		// Write delated frames
 		{
@@ -403,21 +424,35 @@ namespace Encoder {
 	}
 
 	HRESULT Session::endSession() {
-		std::lock_guard<std::mutex> guard(this->mxFinish);
-		if (this->isVideoFinished && this->isAudioFinished) {
-			this->isCapturing = false;
-			LOG("Ending session...");
 
-			LOG("Closing files...");
-				LOG_IF_FAILED_AV(av_write_trailer(this->fmtContext), "Could not finalize the output file.");
-			LOG_IF_FAILED_AV(avio_close(this->fmtContext->pb), "Could not close the output file.");
-			LOG_IF_FAILED_AV(avcodec_close(this->videoCodecContext), "Could not close the video codec.");
-			LOG_IF_FAILED_AV(avcodec_close(this->audioCodecContext), "Could not close the audio codec.");
-			av_free(this->videoCodecContext);
-			av_free(this->audioCodecContext);
-			this->isSessionFinished = true;
-			LOG("Done.");
+		std::lock_guard<std::mutex> lock(this->mxEndSession);
+
+		if (this->isSessionFinished) {
+			return S_OK;
 		}
+
+		while (true) {
+			std::lock_guard<std::mutex> guard(this->mxFinish);
+			if (this->isVideoFinished && this->isAudioFinished) {
+				break;
+			}
+		}
+		
+		this->isCapturing = false;
+		LOG("Ending session...");
+
+		LOG("Closing files...");
+		LOG_IF_FAILED_AV(av_write_trailer(this->fmtContext), "Could not finalize the output file.");
+		LOG_IF_FAILED_AV(avio_close(this->fmtContext->pb), "Could not close the output file.");
+		LOG_IF_FAILED_AV(avcodec_close(this->videoCodecContext), "Could not close the video codec.");
+		LOG_IF_FAILED_AV(avcodec_close(this->audioCodecContext), "Could not close the audio codec.");
+		/*av_free(this->videoCodecContext.get());
+		av_free(this->audioCodecContext.get());*/
+		
+		this->isSessionFinished = true;
+		this->cvEndSession.notify_all();
+		LOG("Done.");
+
 		return S_OK;
 	}
 	HRESULT Session::createVideoFrames(uint32_t srcWidth, uint32_t srcHeight, AVPixelFormat srcFmt, uint32_t dstWidth, uint32_t dstHeight, AVPixelFormat dstFmt)

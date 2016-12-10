@@ -18,24 +18,28 @@ extern "C" {
 #include <libavutil\opt.h>
 }
 
+//template<typename T>
+//using std::shared_ptr = std::shared_ptr<T, std::function<void(T*)>>;
+
 namespace Encoder {
 	class Session {
 	public:
 		AVOutputFormat *oformat;
 		AVFormatContext *fmtContext;
 		
-		AVCodec *videoCodec;
+		AVCodec *videoCodec = NULL;
 		AVCodecContext *videoCodecContext = NULL;
-		AVFrame *inputFrame;
-		AVFrame *outputFrame;
-		AVStream *videoStream;
-		SwsContext* pSwsContext;
-		AVDictionary* videoOptions;
+		AVFrame *inputFrame = NULL;
+		AVFrame *outputFrame = NULL;
+		AVStream *videoStream = NULL;
+		SwsContext *pSwsContext = NULL;
+		AVDictionary *videoOptions = NULL;
 
-		AVCodec *audioCodec;
+		AVCodec *audioCodec = NULL;
 		AVCodecContext *audioCodecContext = NULL;
-		AVFrame *audioFrame;
-		AVStream *audioStream;
+		AVFrame *audioFrame = NULL;
+		AVStream *audioStream = NULL;
+
 
 		bool isVideoFinished = false;
 		bool isAudioFinished = false;
@@ -49,7 +53,16 @@ namespace Encoder {
 		std::condition_variable cvAudioContext;
 		std::condition_variable cvFormatContext;
 
+		std::mutex mxEndSession;
+		std::condition_variable cvEndSession;
+
 		struct frameQueueItem {
+			frameQueueItem():
+				data(nullptr),
+				sampletime(0)
+			{
+				
+			}
 			frameQueueItem(std::shared_ptr<std::vector<uint8_t>> bytes, int64_t sampletime) :
 				data(bytes),
 				sampletime(sampletime)
@@ -104,20 +117,6 @@ namespace Encoder {
 
 		HRESULT finishVideo();
 		HRESULT finishAudio();
-
-		HRESULT convertNV12toYUV420P(const BYTE* image_src, BYTE* image_dst,
-			int image_width, int image_height) {
-			BYTE* p = image_dst;
-			memcpy(p, image_src, image_width * image_height * 3 / 2);
-			const BYTE* pNV = image_src + image_width * image_height;
-			BYTE* pU = p + image_width * image_height;
-			BYTE* pV = p + image_width * image_height + ((image_width * image_height) >> 2);
-			for (int i = 0; i < (image_width * image_height) / 2; i++) {
-				if ((i % 2) == 0) *pU++ = *(pNV + i);
-				else *pV++ = *(pNV + i);
-			}
-			return S_OK;
-		}
 
 		HRESULT endSession();
 
