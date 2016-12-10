@@ -10,60 +10,50 @@
 #define CFG_XVX_SECTION "XVX"
 #define CFG_LOSSLESS_EXPORT "lossless_export"
 #define CFG_OUTPUT_DIR "output_folder"
-//#define CFG_USE_D3D_CAPTURE "use_d3d_capture"
 #define CFG_EXPORT_RESOLUTION "resolution"
+#define CFG_VIDEO_ENC "video_enc"
+#define CFG_VIDEO_FMT "video_fmt"
+#define CFG_VIDEO_CFG "video_cfg"
+
+//#define CFG_AUDIO_CODEC "audio_codec"
 #define INI_FILE_NAME TARGET_NAME ".ini"
 
 class Config {
 public:
 
 	bool isLosslessExportEnabled() {
-		return stringToBoolean(parser.top()[CFG_LOSSLESS_EXPORT], true);
+		return this->is_lossless_export_enabled;
 	}
-
-	/*bool isUseD3DCaptureEnabled() {
-		return stringToBoolean(parser.top()[CFG_USE_D3D_CAPTURE], false);
-		
-	}*/
 
 	std::pair<uint32_t, uint32_t> exportResolution() {
-		std::string string = parser.top()[CFG_EXPORT_RESOLUTION];
-		string = std::regex_replace(string, std::regex("\\s+"), "");
-
-		if (string.empty()) {
-			return std::make_pair(0, 0);
-		}
-
-		std::smatch match;
-		if (!std::regex_match(string, match, std::regex("^(\\d+)x(\\d+)$"))) {
-			LOG("Could not parse resolution: ", string);
-			return std::make_pair(0, 0);
-		}
-
-		uint32_t width  = std::stoul(match[1]);
-		uint32_t height = std::stoul(match[2]);
-
-		return std::make_pair(width, height);
+		return this->resolution;
 	}
 
-	std::stringstream outputDir() {
-		std::stringstream stream;
+	std::string outputDir() {
+		return this->output_dir;
+	}
 
-		std::string stringValue = parser.top()[CFG_OUTPUT_DIR];
-		stringValue = std::regex_replace(stringValue, std::regex("(^\\s*)|(\\s*$)"), "");
+	std::string videoEnc() {
+		return video_enc;
+	}
 
-		if ((!stringValue.empty()) && (stringValue.find_first_not_of(' ') != std::string::npos))
-		{
-			stream << stringValue;
-		} else {
-			char buffer[MAX_PATH];
-			LOG_IF_FAILED(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
-			stream << buffer;
-		}
+	std::string videoFmt() {
+		return video_fmt;
+	}
 
-		
+	std::string videoCfg() {
+		return video_cfg;
+	}
 
-		return stream;
+	void reload() {
+		parser.reset(new INI::Parser(INI_FILE_NAME));
+
+		this->parse_lossless_export();
+		this->parse_output_dir();
+		this->parse_resolution();
+		this->parse_video_enc();
+		this->parse_video_fmt();
+		this->parse_video_cfg();
 	}
 
 	static Config& instance()
@@ -76,10 +66,96 @@ public:
 	void operator=(Config const&) = delete;
 
 private:
-	INI::Parser parser = INI::Parser(INI_FILE_NAME);
+	std::unique_ptr<INI::Parser> parser;
 
-	Config() {};
+	Config() {
+		this->reload();
+	};
 	~Config() {};
+
+	bool                            is_lossless_export_enabled = false;
+	std::pair<uint32_t, uint32_t>   resolution                 = std::make_pair(0, 0);
+	std::string                     output_dir                 = "";
+	std::string                     video_enc                  = "";
+	std::string                     video_fmt                  = "";
+	std::string                     video_cfg                  = "";
+
+
+	void parse_lossless_export() {
+		is_lossless_export_enabled = stringToBoolean(parser->top()[CFG_LOSSLESS_EXPORT], true);
+	}
+
+	void parse_resolution() {
+		std::string string = parser->top()[CFG_EXPORT_RESOLUTION];
+		string = std::regex_replace(string, std::regex("\\s+"), "");
+
+		if (string.empty()) {
+			resolution = std::make_pair(0, 0);
+			return;
+		}
+
+		std::smatch match;
+		if (!std::regex_match(string, match, std::regex("^(\\d+)x(\\d+)$"))) {
+			LOG("Could not parse resolution: ", string);
+			resolution = std::make_pair(0, 0);
+			return;
+		}
+
+		uint32_t width = std::stoul(match[1]);
+		uint32_t height = std::stoul(match[2]);
+
+		resolution = std::make_pair(width, height);
+		return;
+	}
+
+	void parse_output_dir() {
+		this->output_dir = std::string();
+
+		std::string stringValue = parser->top()[CFG_OUTPUT_DIR];
+		stringValue = std::regex_replace(stringValue, std::regex("(^\\s*)|(\\s*$)"), "");
+
+		if ((!stringValue.empty()) && (stringValue.find_first_not_of(' ') != std::string::npos))
+		{
+			this->output_dir += stringValue;
+		} else {
+			char buffer[MAX_PATH];
+			LOG_IF_FAILED(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
+			this->output_dir += buffer;
+		}
+	}
+
+	void parse_video_enc() {
+		if (!getTrimmed(CFG_VIDEO_ENC).empty()) {
+			this->video_enc = parser->top()[CFG_VIDEO_ENC];
+			return;
+		}
+
+		this->video_enc = "ffv1";
+	}
+
+	void parse_video_fmt() {
+		if (!getTrimmed(CFG_VIDEO_FMT).empty()) {
+			this->video_fmt = parser->top()[CFG_VIDEO_FMT];
+			return;
+		}
+		
+		this->video_fmt = "bgr";
+	}
+
+	void parse_video_cfg() {
+		if (!getTrimmed(CFG_VIDEO_CFG).empty()) {
+			this->video_cfg = parser->top()[CFG_VIDEO_CFG];
+			return;
+		}
+
+		this->video_cfg = "";
+	}
+
+	std::string getTrimmed(std::string config_name) {
+		std::string orig_str = parser->top()[config_name];
+		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
+	}
+
 
 	static HRESULT GetVideosDirectory(LPSTR output)
 	{
@@ -114,4 +190,5 @@ private:
 		std::istringstream(booleanString) >> std::boolalpha >> value;
 		return value;
 	}
+
 };

@@ -17,17 +17,19 @@ namespace Encoder {
 
 	HRESULT Session::createVideoContext(UINT width, UINT height, AVPixelFormat inputPixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat) {
 		std::lock_guard<std::mutex> guard(this->mxVideoContext);
+		this->width = width;
+		this->height = height;
 		this->inputPixelFormat = inputPixelFormat;
+		this->outputPixelFormat = outputPixelFormat;
+
+		this->createVideoFrames(width, height, inputPixelFormat, width, height, outputPixelFormat);
 
 		AVCodecID videoCodecId = AV_CODEC_ID_FFV1;
-		this->outputPixelFormat = outputPixelFormat;
 
 		this->videoCodec = avcodec_find_encoder(videoCodecId);
 		RET_IF_NULL(this->videoCodec, "Could not create codec", E_FAIL);
 
 		
-		this->width = width;
-		this->height = height;
 		this->videoCodecContext = avcodec_alloc_context3(this->videoCodec);
 		RET_IF_NULL(this->videoCodecContext, "Could not allocate context for the codec", E_FAIL);
 
@@ -43,18 +45,67 @@ namespace Encoder {
 
 		this->videoCodecContext->gop_size = 1;
 
-		videoFrame = av_frame_alloc();
-		RET_IF_NULL(videoFrame, "Could not allocate video frame", E_FAIL);
-		videoFrame->format = this->videoCodecContext->pix_fmt;
-		videoFrame->width = width;
-		videoFrame->height = height;
+		this->thread_video_encoder = std::thread(&Session::encodingThread, this);
+
 		LOG("Video context was created successfully.");
 		this->isVideoContextCreated = true;
 		this->cvVideoContext.notify_all();
 
-		thread_video_encoder = std::thread(&Session::encodingThread, this);
 
 		//std::async(std::launch::async, &Session::encodingThread, this);
+		return S_OK;
+	}
+
+	HRESULT Session::createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset)
+	{
+		std::lock_guard<std::mutex> guard(this->mxVideoContext);
+
+		this->inputPixelFormat = av_get_pix_fmt(inputPixelFormatString.c_str());
+		if (this->inputPixelFormat == AV_PIX_FMT_NONE) {
+			LOG("Unknown input pixel format specified: ", inputPixelFormatString);
+			return E_FAIL;
+		}
+
+		this->outputPixelFormat = av_get_pix_fmt(outputPixelFormatString.c_str());
+		if (this->outputPixelFormat == AV_PIX_FMT_NONE) {
+			LOG("Unknown output pixel format specified: ", outputPixelFormatString);
+			return E_FAIL;
+		}
+
+		this->width = width;
+		this->height = height;
+
+		this->createVideoFrames(width, height, this->inputPixelFormat, width, height, this->outputPixelFormat);
+
+		this->videoCodec = avcodec_find_encoder_by_name(vcodec.c_str());
+		RET_IF_NULL(this->videoCodec, "Could not create codec", E_FAIL);
+
+		this->videoCodecContext = avcodec_alloc_context3(this->videoCodec);
+		RET_IF_NULL(this->videoCodecContext, "Could not allocate context for the codec", E_FAIL);
+		/*av_opt_set_defaults(this->videoCodecContext);
+		av_opt_set_defaults(this->videoCodecContext->priv_data);*/
+		//av_opt_show2(this->videoCodecContext, NULL, 0xFFFFFFFF, 0);
+		//this->videoCodecContext->coder_type = 1;
+		//LOG("");
+		//av_opt_show2(this->videoCodecContext->priv_data, NULL, 0xFFFFFFFF, 0);
+		
+
+		//av_opt_set_from_string(this->videoCodecContext, preset.c_str(), NULL, "=", ":");
+
+		av_dict_parse_string(&this->videoOptions, preset.c_str(), "=", "/", 0);
+
+		this->videoCodecContext->pix_fmt = this->outputPixelFormat;
+		this->videoCodecContext->width = width;
+		this->videoCodecContext->height = height;
+		this->videoCodecContext->time_base = av_make_q(fps_den, fps_num);
+		this->videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
+		
+		thread_video_encoder = std::thread(&Session::encodingThread, this);
+
+		LOG("Video context was created successfully.");
+		this->isVideoContextCreated = true;
+		this->cvVideoContext.notify_all();
+
 		return S_OK;
 	}
 
@@ -70,7 +121,7 @@ namespace Encoder {
 		this->audioCodecContext->bits_per_raw_sample = bitsPerSample;
 		this->audioCodecContext->bit_rate = sampleRate * bitsPerSample * numChannels;
 		this->audioCodecContext->sample_fmt = sampleFormat;
-		this->audioCodecContext->time_base = { 1, 48000 }; // Probably unused.
+		this->audioCodecContext->time_base = { 1, (int)sampleRate }; // Probably unused.
 		this->audioBlockAlign = align;
 
 		this->audioFrame = av_frame_alloc();
@@ -111,15 +162,15 @@ namespace Encoder {
 
 		this->oformat = av_guess_format(NULL, this->filename, NULL);
 		RET_IF_NULL(this->oformat, "Could not create format", E_FAIL);
-		this->oformat->video_codec = AV_CODEC_ID_FFV1;
-		this->oformat->audio_codec = AV_CODEC_ID_PCM_S16LE;
+		//this->oformat->video_codec = AV_CODEC_ID_FFV1;
+		//this->oformat->audio_codec = AV_CODEC_ID_PCM_S16LE;
 
 		RET_IF_FAILED_AV(avformat_alloc_output_context2(&fmtContext, this->oformat, NULL, NULL), "Could not allocate format context", E_FAIL);
 		RET_IF_NULL(this->fmtContext, "Could not allocate format context", E_FAIL);
 
 		this->fmtContext->oformat = this->oformat;
-		this->fmtContext->video_codec_id = AV_CODEC_ID_FFV1;
-		this->fmtContext->audio_codec_id = AV_CODEC_ID_PCM_S16LE;
+		//this->fmtContext->video_codec_id = AV_CODEC_ID_FFV1;
+		//this->fmtContext->audio_codec_id = AV_CODEC_ID_PCM_S16LE;
 
 		this->videoStream = avformat_new_stream(this->fmtContext, this->videoCodec);
 		RET_IF_NULL(this->videoStream, "Could not create new stream", E_FAIL);
@@ -129,7 +180,7 @@ namespace Encoder {
 
 		this->audioStream = avformat_new_stream(this->fmtContext, this->audioCodec);
 		RET_IF_NULL(this->audioStream, "Could not create new stream", E_FAIL);
-		this->audioStream->time_base = av_make_q(1, this->audioCodecContext->sample_rate);
+		this->audioStream->time_base = this->audioCodecContext->time_base;
 		this->audioStream->codec = this->audioCodecContext;
 		this->audioStream->index = 1;
 
@@ -139,7 +190,7 @@ namespace Encoder {
 			this->audioCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
 		}
 
-		RET_IF_FAILED_AV(avcodec_open2(this->videoCodecContext, this->videoCodec, NULL), "Could not open codec", E_FAIL);
+		RET_IF_FAILED_AV(avcodec_open2(this->videoCodecContext, this->videoCodec, &this->videoOptions), "Could not open codec", E_FAIL);
 		RET_IF_FAILED_AV(avcodec_open2(this->audioCodecContext, this->audioCodec, NULL), "Could not open codec", E_FAIL);
 		RET_IF_FAILED_AV(avio_open(&this->fmtContext->pb, filename, AVIO_FLAG_WRITE), "Could not open output file", E_FAIL);
 		RET_IF_NULL(this->fmtContext->pb, "Could not open output file", E_FAIL);
@@ -187,8 +238,8 @@ namespace Encoder {
 			return E_FAIL;
 		}
 
-		BYTE *pDataTarget = new BYTE[length];
-		switch (this->inputPixelFormat) {
+		//BYTE *pDataTarget = new BYTE[length];
+		/*switch (this->inputPixelFormat) {
 		
 		case AV_PIX_FMT_ARGB:
 		case AV_PIX_FMT_YUV420P:
@@ -203,10 +254,13 @@ namespace Encoder {
 			LOG("Could not recognize pixel format.");
 			delete[] pDataTarget;
 			return E_FAIL;
-		}
-		RET_IF_FAILED(av_image_fill_arrays(videoFrame->data, videoFrame->linesize, pDataTarget, this->outputPixelFormat, this->width, this->height, 1), "Could not fill the frame with data from the buffer", E_FAIL);
+		}*/
+		RET_IF_FAILED(av_image_fill_arrays(inputFrame->data, inputFrame->linesize, pData, this->inputPixelFormat, this->width, this->height, 1), "Could not fill the frame with data from the buffer", E_FAIL);
 		//videoFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->videoStream->time_base);
-		videoFrame->pts = av_rescale_q(sampleTime, this->videoCodecContext->time_base, this->videoStream->time_base);
+
+		sws_scale(pSwsContext, inputFrame->data, inputFrame->linesize, 0, this->height, outputFrame->data, outputFrame->linesize);
+		//outputFrame->pts = av_rescale_q(sampleTime, this->videoCodecContext->time_base, this->videoStream->time_base);
+		outputFrame->pts = sampleTime;
 		
 		AVPacket pkt;
 
@@ -215,15 +269,16 @@ namespace Encoder {
 		pkt.size = 0;
 
 		int got_packet;
-		avcodec_encode_video2(this->videoCodecContext, &pkt, videoFrame, &got_packet);
+		avcodec_encode_video2(this->videoCodecContext, &pkt, outputFrame, &got_packet);
 		if (got_packet != 0) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-			pkt.dts = videoFrame->pts;
+			av_packet_rescale_ts(&pkt, this->videoCodecContext->time_base, this->videoStream->time_base);
+			//pkt.dts = outputFrame->pts;
 			pkt.stream_index = this->videoStream->index;
 			av_interleaved_write_frame(this->fmtContext, &pkt);
 		}
 
-		delete[] pDataTarget;
+		//delete[] pDataTarget;
 
 		av_free_packet(&pkt);
 		av_packet_unref(&pkt);
@@ -246,6 +301,8 @@ namespace Encoder {
 		this->audioFrame->format = this->audioCodecContext->sample_fmt;
 		avcodec_fill_audio_frame(this->audioFrame, this->audioCodecContext->channels, this->audioCodecContext->sample_fmt, pData, length, this->audioBlockAlign);
 
+		//audioFrame->pts = sampleTime;
+		//audioFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->audioStream->time_base);
 		audioFrame->pts = AV_NOPTS_VALUE;
 
 		AVPacket pkt;
@@ -258,6 +315,8 @@ namespace Encoder {
 		avcodec_encode_audio2(this->audioCodecContext, &pkt, this->audioFrame, &got_packet);
 		if (got_packet != 0) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
+			//av_packet_rescale_ts(&pkt, this->audioCodecContext->time_base, this->audioStream->time_base);
+			pkt.dts = audioFrame->pts;
 			pkt.stream_index = this->audioStream->index;
 			av_interleaved_write_frame(this->fmtContext, &pkt);
 		}
@@ -282,6 +341,30 @@ namespace Encoder {
 			}
 		}
 		thread_video_encoder.join();
+
+		// Write delayed frames
+		{
+			AVPacket pkt;
+
+			av_init_packet(&pkt);
+			pkt.data = NULL;
+			pkt.size = 0;
+
+			int got_packet;
+			avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
+			while (got_packet != 0) {
+				std::lock_guard<std::mutex> guard(this->mxWriteFrame);
+				av_packet_rescale_ts(&pkt, this->videoCodecContext->time_base, this->videoStream->time_base);
+				//pkt.dts = outputFrame->pts;
+				pkt.stream_index = this->videoStream->index;
+				av_interleaved_write_frame(this->fmtContext, &pkt);
+				avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
+			}
+
+			av_free_packet(&pkt);
+			av_packet_unref(&pkt);
+		}
+
 		{
 			std::lock_guard<std::mutex> guard(this->mxFinish);
 			this->isVideoFinished = true;
@@ -292,6 +375,29 @@ namespace Encoder {
 	HRESULT Session::finishAudio()
 	{
 		std::lock_guard<std::mutex> guard(this->mxFinish);
+
+		// Write delated frames
+		{
+			AVPacket pkt;
+
+			av_init_packet(&pkt);
+			pkt.data = NULL;
+			pkt.size = 0;
+
+			int got_packet;
+			avcodec_encode_audio2(this->audioCodecContext, &pkt, NULL, &got_packet);
+			while (got_packet != 0) {
+				std::lock_guard<std::mutex> guard(this->mxWriteFrame);
+				//av_packet_rescale_ts(&pkt, this->audioCodecContext->time_base, this->audioStream->time_base);
+				pkt.stream_index = this->audioStream->index;
+				av_interleaved_write_frame(this->fmtContext, &pkt);
+				avcodec_encode_audio2(this->audioCodecContext, &pkt, NULL, &got_packet);
+			}
+
+			av_free_packet(&pkt);
+			av_packet_unref(&pkt);
+		}
+
 		this->isAudioFinished = true;
 		return S_OK;
 	}
@@ -312,6 +418,24 @@ namespace Encoder {
 			this->isSessionFinished = true;
 			LOG("Done.");
 		}
+		return S_OK;
+	}
+	HRESULT Session::createVideoFrames(uint32_t srcWidth, uint32_t srcHeight, AVPixelFormat srcFmt, uint32_t dstWidth, uint32_t dstHeight, AVPixelFormat dstFmt)
+	{
+		this->inputFrame = av_frame_alloc();
+		RET_IF_NULL(this->inputFrame, "Could not allocate video frame", E_FAIL);
+		this->inputFrame->format = srcFmt;
+		this->inputFrame->width = srcWidth;
+		this->inputFrame->height = srcHeight;
+
+		this->outputFrame = av_frame_alloc();
+		RET_IF_NULL(this->outputFrame, "Could not allocate video frame", E_FAIL);
+		this->outputFrame->format = dstFmt;
+		this->outputFrame->width = dstWidth;
+		this->outputFrame->height = dstHeight;
+		av_image_alloc(outputFrame->data, outputFrame->linesize, dstWidth, dstHeight, dstFmt, 1);
+
+		this->pSwsContext = sws_getContext(srcWidth, srcHeight, srcFmt, dstWidth, dstHeight, dstFmt, SWS_POINT, NULL, NULL, NULL);
 		return S_OK;
 	}
 }

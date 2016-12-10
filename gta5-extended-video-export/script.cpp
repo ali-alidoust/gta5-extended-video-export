@@ -32,6 +32,9 @@ namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkLock(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkGetData(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkCreateTexture2D(new PLH::VFuncDetour);
+	std::shared_ptr<PLH::VFuncDetour> hkMap(new PLH::VFuncDetour);
+	std::shared_ptr<PLH::VFuncDetour> hkCopyResource(new PLH::VFuncDetour);
+	std::shared_ptr<PLH::VFuncDetour> hkCopySubresourceRegion(new PLH::VFuncDetour);
 
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);
@@ -118,6 +121,24 @@ static HRESULT Hook_CreateTexture2D(
 	ID3D11Texture2D        **ppTexture2D
 	);
 
+static void CopyResource(
+	ID3D11DeviceContext *pThis,
+	ID3D11Resource      *pDstResource,
+	ID3D11Resource      *pSrcResource
+	);
+
+static void CopySubresourceRegion(
+	ID3D11DeviceContext  *pThis,
+	ID3D11Resource       *pDstResource,
+	UINT                 DstSubresource,
+	UINT                 DstX,
+	UINT                 DstY,
+	UINT                 DstZ,
+	ID3D11Resource       *pSrcResource,
+	UINT                 SrcSubresource,
+	const D3D11_BOX      *pSrcBox
+	);
+
 
 static void Hook_ClearRenderTargetView(
 	ID3D11DeviceContext    *pThis,
@@ -191,6 +212,15 @@ static HRESULT Lock(
 	DWORD *pcbCurrentLength
 	);
 
+static HRESULT Hook_Map(
+	ID3D11DeviceContext      *pThis,
+	ID3D11Resource           *pResource,
+	UINT                     Subresource,
+	D3D11_MAP                MapType,
+	UINT                     MapFlags,
+	D3D11_MAPPED_SUBRESOURCE *pMappedResource
+	);
+
 
 typedef HRESULT(*tCreateObjectFromURL)(
 	IMFSourceResolver *pThis,
@@ -207,6 +237,33 @@ typedef HRESULT(*tCreateTexture2D)(
 	const D3D11_TEXTURE2D_DESC   *pDesc,
 	const D3D11_SUBRESOURCE_DATA *pInitialData,
 	ID3D11Texture2D        **ppTexture2D
+	);
+
+typedef void (*tCopyResource)(
+	ID3D11DeviceContext *pThis,
+	ID3D11Resource      *pDstResource,
+	ID3D11Resource      *pSrcResource
+	);
+
+typedef void (*tCopySubresourceRegion)(
+	ID3D11DeviceContext  *pThis,
+	ID3D11Resource       *pDstResource,
+	UINT                 DstSubresource,
+	UINT                 DstX,
+	UINT                 DstY,
+	UINT                 DstZ,
+	ID3D11Resource       *pSrcResource,
+	UINT                 SrcSubresource,
+	const D3D11_BOX      *pSrcBox
+	);
+
+typedef HRESULT(*tMap)(
+	ID3D11DeviceContext      *pThis,
+	ID3D11Resource           *pResource,
+	UINT                     Subresource,
+	D3D11_MAP                MapType,
+	UINT                     MapFlags,
+	D3D11_MAPPED_SUBRESOURCE *pMappedResource
 	);
 
 typedef void(*tClearRenderTargetView)(
@@ -331,7 +388,10 @@ tCreateObjectFromURL oCreateObjectFromURL;
 tRSSetViewports oRSSetViewports;
 tRSSetScissorRects oRSSetScissorRects;
 tLock oLock;
+tMap oMap;
 tGetData oGetData;
+tCopyResource oCopyResource;
+tCopySubresourceRegion oCopySubresourceRegion;
 
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	static char msg[8192];
@@ -373,7 +433,9 @@ void onPresent(IDXGISwapChain *swapChain) {
 			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 44, &RSSetViewports, &oRSSetViewports, hkRSSetViewports), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
 			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 45, &RSSetScissorRects, &oRSSetScissorRects, hkRSSetScissorRects), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 29, &GetData, &oGetData, hkGetData), "Failed to hook ID3DDeviceContext::GetData", std::exception());
-			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 14, &Hook_Map, &oMap, hkMap), "Failed to hook ID3DDeviceContext::Map", std::exception());
+			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 14, &Hook_Map, &oMap, hkMap), "Failed to hook ID3DDeviceContext::Map", std::exception());
+			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 47, &CopyResource, &oCopyResource, hkCopyResource), "Failed to hook ID3DDeviceContext::Map", std::exception());
+			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 46, &CopySubresourceRegion, &oCopySubresourceRegion, hkCopySubresourceRegion), "Failed to hook ID3DDeviceContext::Map", std::exception());
 			REQUIRE(hookVirtualFunction(pDevice.Get(), 5, &Hook_CreateTexture2D, &oCreateTexture2D, hkCreateTexture2D), "Failed to hook ID3DDeviceContext::Map", std::exception());
 			REQUIRE(hookVirtualFunction(pDevice.Get(), 9, &Hook_CreateRenderTargetView, &oCreateRenderTargetView, hkCreateRenderTargetView), "Failed to hook ID3DDeviceContext::CreateRenderTargetView", std::exception());
 			REQUIRE(hookVirtualFunction(pDevice.Get(), 10, &Hook_CreateDepthStencilView, &oCreateDepthStencilView, hkCreateDepthStencilView), "Failed to hook ID3DDeviceContext::CreateDepthStencilView", std::exception());
@@ -512,6 +574,36 @@ static HRESULT Hook_CoCreateInstance(
 	}
 
 	return result;
+}
+
+static void CopyResource(
+	ID3D11DeviceContext *pThis,
+	ID3D11Resource      *pDstResource,
+	ID3D11Resource      *pSrcResource
+	) {
+	return oCopyResource(pThis, pDstResource, pSrcResource);
+}
+
+static void CopySubresourceRegion(
+	ID3D11DeviceContext  *pThis,
+	ID3D11Resource       *pDstResource,
+	UINT                 DstSubresource,
+	UINT                 DstX,
+	UINT                 DstY,
+	UINT                 DstZ,
+	ID3D11Resource       *pSrcResource,
+	UINT                 SrcSubresource,
+	const D3D11_BOX      *pSrcBox
+	) {
+	if ((exportContext != NULL) && (exportContext->pExportRenderTarget != NULL)) {
+		if ((void*)pSrcResource == (void*)exportContext->pExportRenderTarget.Get()) {
+			LOG("Copying from texture2D");
+		}
+		if ((void*)pDstResource == (void*)exportContext->pExportRenderTarget.Get()) {
+			LOG("Copying to texture2D");
+		}
+	}
+	return oCopySubresourceRegion(pThis, pDstResource, DstSubresource, DstX, DstY, DstZ, pSrcResource, SrcSubresource, pSrcBox);
 }
 
 static HRESULT Hook_CreateRenderTargetView(
@@ -720,7 +812,7 @@ static void Hook_OMSetRenderTargets(
 	//return oOMSetRenderTargets(pThis, NumViews, ppRenderTargetViews, pDepthStencilView);
 
 
-	if ((session != NULL) && (exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
+	if ((session != NULL) && (session->isCapturing) && (exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
 		// Time to capture rendered frame
 		ComPtr<ID3D11ShaderResourceView> pShaderResourceView;
 		pThis->VSGetShaderResources(0, 1, pShaderResourceView.GetAddressOf());
@@ -794,19 +886,18 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 			LOG("Input media type: ", GetMediaTypeDescription(pType.Get()).c_str());
 			if (session->videoCodecContext == NULL) {
 				char buffer[128];
-				std::stringstream stream = Config::instance().outputDir();
+				std::string output_file = Config::instance().outputDir();
 
-				stream << "\\";
-				stream << "XVX-";
+				output_file += "\\XVX-";
 				time_t rawtime;
 				struct tm timeinfo;
 				time(&rawtime);
 				localtime_s(&timeinfo, &rawtime);
 				strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
-				stream << buffer;
-				stream << ".avi";
+				output_file += buffer;
+				output_file += ".mkv";
 
-				std::string filename = std::regex_replace(stream.str(), std::regex("\\\\+"), "\\");
+				std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
 
 				LOG("Output file: ", filename);
 
@@ -821,8 +912,8 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 					width = exportContext->width;
 					height = exportContext->height;
 				}
-
-				LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_ARGB, fps_num, fps_den, AV_PIX_FMT_BGRA));
+				//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
+				LOG_CALL(session->createVideoContext(width, height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()));
 				LOG_CALL(session->createFormatContext(filename.c_str()));
 			}
 		}
@@ -953,14 +1044,7 @@ static HRESULT Lock(
 	return oLock(pThis, ppbBuffer, pcbMaxLength, pcbCurrentLength);
 }
 
-//typedef HRESULT (*tMap)(
-//	ID3D11DeviceContext      *pThis,
-//	ID3D11Resource           *pResource,
-//	UINT                     Subresource,
-//	D3D11_MAP                MapType,
-//	UINT                     MapFlags,
-//	D3D11_MAPPED_SUBRESOURCE *pMappedResource
-//	);
+
 
 //static HMODULE Hook_LoadLibraryA(
 //	LPCSTR lpFileName
@@ -1032,16 +1116,26 @@ static HRESULT Lock(
 //	oDraw(pThis, VertexCount, StartVertexLocation);
 //}
 
-//static HRESULT Hook_Map(
-//	ID3D11DeviceContext      *pThis,
-//	ID3D11Resource           *pResource,
-//	UINT                     Subresource,
-//	D3D11_MAP                MapType,
-//	UINT                     MapFlags,
-//	D3D11_MAPPED_SUBRESOURCE *pMappedResource
-//	) {
-//	return oMap(pThis, pResource, Subresource, MapType, MapFlags, pMappedResource);
-//}
+static HRESULT Hook_Map(
+	ID3D11DeviceContext      *pThis,
+	ID3D11Resource           *pResource,
+	UINT                     Subresource,
+	D3D11_MAP                MapType,
+	UINT                     MapFlags,
+	D3D11_MAPPED_SUBRESOURCE *pMappedResource
+	) {
+
+	/*if ((exportContext != NULL) && (exportContext->pExportRenderTarget != NULL)) {
+		ComPtr<ID3D11Texture2D> pTexture;
+		if (SUCCEEDED(pResource->QueryInterface(pTexture.GetAddressOf()))) {
+			if (pTexture == exportContext->pExportRenderTarget) {
+				LOG("Mapping the texture here.");
+			}
+		}
+	}*/
+
+	return oMap(pThis, pResource, Subresource, MapType, MapFlags, pMappedResource);
+}
 
 static HRESULT Hook_CreateTexture2D(
 	ID3D11Device*				 *pThis,
@@ -1117,7 +1211,7 @@ static HRESULT Hook_CreateTexture2D(
 //	return oD3D11CreateDevice(pAdapter, DriverType, Software, Flags, pFeatureLevels, FeatureLevels, SDKVersion, ppDevice, pFeatureLevel, ppImmediateContext);
 //}
 
-//std::shared_ptr<PLH::VFuncDetour> hkMap(new PLH::VFuncDetour);
+
 
 //std::shared_ptr<PLH::VFuncDetour> hkDraw(new PLH::VFuncDetour);
 //std::shared_ptr<PLH::VFuncDetour> hkPSSetShader(new PLH::VFuncDetour);
@@ -1178,14 +1272,7 @@ static HRESULT Hook_CreateTexture2D(
 //	LPCSTR lpFileName
 //	);
 
-//static HRESULT Hook_Map(
-//	ID3D11DeviceContext      *pThis,
-//	ID3D11Resource           *pResource,
-//	UINT                     Subresource,
-//	D3D11_MAP                MapType,
-//	UINT                     MapFlags,
-//	D3D11_MAPPED_SUBRESOURCE *pMappedResource
-//	);
+
 
 
 //static void Hook_PSSetShader(

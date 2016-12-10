@@ -26,8 +26,11 @@ namespace Encoder {
 		
 		AVCodec *videoCodec;
 		AVCodecContext *videoCodecContext = NULL;
-		AVFrame *videoFrame;
+		AVFrame *inputFrame;
+		AVFrame *outputFrame;
 		AVStream *videoStream;
+		SwsContext* pSwsContext;
+		AVDictionary* videoOptions;
 
 		AVCodec *audioCodec;
 		AVCodecContext *audioCodecContext = NULL;
@@ -88,6 +91,7 @@ namespace Encoder {
 		~Session();
 
 		HRESULT createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat);
+		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset);
 		HRESULT createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align);
 		HRESULT createFormatContext(LPCSTR filename);
 
@@ -118,5 +122,6 @@ namespace Encoder {
 		HRESULT endSession();
 
 	private:
+		HRESULT createVideoFrames(uint32_t srcWidth, uint32_t srcHeight, AVPixelFormat srcFmt, uint32_t dstWidth, uint32_t dstHeight, AVPixelFormat dstFmt);
 	};
 }

@@ -7,6 +7,7 @@
 #pragma comment(lib, "mfuuid.lib")
 #pragma comment(lib, "wmcodecdspuuid.lib")
 #pragma comment(lib, "avcodec.lib")
+#pragma comment(lib, "swscale.lib")
 #pragma comment(lib, "d3d11.lib")
 
 #include <sstream>
@@ -27,6 +28,7 @@
 
 extern "C" {
 #include "libavcodec\avcodec.h"
+#include "libswscale\swscale.h"
 #include <yara\libyara.h>
 #include <yara\compiler.h>
 }
