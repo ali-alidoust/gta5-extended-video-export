@@ -8,6 +8,7 @@
 #pragma comment(lib, "wmcodecdspuuid.lib")
 #pragma comment(lib, "avcodec.lib")
 #pragma comment(lib, "swscale.lib")
+#pragma comment(lib, "swresample.lib")
 #pragma comment(lib, "d3d11.lib")
 
 #include <sstream>

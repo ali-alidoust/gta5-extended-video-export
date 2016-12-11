@@ -12,9 +12,16 @@
 #define CFG_ENABLE_XVX "enable_mod"
 #define CFG_OUTPUT_DIR "output_folder"
 #define CFG_EXPORT_RESOLUTION "resolution"
-#define CFG_VIDEO_ENC "video_enc"
-#define CFG_VIDEO_FMT "video_fmt"
-#define CFG_VIDEO_CFG "video_cfg"
+#define CFG_VIDEO_SECTION "VIDEO"
+#define CFG_VIDEO_ENC "encoder"
+#define CFG_VIDEO_FMT "pixel_format"
+#define CFG_VIDEO_CFG "options"
+
+#define CFG_AUDIO_SECTION "AUDIO"
+#define CFG_AUDIO_ENC "encoder"
+#define CFG_AUDIO_FMT "sample_format"
+#define CFG_AUDIO_RATE "sample_rate"
+#define CFG_AUDIO_CFG "options"
 
 //#define CFG_AUDIO_CODEC "audio_codec"
 #define INI_FILE_NAME TARGET_NAME ".ini"
@@ -26,24 +33,44 @@ public:
 		return this->is_mod_enabled;
 	}
 
-	std::pair<uint32_t, uint32_t> exportResolution() {
-		return this->resolution;
+	bool isAutoReloadEnabled() {
+		return this->auto_reload_config;
 	}
+
+	//std::pair<uint32_t, uint32_t> exportResolution() {
+	//	return this->resolution;
+	//}
 
 	std::string outputDir() {
 		return this->output_dir;
 	}
 
 	std::string videoEnc() {
-		return video_enc;
+		return this->video_enc;
 	}
 
 	std::string videoFmt() {
-		return video_fmt;
+		return this->video_fmt;
 	}
 
 	std::string videoCfg() {
-		return video_cfg;
+		return this->video_cfg;
+	}
+
+	std::string audioEnc() {
+		return this->audio_enc;
+	}
+
+	std::string audioCfg() {
+		return this->audio_cfg;
+	}
+
+	std::string audioFmt() {
+		return this->audio_fmt;
+	}
+
+	uint32_t audioRate() {
+		return this->audio_rate;
 	}
 
 	void reload() {
@@ -52,10 +79,12 @@ public:
 		this->parse_lossless_export();
 		this->parse_auto_reload_config();
 		this->parse_output_dir();
-		this->parse_resolution();
+		//this->parse_resolution();
 		this->parse_video_enc();
 		this->parse_video_fmt();
 		this->parse_video_cfg();
+		this->parse_audio_enc();
+		this->parse_audio_cfg();
 	}
 
 	static Config& instance()
@@ -82,6 +111,10 @@ private:
 	std::string                     video_enc                  = "";
 	std::string                     video_fmt                  = "";
 	std::string                     video_cfg                  = "";
+	std::string                     audio_enc                  = "";
+	std::string                     audio_cfg                  = "";
+	std::string                     audio_fmt                  = "";
+	uint32_t                        audio_rate                 = 48000;
 
 
 	void parse_lossless_export() {
@@ -132,34 +165,93 @@ private:
 	}
 
 	void parse_video_enc() {
-		if (!getTrimmed(CFG_VIDEO_ENC).empty()) {
-			this->video_enc = parser->top()[CFG_VIDEO_ENC];
+		std::string value = getTrimmed(CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
+		if (!value.empty()) {
+			this->video_enc = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_ENC];
 			return;
 		}
 
-		this->video_enc = "ffv1";
+		LOG("Video encoder not supplied in .ini file, using default: \"libx264\"");
+		this->video_enc = "libx264";
 	}
 
 	void parse_video_fmt() {
-		if (!getTrimmed(CFG_VIDEO_FMT).empty()) {
-			this->video_fmt = parser->top()[CFG_VIDEO_FMT];
+		std::string value = getTrimmed(CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
+		if (!value.empty()) {
+			this->video_fmt = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_FMT];
 			return;
 		}
 		
-		this->video_fmt = "bgr";
+		LOG("Video pixel format not supplied in .ini file, using default: \"yuv420p\"");
+		this->video_fmt = "yuv420p";
 	}
 
 	void parse_video_cfg() {
-		if (!getTrimmed(CFG_VIDEO_CFG).empty()) {
-			this->video_cfg = parser->top()[CFG_VIDEO_CFG];
+		std::string value = getTrimmed(CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
+		if (!value.empty()) {
+			this->video_cfg = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_CFG];
 			return;
 		}
 
 		this->video_cfg = "";
 	}
 
+	void parse_audio_enc() {
+		std::string value = getTrimmed(CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
+		if (!value.empty()) {
+			this->audio_enc = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_ENC];
+			return;
+		}
+
+		LOG("Audio encoder not supplied in .ini file, using default: \"ac3\"");
+		this->audio_enc = "ac3";
+	}
+
+	void parse_audio_cfg() {
+		std::string value = getTrimmed(CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
+		if (!value.empty()) {
+			this->audio_cfg = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_CFG];
+			return;
+		}
+
+		this->audio_cfg = "";
+	}
+
+	void parse_audio_fmt() {
+		std::string value = getTrimmed(CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
+		if (!value.empty()) {
+			this->audio_fmt = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_FMT];
+			return;
+		}
+
+		LOG("Audio sample format not supplied in .ini file, using default: \"fltp\"");
+		this->audio_fmt = "fltp";
+	}
+
+	void parse_audio_rate() {
+		std::string value = getTrimmed(CFG_AUDIO_RATE, CFG_AUDIO_SECTION);
+		if (!value.empty()) {
+			try {
+				this->audio_rate = std::stoul(parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_RATE]);
+
+			} catch (std::exception&) {
+				LOG("Failed to parse audio sample rate: ", value);
+				LOG("using default: 48000");
+			}
+		} else {
+			LOG("Audio sample format not supplied in .ini file, using default: 48000");
+		}
+		this->audio_rate = 48000;
+	}
+
+
 	std::string getTrimmed(std::string config_name) {
 		std::string orig_str = parser->top()[config_name];
+		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
+	}
+
+	std::string getTrimmed(std::string config_name, std::string section) {
+		std::string orig_str = parser->top()(section)[config_name];
 		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
 	}
 

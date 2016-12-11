@@ -15,7 +15,7 @@ extern "C" {
 #include <libavcodec\avcodec.h>
 #include <libavformat\avformat.h>
 #include <libavutil\imgutils.h>
-#include <libavutil\opt.h>
+#include <libswresample\swresample.h>
 }
 
 //template<typename T>
@@ -37,14 +37,18 @@ namespace Encoder {
 
 		AVCodec *audioCodec = NULL;
 		AVCodecContext *audioCodecContext = NULL;
-		AVFrame *audioFrame = NULL;
+		AVFrame *inputAudioFrame = NULL;
+		AVFrame *outputAudioFrame = NULL;
 		AVStream *audioStream = NULL;
+		SwrContext* pSwrContext = NULL;
+		AVDictionary *audioOptions = NULL;
 
 
 		bool isVideoFinished = false;
 		bool isAudioFinished = false;
 		bool isSessionFinished = false;
 		bool isCapturing = false;
+		bool isBeingDeleted = false;
 
 		std::mutex mxVideoContext;
 		std::mutex mxAudioContext;
@@ -103,8 +107,9 @@ namespace Encoder {
 
 		~Session();
 
-		HRESULT createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat);
 		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset);
+		HRESULT createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat);
+		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, uint32_t outputSampleRate, std::string outputSampleFormatString, std::string acodec, std::string preset);
 		HRESULT createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align);
 		HRESULT createFormatContext(LPCSTR filename);
 
@@ -122,5 +127,6 @@ namespace Encoder {
 
 	private:
 		HRESULT createVideoFrames(uint32_t srcWidth, uint32_t srcHeight, AVPixelFormat srcFmt, uint32_t dstWidth, uint32_t dstHeight, AVPixelFormat dstFmt);
+		HRESULT createAudioFrames(uint32_t inputChannels, AVSampleFormat inputSampleFmt, uint32_t inputSampleRate, uint32_t outputChannels, AVSampleFormat outputSampleFmt, uint32_t outputSampleRate);
 	};
 }

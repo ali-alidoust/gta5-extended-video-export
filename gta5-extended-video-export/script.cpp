@@ -12,6 +12,7 @@
 #include "yara-patterns.h"
 
 #include "..\DirectXTex\DirectXTex\DirectXTex.h"
+#include "hook-def.h"
 
 using namespace Microsoft::WRL;
 
@@ -68,308 +69,6 @@ namespace {
 	ExportContext* exportContext;
 	YR_COMPILER* pYrCompiler;
 }
-
-
-static HRESULT CreateObjectFromURL(
-	IMFSourceResolver *pThis,
-	LPCWSTR           pwszURL,
-	DWORD             dwFlags,
-	IPropertyStore    *pProps,
-	MF_OBJECT_TYPE    *pObjectType,
-	IUnknown          **ppObject
-	);
-
-
-static HRESULT Hook_CreateRenderTargetView(
-	ID3D11Device                  *pThis,
-	ID3D11Resource                *pResource,
-	const D3D11_RENDER_TARGET_VIEW_DESC *pDesc,
-	ID3D11RenderTargetView        **ppRTView
-	);
-
-static HRESULT Hook_CreateDepthStencilView(
-	ID3D11Device                  *pThis,
-	ID3D11Resource                *pResource,
-	const D3D11_DEPTH_STENCIL_VIEW_DESC *pDesc,
-	ID3D11DepthStencilView        **ppDepthStencilView
-	);
-
-static void RSSetViewports(
-	ID3D11DeviceContext  *pThis,
-	UINT           NumViewports,
-	const D3D11_VIEWPORT *pViewports
-	);
-
-static void RSSetScissorRects(
-	ID3D11DeviceContext *pThis,
-	UINT          NumRects,
-	const D3D11_RECT *  pRects
-	);
-
-static HRESULT GetData(
-	ID3D11DeviceContext *pThis,
-	ID3D11Asynchronous  *pAsync,
-	void                *pData,
-	UINT                DataSize,
-	UINT                GetDataFlags
-	);
-
-static HRESULT Hook_CreateTexture2D(
-	ID3D11Device*				 *pThis,
-	const D3D11_TEXTURE2D_DESC   *pDesc,
-	const D3D11_SUBRESOURCE_DATA *pInitialData,
-	ID3D11Texture2D        **ppTexture2D
-	);
-
-static void CopyResource(
-	ID3D11DeviceContext *pThis,
-	ID3D11Resource      *pDstResource,
-	ID3D11Resource      *pSrcResource
-	);
-
-static void CopySubresourceRegion(
-	ID3D11DeviceContext  *pThis,
-	ID3D11Resource       *pDstResource,
-	UINT                 DstSubresource,
-	UINT                 DstX,
-	UINT                 DstY,
-	UINT                 DstZ,
-	ID3D11Resource       *pSrcResource,
-	UINT                 SrcSubresource,
-	const D3D11_BOX      *pSrcBox
-	);
-
-
-static void Hook_ClearRenderTargetView(
-	ID3D11DeviceContext    *pThis,
-	ID3D11RenderTargetView *pRenderTargetView,
-	const FLOAT            ColorRGBA[4]
-	);
-
-
-static void Hook_OMSetRenderTargets(
-	ID3D11DeviceContext           *pThis,
-	UINT                          NumViews,
-	ID3D11RenderTargetView *const *ppRenderTargetViews,
-	ID3D11DepthStencilView        *pDepthStencilView
-	);
-
-static HRESULT Hook_CoCreateInstance(
-	REFCLSID  rclsid,
-	LPUNKNOWN pUnkOuter,
-	DWORD     dwClsContext,
-	REFIID    riid,
-	LPVOID    *ppv
-	);
-
-static HRESULT Hook_MFCreateSinkWriterFromURL(
-	LPCWSTR       pwszOutputURL,
-	IMFByteStream *pByteStream,
-	IMFAttributes *pAttributes,
-	IMFSinkWriter **ppSinkWriter
-	);
-
-static HRESULT IMFSinkWriter_SetInputMediaType(
-	IMFSinkWriter *pThis,
-	DWORD         dwStreamIndex,
-	IMFMediaType  *pInputMediaType,
-	IMFAttributes *pEncodingParameters
-	);
-
-static HRESULT Hook_IMFTransform_ProcessMessage(
-	IMFTransform     *pThis,
-	MFT_MESSAGE_TYPE eMessage,
-	ULONG_PTR        ulParam
-	);
-
-static HRESULT Hook_IMFSinkWriter_AddStream(
-	IMFSinkWriter *pThis,
-	IMFMediaType  *pTargetMediaType,
-	DWORD         *pdwStreamIndex
-	);
-
-static HRESULT Hook_IMFSinkWriter_WriteSample(
-	IMFSinkWriter *pThis,
-	DWORD         dwStreamIndex,
-	IMFSample     *pSample
-	);
-
-static HRESULT Hook_IMFSinkWriter_Finalize(
-	IMFSinkWriter *pThis
-	);
-
-static HRESULT Hook_IMFTransform_ProcessInput(
-	IMFTransform	*pThis,
-	DWORD			dwInputStreamID,
-	IMFSample		*pSample,
-	DWORD			dwFlags
-	);
-
-static HRESULT Lock(
-	IMFMediaBuffer *pThis,
-	BYTE  **ppbBuffer,
-	DWORD *pcbMaxLength,
-	DWORD *pcbCurrentLength
-	);
-
-static HRESULT Hook_Map(
-	ID3D11DeviceContext      *pThis,
-	ID3D11Resource           *pResource,
-	UINT                     Subresource,
-	D3D11_MAP                MapType,
-	UINT                     MapFlags,
-	D3D11_MAPPED_SUBRESOURCE *pMappedResource
-	);
-
-
-typedef HRESULT(*tCreateObjectFromURL)(
-	IMFSourceResolver *pThis,
-	LPCWSTR           pwszURL,
-	DWORD             dwFlags,
-	IPropertyStore    *pProps,
-	MF_OBJECT_TYPE    *pObjectType,
-	IUnknown          **ppObject
-	);
-
-
-typedef HRESULT(*tCreateTexture2D)(
-	ID3D11Device*				 *pThis,
-	const D3D11_TEXTURE2D_DESC   *pDesc,
-	const D3D11_SUBRESOURCE_DATA *pInitialData,
-	ID3D11Texture2D        **ppTexture2D
-	);
-
-typedef void (*tCopyResource)(
-	ID3D11DeviceContext *pThis,
-	ID3D11Resource      *pDstResource,
-	ID3D11Resource      *pSrcResource
-	);
-
-typedef void (*tCopySubresourceRegion)(
-	ID3D11DeviceContext  *pThis,
-	ID3D11Resource       *pDstResource,
-	UINT                 DstSubresource,
-	UINT                 DstX,
-	UINT                 DstY,
-	UINT                 DstZ,
-	ID3D11Resource       *pSrcResource,
-	UINT                 SrcSubresource,
-	const D3D11_BOX      *pSrcBox
-	);
-
-typedef HRESULT(*tMap)(
-	ID3D11DeviceContext      *pThis,
-	ID3D11Resource           *pResource,
-	UINT                     Subresource,
-	D3D11_MAP                MapType,
-	UINT                     MapFlags,
-	D3D11_MAPPED_SUBRESOURCE *pMappedResource
-	);
-
-typedef void(*tClearRenderTargetView)(
-	ID3D11DeviceContext    *pThis,
-	ID3D11RenderTargetView *pRenderTargetView,
-	const FLOAT            ColorRGBA[4]
-	);
-
-typedef void(*tOMSetRenderTargets)(
-	ID3D11DeviceContext           *pThis,
-	UINT                          NumViews,
-	ID3D11RenderTargetView *const *ppRenderTargetViews,
-	ID3D11DepthStencilView        *pDepthStencilView
-	);
-
-typedef HRESULT(*tMFCreateSinkWriterFromURL)(
-	LPCWSTR       pwszOutputURL,
-	IMFByteStream *pByteStream,
-	IMFAttributes *pAttributes,
-	IMFSinkWriter **ppSinkWriter
-	);
-
-typedef HRESULT(*tIMFTransform_ProcessInput)(
-	IMFTransform	*pThis,
-	DWORD     dwInputStreamID,
-	IMFSample *pSample,
-	DWORD     dwFlags
-	);
-
-typedef HRESULT(*tIMFTransform_ProcessMessage)(
-	IMFTransform     *pThis,
-	MFT_MESSAGE_TYPE eMessage,
-	ULONG_PTR        ulParam
-	);
-
-typedef HRESULT(*tCoCreateInstance)(
-	REFCLSID  rclsid,
-	LPUNKNOWN pUnkOuter,
-	DWORD     dwClsContext,
-	REFIID    riid,
-	LPVOID    *ppv
-	);
-
-typedef HRESULT(*tCreateRenderTargetView)(
-	ID3D11Device                  *pThis,
-	ID3D11Resource                *pResource,
-	const D3D11_RENDER_TARGET_VIEW_DESC *pDesc,
-	ID3D11RenderTargetView        **ppRTView
-	);
-
-typedef HRESULT(*tCreateDepthStencilView)(
-	ID3D11Device                  *pThis,
-	ID3D11Resource                *pResource,
-	const D3D11_DEPTH_STENCIL_VIEW_DESC *pDesc,
-	ID3D11DepthStencilView        **ppDepthStencilView
-	);
-
-typedef void(*tRSSetViewports)(
-	ID3D11DeviceContext  *pThis,
-	UINT                 NumViewports,
-	const D3D11_VIEWPORT *pViewports
-	);
-
-typedef void(*tRSSetScissorRects)(
-	ID3D11DeviceContext *pThis,
-	UINT          NumRects,
-	const D3D11_RECT *  pRects
-	);
-
-typedef HRESULT(*tGetData)(
-	ID3D11DeviceContext *pThis,
-	ID3D11Asynchronous  *pAsync,
-	void                *pData,
-	UINT                DataSize,
-	UINT                GetDataFlags
-	);
-
-typedef HRESULT(*tIMFSinkWriter_AddStream)(
-	IMFSinkWriter *pThis,
-	IMFMediaType  *pTargetMediaType,
-	DWORD         *pdwStreamIndex
-	);
-
-typedef HRESULT(*tIMFSinkWriter_SetInputMediaType)(
-	IMFSinkWriter *pThis,
-	DWORD         dwStreamIndex,
-	IMFMediaType  *pInputMediaType,
-	IMFAttributes *pEncodingParameters
-	);
-
-typedef HRESULT(*tIMFSinkWriter_WriteSample)(
-	IMFSinkWriter *pThis,
-	DWORD         dwStreamIndex,
-	IMFSample     *pSample
-	);
-
-typedef HRESULT(*tIMFSinkWriter_Finalize)(
-	IMFSinkWriter *pThis
-	);
-
-typedef HRESULT(*tLock)(
-	IMFMediaBuffer *pThis,
-	BYTE  **ppbBuffer,
-	DWORD *pcbMaxLength,
-	DWORD *pcbCurrentLength
-	);
 
 tCoCreateInstance oCoCreateInstance;
 tMFCreateSinkWriterFromURL oMFCreateSinkWriterFromURL;
@@ -430,15 +129,15 @@ void onPresent(IDXGISwapChain *swapChain) {
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 9, &Hook_PSSetShader, &oPSSetShader, hkPSSetShader), "Failed to hook ID3DDeviceContext::PSSetShader", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 13, &Hook_Draw, &oDraw, hkDraw), "Failed to hook ID3DDeviceContext::Draw", std::exception());
 			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 33, &Hook_OMSetRenderTargets, &oOMSetRenderTargets, hkOMSetRenderTargets), "Failed to hook ID3DDeviceContext::OMSetRenderTargets", std::exception());
-			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 44, &RSSetViewports, &oRSSetViewports, hkRSSetViewports), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
-			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 45, &RSSetScissorRects, &oRSSetScissorRects, hkRSSetScissorRects), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
+			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 44, &RSSetViewports, &oRSSetViewports, hkRSSetViewports), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
+			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 45, &RSSetScissorRects, &oRSSetScissorRects, hkRSSetScissorRects), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 29, &GetData, &oGetData, hkGetData), "Failed to hook ID3DDeviceContext::GetData", std::exception());
-			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 14, &Hook_Map, &oMap, hkMap), "Failed to hook ID3DDeviceContext::Map", std::exception());
-			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 47, &CopyResource, &oCopyResource, hkCopyResource), "Failed to hook ID3DDeviceContext::Map", std::exception());
-			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 46, &CopySubresourceRegion, &oCopySubresourceRegion, hkCopySubresourceRegion), "Failed to hook ID3DDeviceContext::Map", std::exception());
+			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 14, &Hook_Map, &oMap, hkMap), "Failed to hook ID3DDeviceContext::Map", std::exception());
+			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 47, &CopyResource, &oCopyResource, hkCopyResource), "Failed to hook ID3DDeviceContext::Map", std::exception());
+			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 46, &CopySubresourceRegion, &oCopySubresourceRegion, hkCopySubresourceRegion), "Failed to hook ID3DDeviceContext::Map", std::exception());
 			REQUIRE(hookVirtualFunction(pDevice.Get(), 5, &Hook_CreateTexture2D, &oCreateTexture2D, hkCreateTexture2D), "Failed to hook ID3DDeviceContext::Map", std::exception());
-			REQUIRE(hookVirtualFunction(pDevice.Get(), 9, &Hook_CreateRenderTargetView, &oCreateRenderTargetView, hkCreateRenderTargetView), "Failed to hook ID3DDeviceContext::CreateRenderTargetView", std::exception());
-			REQUIRE(hookVirtualFunction(pDevice.Get(), 10, &Hook_CreateDepthStencilView, &oCreateDepthStencilView, hkCreateDepthStencilView), "Failed to hook ID3DDeviceContext::CreateDepthStencilView", std::exception());
+			//REQUIRE(hookVirtualFunction(pDevice.Get(), 9, &Hook_CreateRenderTargetView, &oCreateRenderTargetView, hkCreateRenderTargetView), "Failed to hook ID3DDeviceContext::CreateRenderTargetView", std::exception());
+			//REQUIRE(hookVirtualFunction(pDevice.Get(), 10, &Hook_CreateDepthStencilView, &oCreateDepthStencilView, hkCreateDepthStencilView), "Failed to hook ID3DDeviceContext::CreateDepthStencilView", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 50, &Hook_ClearRenderTargetView, &oClearRenderTargetView, hkClearRenderTargetView), "Failed to hook ID3DDeviceContext::Draw", std::exception());
 			once = false;
 		} catch (std::exception& ex) {
@@ -903,10 +602,10 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 					GUID pixelFormat;
 					pType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
-					if ((exportContext->width != 0) && (exportContext->height != 0)) {
+					/*if ((exportContext->width != 0) && (exportContext->height != 0)) {
 						width = exportContext->width;
 						height = exportContext->height;
-					}
+					}*/
 
 					//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
 					REQUIRE(session->createVideoContext(width, height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context", std::exception());
@@ -965,7 +664,8 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 
 			if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
 				try {
-					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment), "Failed to create audio context.", std::exception());
+					// REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment), "Failed to create audio context.", std::exception());
+					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, Config::instance().audioRate(), Config::instance().audioFmt(), Config::instance().audioEnc(), Config::instance().audioCfg()), "Failed to create audio context.", std::exception());
 				} catch (std::exception& ex) {
 					SafeDelete(session);
 					SafeDelete(exportContext);
@@ -1170,18 +870,21 @@ static HRESULT Hook_CreateTexture2D(
 			LOG(" fmt:", conv_dxgi_format_to_string(pDesc->Format),
 				" w:", pDesc->Width,
 				" h:", pDesc->Height);
+			if (Config::instance().isAutoReloadEnabled()) {
+				LOG_CALL(Config::instance().reload());
+			}
 			session = new Encoder::Session();
 			NOT_NULL(session, "Could not create the session.", std::exception());
 			exportContext = new ExportContext();
 			exportContext->captureRenderTargetViewReference = true;
 			exportContext->captureDepthStencilViewReference = true;
-			exportContext->width = Config::instance().exportResolution().first;
-			exportContext->height = Config::instance().exportResolution().second;
+			/*exportContext->width = Config::instance().exportResolution().first;
+			exportContext->height = Config::instance().exportResolution().second;*/
 			/*exportContext->width = 800;
 			exportContext->height = 600;*/
 			D3D11_TEXTURE2D_DESC desc = *(pDesc);
-			desc.Width = exportContext->width;
-			desc.Height = exportContext->height;
+			/*desc.Width = exportContext->width;
+			desc.Height = exportContext->height;*/
 			return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);
 		} catch (std::exception& ex) {
 			SafeDelete(session);

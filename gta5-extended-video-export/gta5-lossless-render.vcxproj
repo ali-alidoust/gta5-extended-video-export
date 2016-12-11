@@ -183,6 +183,7 @@
     <ClInclude Include="..\PolyHook\PolyHook\PolyHook.h" />
     <ClInclude Include="config.h" />
     <ClInclude Include="encoder.h" />
+    <ClInclude Include="hook-def.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="MFUtility.h" />
     <ClInclude Include="SafeQueue.h" />
