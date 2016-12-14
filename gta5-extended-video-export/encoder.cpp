@@ -22,6 +22,11 @@ namespace Encoder {
 		this->isBeingDeleted = true;
 		this->isCapturing = false;
 		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, -1)));
+
+		if (thread_video_encoder.joinable()) {
+			thread_video_encoder.join();
+		}
+
 		LOG_CALL(LL_DBG, this->finishVideo());
 		LOG_CALL(LL_DBG, this->finishAudio());
 		LOG_CALL(LL_DBG, this->endSession());
@@ -311,6 +316,10 @@ namespace Encoder {
 
 	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
 		PRE();
+		if (this->isBeingDeleted) {
+			POST();
+			return E_FAIL;
+		}
 		auto pVector = std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(pData, pData + length));
 		frameQueueItem item(pVector, sampleTime);
 		this->videoFrameQueue.enqueue(item);
@@ -468,7 +477,7 @@ namespace Encoder {
 		av_frame_free(&localFrame);
 		if (got_packet != 0) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-			//av_packet_rescale_ts(&pkt, this->audioCodecContext->time_base, this->audioStream->time_base);
+			av_packet_rescale_ts(pPkt.get(), this->audioCodecContext->time_base, this->audioStream->time_base);
 			//pPkt->dts = audioFrame->pts;
 			pPkt->stream_index = this->audioStream->index;
 			av_interleaved_write_frame(this->fmtContext, pPkt.get());
@@ -482,7 +491,7 @@ namespace Encoder {
 	{
 		PRE();
 		std::lock_guard<std::mutex> guard(this->mxFinish);
-		if (this->isVideoFinished) {
+		if (this->isVideoFinished || !this->isVideoContextCreated || this->isBeingDeleted) {
 			POST();
 			return S_OK;
 		}
@@ -534,7 +543,7 @@ namespace Encoder {
 	{
 		PRE();
 		std::lock_guard<std::mutex> guard(this->mxFinish);
-		if (this->isAudioFinished) {
+		if (this->isAudioFinished || !this->isAudioContextCreated || this->isBeingDeleted) {
 			POST();
 			return S_OK;
 		}
@@ -573,7 +582,7 @@ namespace Encoder {
 		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEndSession);
 
-		if (this->isSessionFinished) {
+		if (this->isSessionFinished || this->isBeingDeleted) {
 			POST();
 			return S_OK;
 		}

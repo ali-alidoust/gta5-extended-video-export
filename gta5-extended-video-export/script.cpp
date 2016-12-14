@@ -74,6 +74,8 @@ namespace {
 
 		UINT width;
 		UINT height;
+		UINT outputWidth;
+		UINT outputHeight;
 
 		UINT pts = 0;
 	};
@@ -209,37 +211,33 @@ void initialize() {
 	PRE();
 	//hookNamedFunction("kernel32.dll", "LoadLibraryA", &Hook_LoadLibraryA, &oLoadLibraryA, hkLoadLibraryA);
 	//hookNamedFunction("kernel32.dll", "EnterCriticalSection", &Hook_RtlEnterCriticalSection, &oRtlEnterCriticalSection, hkHook_RtlEnterCriticalSection);
-	if (Config::instance().isModEnabled()) {
-		try {
-			mainThreadId = std::this_thread::get_id();
-			ComPtr<IMFSourceResolver> pSourceResolver;
-			MFCreateSourceResolver(pSourceResolver.GetAddressOf());
-			REQUIRE(hookVirtualFunction(pSourceResolver.Get(), 3, &CreateObjectFromURL, &oCreateObjectFromURL, hkCreateObjectFromURL), "Failed to hook IMFSourceResolver::CreateObjectFromURL");
+	try {
+		mainThreadId = std::this_thread::get_id();
+		ComPtr<IMFSourceResolver> pSourceResolver;
+		MFCreateSourceResolver(pSourceResolver.GetAddressOf());
+		REQUIRE(hookVirtualFunction(pSourceResolver.Get(), 3, &CreateObjectFromURL, &oCreateObjectFromURL, hkCreateObjectFromURL), "Failed to hook IMFSourceResolver::CreateObjectFromURL");
 
-			ComPtr<IMFMediaBuffer> pMediaBuffer;
-			MFCreateMemoryBuffer(1, pMediaBuffer.GetAddressOf());
-			REQUIRE(hookVirtualFunction(pMediaBuffer.Get(), 3, &Lock, &oLock, hkLock), "Failed to hook IMFSourceResolver::CreateObjectFromURL");
+		ComPtr<IMFMediaBuffer> pMediaBuffer;
+		MFCreateMemoryBuffer(1, pMediaBuffer.GetAddressOf());
+		REQUIRE(hookVirtualFunction(pMediaBuffer.Get(), 3, &Lock, &oLock, hkLock), "Failed to hook IMFSourceResolver::CreateObjectFromURL");
 
-			REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
-			REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
+		REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
+		REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
 
 			
-			LOG_CALL(LL_DBG, yr_initialize());
-			REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.");
-			REQUIRE(yr_compiler_add_string(pYrCompiler, yara_resolution_fields.c_str(), NULL), "Failed to compile yara rule");
+		LOG_CALL(LL_DBG, yr_initialize());
+		REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.");
+		REQUIRE(yr_compiler_add_string(pYrCompiler, yara_resolution_fields.c_str(), NULL), "Failed to compile yara rule");
 
 
-			LOG_CALL(LL_DBG, av_register_all());
-			LOG_CALL(LL_DBG, avcodec_register_all());
-			LOG_CALL(LL_DBG, av_log_set_level(AV_LOG_TRACE));
-			LOG_CALL(LL_DBG, av_log_set_callback(&avlog_callback));
-		} catch (std::exception& ex) {
-			// TODO cleanup
-			POST();
-			throw ex;
-		}
-	} else {
-		LOG(LL_NON, "Lossless export is disabled in the config file.");
+		LOG_CALL(LL_DBG, av_register_all());
+		LOG_CALL(LL_DBG, avcodec_register_all());
+		LOG_CALL(LL_DBG, av_log_set_level(AV_LOG_TRACE));
+		LOG_CALL(LL_DBG, av_log_set_callback(&avlog_callback));
+	} catch (std::exception& ex) {
+		// TODO cleanup
+		POST();
+		throw ex;
 	}
 	POST();
 }
@@ -336,6 +334,8 @@ static HRESULT Hook_CreateRenderTargetView(
 		if (SUCCEEDED(pResource->QueryInterface(pOldTexture.GetAddressOf()))) {
 			D3D11_TEXTURE2D_DESC desc;
 			pOldTexture->GetDesc(&desc);
+			exportContext->outputWidth = desc.Width;
+			exportContext->outputHeight = desc.Height;
 			/*if ((exportContext->width != 0) && (exportContext->height != 0)) {
 				desc.Width = exportContext->width;
 				desc.Height = exportContext->height;
@@ -403,8 +403,8 @@ static void RSSetViewports(
 		for (UINT i = 0; i < NumViewports; i++) {
 			pNewViewports[i] = pViewports[i];
 			if ((exportContext->width != 0) && (exportContext->height != 0)) {
-				pNewViewports[i].Width = (float)exportContext->width;
-				pNewViewports[i].Height = (float)exportContext->height;
+				/*pNewViewports[i].Width = (float)exportContext->width;
+				pNewViewports[i].Height = (float)exportContext->height;*/
 			}
 		}
 		return oRSSetViewports(pThis, NumViewports, pNewViewports);
@@ -435,8 +435,8 @@ static void RSSetScissorRects(
 		for (UINT i = 0; i < NumRects; i++) {
 			pNewRects[i] = pRects[i];
 			if ((exportContext->width != 0) && (exportContext->height != 0)) {
-				pNewRects[i].right  = exportContext->width;
-				pNewRects[i].bottom = exportContext->height;
+				/*pNewRects[i].right  = exportContext->width;
+				pNewRects[i].bottom = exportContext->height;*/
 			}
 		}
 		return oRSSetScissorRects(pThis, NumRects, pNewRects);
@@ -534,9 +534,9 @@ static void Hook_OMSetRenderTargets(
 			pThis->VSGetShaderResources(0, 1, pShaderResourceView.GetAddressOf());
 			D3D11_SHADER_RESOURCE_VIEW_DESC desc;
 			pShaderResourceView->GetDesc(&desc);
-
 			try {
 				NOT_NULL(exportContext, "No export context detected! Cannot capture lossless frame.");
+
 				auto& image_ref = *(exportContext->latestImage);
 				LOG_CALL(LL_DBG, DirectX::CaptureTexture(exportContext->pDevice.Get(), exportContext->pDeviceContext.Get(), exportContext->pExportRenderTarget.Get(), image_ref));
 				if (exportContext->latestImage->GetImageCount() == 0) {
@@ -635,7 +635,7 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 					}*/
 
 					//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
-					REQUIRE(session->createVideoContext(width, height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
+					REQUIRE(session->createVideoContext(exportContext->outputWidth, exportContext->outputHeight, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
 					REQUIRE(session->createFormatContext(filename.c_str()), "Failed to create format context");
 				}
 			}
@@ -670,6 +670,14 @@ static HRESULT Hook_IMFSinkWriter_AddStream(
 	PRE();
 	LOG(LL_NFO, "IMFSinkWriter::AddStream: ", GetMediaTypeDescription(pTargetMediaType).c_str());
 	POST();
+
+	GUID majorType;
+	pTargetMediaType->GetGUID(MF_MT_MAJOR_TYPE, &majorType);
+
+	if (IsEqualGUID(majorType, MFMediaType_Video)) {
+		//MFGetAttribute2UINT32asUINT64(pTargetMediaType, MF_MT_FRAME_SIZE, &exportContext->outputWidth, &exportContext->outputHeight);
+	}
+
 	return oIMFSinkWriter_AddStream(pThis, pTargetMediaType, pdwStreamIndex);
 }
 

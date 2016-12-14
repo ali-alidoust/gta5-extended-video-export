@@ -10,6 +10,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 					 )
 {
 	if (!Config::instance().isModEnabled()) {
+		LOG(LL_NON, "Extended Video Export mod is disabled in the config file. Exiting...");
 		return TRUE;
 	}
 
