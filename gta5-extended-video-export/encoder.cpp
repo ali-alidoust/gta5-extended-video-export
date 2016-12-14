@@ -430,14 +430,10 @@ namespace Encoder {
 
 		this->inputAudioFrame->nb_samples = numSamples;
 		//this->inputAudioFrame->format = this->audioCodecContext->sample_fmt;
-		this->outputAudioFrame->nb_samples = this->audioCodecContext->frame_size;
+		//this->outputAudioFrame->nb_samples = this->audioCodecContext->frame_size;
 
-		uint8_t* outSamples;
 		int numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) + numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
 		this->outputAudioFrame->nb_samples = numOutSamples;
-		//std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> localFrame(av_frame_alloc(), [](AVFrame* p) { av_free(p); });
-		//av_samples_alloc(&outSamples, NULL, this->outputAudioChannels, this->audioCodecContext->frame_size, this->audioCodecContext->sample_fmt, 0);
-		//swr_convert(this->pSwrContext, &outSamples, numOutSamples, &pData, numSamples);
 
 		avcodec_fill_audio_frame(this->inputAudioFrame, this->inputAudioFrame->channels, (AVSampleFormat)this->inputAudioFrame->format, pData, length, this->audioBlockAlign);
 
@@ -670,7 +666,7 @@ namespace Encoder {
 			AV_CH_LAYOUT_STEREO,
 			inputSampleFmt,
 			inputSampleRate,
-			0, NULL);
+			AV_LOG_TRACE, NULL);
 
 		RET_IF_NULL(this->pSwrContext, "Could not allocate audio resampling context", E_FAIL);
 		RET_IF_FAILED_AV(swr_init(pSwrContext), "Could not initialize audio resampling context", E_FAIL);

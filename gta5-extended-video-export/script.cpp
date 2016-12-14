@@ -78,9 +78,11 @@ namespace {
 		UINT outputHeight;
 
 		UINT pts = 0;
+
+		ComPtr<IMFMediaType> videoMediaType;
 	};
 
-	ExportContext* exportContext;
+	std::shared_ptr<ExportContext> exportContext;
 	YR_COMPILER* pYrCompiler;
 }
 
@@ -554,7 +556,7 @@ static void Hook_OMSetRenderTargets(
 				exportContext->latestImage->Release();
 				//SafeDelete(session);
 				session.reset();
-				SafeDelete(exportContext);
+				exportContext.reset();
 			}
 		}
 	}
@@ -597,54 +599,9 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 	MFT_MESSAGE_TYPE eMessage,
 	ULONG_PTR        ulParam
 	) {
-	std::lock_guard<std::mutex> sessionLock(mxSession);
-	if (eMessage == MFT_MESSAGE_NOTIFY_START_OF_STREAM && (session != NULL) && (!session->isVideoContextCreated)) {
-		try {
-			LOG(LL_NFO, "MFT_MESSAGE_NOTIFY_START_OF_STREAM");
-			ComPtr<IMFMediaType> pType;
-			REQUIRE(pThis->GetInputCurrentType(0, pType.GetAddressOf()), "Failed to get current input type");
-			if (pType.Get() != NULL) {
-				LOG(LL_NFO, "Input media type: ", GetMediaTypeDescription(pType.Get()).c_str());
-				if (!session->isVideoContextCreated) {
-					char buffer[128];
-					std::string output_file = Config::instance().outputDir();
-
-					output_file += "\\XVX-";
-					time_t rawtime;
-					struct tm timeinfo;
-					time(&rawtime);
-					localtime_s(&timeinfo, &rawtime);
-					strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
-					output_file += buffer;
-					output_file += ".mkv";
-
-					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
-
-					LOG(LL_NFO, "Output file: ", filename);
-
-					UINT width, height, fps_num, fps_den;
-					MFGetAttribute2UINT32asUINT64(pType.Get(), MF_MT_FRAME_SIZE, &width, &height);
-					MFGetAttributeRatio(pType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
-
-					GUID pixelFormat;
-					pType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
-
-					/*if ((exportContext->width != 0) && (exportContext->height != 0)) {
-						width = exportContext->width;
-						height = exportContext->height;
-					}*/
-
-					//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
-					REQUIRE(session->createVideoContext(exportContext->outputWidth, exportContext->outputHeight, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
-					REQUIRE(session->createFormatContext(filename.c_str()), "Failed to create format context");
-				}
-			}
-		} catch (std::exception&) {
-			//SafeDelete(session);
-			session.reset();
-			SafeDelete(exportContext);
-		}
-	} 
+	/*if (eMessage == MFT_MESSAGE_NOTIFY_START_OF_STREAM && (session != NULL) && (!session->isVideoContextCreated)) {
+		
+	} */
 	return S_OK;
 	//return oIMFTransform_ProcessMessage(pThis, eMessage, ulParam);
 }
@@ -692,30 +649,80 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 
 	GUID majorType;
 	if (SUCCEEDED(pInputMediaType->GetMajorType(&majorType))) {
-		if (IsEqualGUID(majorType, MFMediaType_Audio)) {
-			UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
-			GUID subType;
+		if (IsEqualGUID(majorType, MFMediaType_Video)) {
+			exportContext->videoMediaType = pInputMediaType;
+		} else if (IsEqualGUID(majorType, MFMediaType_Audio)) {
+			try {
+				std::lock_guard<std::mutex> sessionLock(mxSession);
+				//LOG(LL_NFO, "MFT_MESSAGE_NOTIFY_START_OF_STREAM");
+				//LOG(LL_NFO, "Input media type: ", GetMediaTypeDescription(exportContext->videoMediaType.Get()).c_str());
+				//if (!session->isVideoContextCreated) {
 
-			pInputMediaType->GetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, &blockAlignment);
-			pInputMediaType->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &numChannels);
-			pInputMediaType->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sampleRate);
-			pInputMediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bitsPerSample);
-			pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
+				// Create Video Context
+				{
+					UINT width, height, fps_num, fps_den;
+					MFGetAttribute2UINT32asUINT64(exportContext->videoMediaType.Get(), MF_MT_FRAME_SIZE, &width, &height);
+					MFGetAttributeRatio(exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
 
-			std::lock_guard<std::mutex> sessionLock(mxSession);
-			if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
-				try {
-					// REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment), "Failed to create audio context.", std::exception());
-					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, Config::instance().audioRate(), Config::instance().audioFmt(), Config::instance().audioEnc(), Config::instance().audioCfg()), "Failed to create audio context.");
-				} catch (std::exception&) {
-					//SafeDelete(session);
-					session.reset();
-					SafeDelete(exportContext);
+					GUID pixelFormat;
+					exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
+
+					/*if ((exportContext->width != 0) && (exportContext->height != 0)) {
+					width = exportContext->width;
+					height = exportContext->height;
+					}*/
+
+					//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
+					REQUIRE(session->createVideoContext(exportContext->outputWidth, exportContext->outputHeight, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
 				}
-			} else {
-				char buffer[64];
-				GUIDToString(subType, buffer, 64);
-				LOG(LL_ERR, "Unsupported input audio format: ", buffer);
+				
+				// Create Audio Context
+				{
+					UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
+					GUID subType;
+
+					pInputMediaType->GetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, &blockAlignment);
+					pInputMediaType->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &numChannels);
+					pInputMediaType->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sampleRate);
+					pInputMediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bitsPerSample);
+					pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
+
+					if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
+						// REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment), "Failed to create audio context.", std::exception());
+						REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, Config::instance().audioRate(), Config::instance().audioFmt(), Config::instance().audioEnc(), Config::instance().audioCfg()), "Failed to create audio context.");
+					} else {
+						char buffer[64];
+						GUIDToString(subType, buffer, 64);
+						LOG(LL_ERR, "Unsupported input audio format: ", buffer);
+						throw std::runtime_error("Unsupported input audio format");
+					}
+				}
+
+				// Create Format Context
+				{
+					char buffer[128];
+					std::string output_file = Config::instance().outputDir();
+
+					output_file += "\\XVX-";
+					time_t rawtime;
+					struct tm timeinfo;
+					time(&rawtime);
+					localtime_s(&timeinfo, &rawtime);
+					strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
+					output_file += buffer;
+					output_file += ".mkv";
+
+					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
+
+					LOG(LL_NFO, "Output file: ", filename);
+
+					REQUIRE(session->createFormatContext(filename.c_str()), "Failed to create format context");
+				}
+				//}
+			} catch (std::exception&) {
+				//SafeDelete(session);
+				session.reset();
+				exportContext.reset();
 			}
 		}
 	}
@@ -729,7 +736,7 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 	DWORD         dwStreamIndex,
 	IMFSample     *pSample
 	) {
-	PRE();
+	//PRE();
 	std::lock_guard<std::mutex> sessionLock(mxSession);
 	if ((session != NULL) && (dwStreamIndex == 1)) {
 		ComPtr<IMFMediaBuffer> pBuffer = NULL;
@@ -745,16 +752,17 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 				LOG_CALL(LL_DBG, session->writeAudioFrame(buffer, length, sampleTime));
 			}
 			
-		} catch (std::exception&) {
+		} catch (std::exception& ex) {
 			//SafeDelete(session);
+			LOG(LL_ERR, ex.what());
 			session.reset();
-			SafeDelete(exportContext);
+			exportContext.reset();
 			if (pBuffer != NULL) {
 				pBuffer->Unlock();
 			}
 		}
 	}
-	POST();
+	//POST();
 	return S_OK; // oIMFSinkWriter_WriteSample(pThis, dwStreamIndex, pSample);
 }
 
@@ -775,7 +783,7 @@ static HRESULT Hook_IMFSinkWriter_Finalize(
 
 	//SafeDelete(session);
 	session.reset();
-	SafeDelete(exportContext);
+	exportContext.reset();
 	POST();
 	return S_OK; // return oIMFSinkWriter_Finalize(pThis);
 }
@@ -915,7 +923,7 @@ static HRESULT Hook_CreateTexture2D(
 	// Detect export buffer creation
 	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId)) {
 		std::lock_guard<std::mutex> sessionLock(mxSession);
-		SafeDelete(exportContext);
+		exportContext.reset();
 		//SafeDelete(session);
 		session.reset();
 		try {
@@ -928,7 +936,7 @@ static HRESULT Hook_CreateTexture2D(
 			}
 			session.reset(new Encoder::Session());
 			NOT_NULL(session, "Could not create the session");
-			exportContext = new ExportContext();
+			exportContext.reset(new ExportContext());
 			exportContext->captureRenderTargetViewReference = true;
 			exportContext->captureDepthStencilViewReference = true;
 			/*exportContext->width = Config::instance().exportResolution().first;
@@ -942,7 +950,7 @@ static HRESULT Hook_CreateTexture2D(
 		} catch (std::exception&) {
 			//SafeDelete(session);
 			session.reset();
-			SafeDelete(exportContext);
+			exportContext.reset();
 		}
 	}
 
