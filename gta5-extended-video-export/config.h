@@ -11,6 +11,7 @@
 #define CFG_AUTO_RELOAD_CONFIG "auto_reload_config"
 #define CFG_ENABLE_XVX "enable_mod"
 #define CFG_OUTPUT_DIR "output_folder"
+#define CFG_LOG_LEVEL "log_level"
 #define CFG_EXPORT_RESOLUTION "resolution"
 #define CFG_VIDEO_SECTION "VIDEO"
 #define CFG_VIDEO_ENC "encoder"
@@ -73,6 +74,10 @@ public:
 		return this->audio_rate;
 	}
 
+	LogLevel logLevel() {
+		return this->log_level;
+	}
+
 	void reload() {
 		parser.reset(new INI::Parser(INI_FILE_NAME));
 
@@ -85,6 +90,9 @@ public:
 		this->parse_video_cfg();
 		this->parse_audio_enc();
 		this->parse_audio_cfg();
+		this->parse_audio_fmt();
+		this->parse_audio_rate();
+		this->log_level = this->parse_log_level();
 	}
 
 	static Config& instance()
@@ -115,6 +123,7 @@ private:
 	std::string                     audio_cfg                  = "";
 	std::string                     audio_fmt                  = "";
 	uint32_t                        audio_rate                 = 48000;
+	LogLevel						log_level                  = LL_ERR;
 
 
 	void parse_lossless_export() {
@@ -136,7 +145,7 @@ private:
 
 		std::smatch match;
 		if (!std::regex_match(string, match, std::regex("^(\\d+)x(\\d+)$"))) {
-			LOG("Could not parse resolution: ", string);
+			LOG(LL_NON, "Could not parse resolution: ", string);
 			resolution = std::make_pair(0, 0);
 			return;
 		}
@@ -171,7 +180,7 @@ private:
 			return;
 		}
 
-		LOG("Video encoder not supplied in .ini file, using default: \"libx264\"");
+		LOG(LL_NON, "Video encoder not supplied in .ini file, using default: \"libx264\"");
 		this->video_enc = "libx264";
 	}
 
@@ -182,7 +191,7 @@ private:
 			return;
 		}
 		
-		LOG("Video pixel format not supplied in .ini file, using default: \"yuv420p\"");
+		LOG(LL_NON, "Video pixel format not supplied in .ini file, using default: \"yuv420p\"");
 		this->video_fmt = "yuv420p";
 	}
 
@@ -203,7 +212,7 @@ private:
 			return;
 		}
 
-		LOG("Audio encoder not supplied in .ini file, using default: \"ac3\"");
+		LOG(LL_NON, "Audio encoder not supplied in .ini file, using default: \"ac3\"");
 		this->audio_enc = "ac3";
 	}
 
@@ -224,7 +233,7 @@ private:
 			return;
 		}
 
-		LOG("Audio sample format not supplied in .ini file, using default: \"fltp\"");
+		LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: \"fltp\"");
 		this->audio_fmt = "fltp";
 	}
 
@@ -235,13 +244,32 @@ private:
 				this->audio_rate = std::stoul(parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_RATE]);
 
 			} catch (std::exception&) {
-				LOG("Failed to parse audio sample rate: ", value);
-				LOG("using default: 48000");
+				LOG(LL_NON, "Failed to parse audio sample rate: ", value);
+				LOG(LL_NON, "using default: 48000");
 			}
 		} else {
-			LOG("Audio sample format not supplied in .ini file, using default: 48000");
+			LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: 48000");
 		}
 		this->audio_rate = 48000;
+	}
+
+	LogLevel parse_log_level() {
+		std::string value = getTrimmed(CFG_LOG_LEVEL);
+		value = toLower(value);
+		if (value == "error") {
+			return LL_ERR;
+		} else if (value == "warn") {
+			return LL_WRN;
+		} else if (value == "info") {
+			return LL_NFO;
+		} else if (value == "debug") {
+			return LL_DBG;
+		} else if (value == "trace") {
+			return LL_TRC;
+		}
+
+		LOG(LL_NON, "Could not parse log level, using default: \"error\"");
+		return LL_ERR;
 	}
 
 
@@ -277,6 +305,12 @@ private:
 		CoTaskMemFree(vidPath);
 
 		return S_OK;
+	}
+
+	static std::string toLower(std::string input) {
+		std::string result = input;
+		std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+		return result;
 	}
 
 	static bool stringToBoolean(std::string booleanString, bool defaultValue) {

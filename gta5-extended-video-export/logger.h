@@ -3,10 +3,21 @@
 #include <fstream>
 #include <mutex>
 #include <iomanip>
+#include <exception>
 extern "C" {
 	#include <libavutil\error.h>
 }
+
 #define __FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
+
+enum LogLevel {
+	LL_NON = 0,
+	LL_ERR = 10,
+	LL_WRN = 20,
+	LL_NFO = 30,
+	LL_DBG = 40,
+	LL_TRC = 50
+};
 
 class Logger {
 public:
@@ -33,6 +44,9 @@ public:
 	void writeLine();
 
 	std::string getTimestamp();
+	std::string getThreadId();
+	std::string getLogLevelString(LogLevel level);
+	LogLevel level = LL_NFO;
 	
 	static Logger& instance()
 	{
@@ -66,65 +80,44 @@ private:
 };
 
 #ifndef LOG
-#define LOG(...) Logger::instance().write(\
+#define LOG(ll, ...) if (ll <= Logger::instance().level) {Logger::instance().write(\
 	Logger::instance().getTimestamp(),\
-	"0x",\
-	std::uppercase,\
-	std::setfill('0'),\
-	std::setw(4),\
-	std::hex,\
-	std::this_thread::get_id(),\
-	std::dec,\
-	std::setw(0),\
-	std::setfill(' '),\
+	" ",\
+	Logger::instance().getLogLevelString(ll),\
+	" ",\
+	Logger::instance().getThreadId(),\
 	" ",\
 	__FILENAME__,\
 	" (line ",\
 	__LINE__,\
 	"): ",\
 	__VA_ARGS__,\
-	std::endl<char,std::char_traits<char>>);
+	std::endl<char,std::char_traits<char>>);\
+}
 #endif // ! LOG // Logger::instance().write(__LINE__); Logger::instance().writeLine(x);
 
-#ifndef LOG_CALL
-#define LOG_CALL(o) {LOG("Executing ",#o); o;}
-#endif
+#define PRE()  {LOG(LL_DBG, "Entering: ", __func__);}
 
-#ifndef LOG_CALL_DONT_USE
-#define LOG_CALL_BUT_NOT_INVOKE_IT(o) {LOG("Executing ",#o);}
-#endif
+#define POST() {LOG(LL_DBG, "Leaving: ",  __func__);}
 
-#ifndef LOG_IF_NULL
-#define LOG_IF_NULL(o, m) if ((o) == NULL) {LOG(m);}
-#endif
+#define LOG_CALL(ll, o) {LOG(ll, "Executing ",#o); o;}
 
-#ifndef LOG_IF_FAILED
-#define LOG_IF_FAILED(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result);}}
-#endif
+#define LOG_CALL_BUT_NOT_INVOKE_IT(ll, o) {LOG(ll, "Executing ",#o);}
 
-#ifndef RET_IF_NULL
-#define RET_IF_NULL(o, m, r) if ((o) == NULL) {LOG(m); return r;}
-#endif
+#define LOG_IF_NULL(o, m) if ((o) == NULL) {LOG(LL_WRN, m);}
 
-#ifndef RET_IF_FAILED
-#define RET_IF_FAILED(o, m, r) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result); return r;}}
-#endif
+#define LOG_IF_FAILED(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(LL_DBG, o); int __result = (int)o; if (FAILED(__result)) {LOG(LL_WRN, m, " ### error code: ", __result);}}
 
-// TODO: replace this with something less stupid.
+#define RET_IF_NULL(o, m, r) if ((o) == NULL) {LOG(LL_WRN, m); POST(); return r;}
+
+#define RET_IF_FAILED(o, m, r) {LOG_CALL_BUT_NOT_INVOKE_IT(LL_DBG, o); int __result = (int)o; if (FAILED(__result)) {LOG(LL_WRN, m, " ### error code: ", __result); POST(); return r;}}
+
 #define av_err2str2(errnum) char __av_error[AV_ERROR_MAX_STRING_SIZE]; av_make_error_string(__av_error, AV_ERROR_MAX_STRING_SIZE, errnum);
 
-#ifndef RET_IF_FAILED_AV
-#define RET_IF_FAILED_AV(o, m, r) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error); return r;}}
-#endif
+#define RET_IF_FAILED_AV(o, m, r) {LOG_CALL_BUT_NOT_INVOKE_IT(LL_DBG, o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(LL_WRN, m, " ### avcodec error : ", __av_error); POST(); return r;}}
 
-#ifndef LOG_IF_FAILED_AV
-#define LOG_IF_FAILED_AV(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(m, " ### avcodec error : ", __av_error);}}
-#endif
+#define LOG_IF_FAILED_AV(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(LL_DBG, o); int __result = (int)o; if (FAILED(__result)) {av_err2str2(__result); LOG(LL_WRN, m, " ### avcodec error : ", __av_error);}}
 
-#ifndef REQUIRE
-#define REQUIRE(o, m, ex) {LOG_CALL_BUT_NOT_INVOKE_IT(o); int __result = (int)o; if (FAILED(__result)) {LOG(m, " ### error code: ", __result); throw ex;}}
-#endif
+#define REQUIRE(o, m) {LOG_CALL_BUT_NOT_INVOKE_IT(LL_DBG, o); int __result = (int)o; if (FAILED(__result)) {LOG(LL_ERR, m, " ### error code: ", __result); throw std::runtime_error(m); }}
 
-#ifndef NOT_NULL
-#define NOT_NULL(o, m, ex) {if ((o) == NULL) {LOG(m); throw ex;}}
-#endif
+#define NOT_NULL(o, m) {if ((o) == NULL) {LOG(LL_ERR, m); throw std::runtime_error(m);}}

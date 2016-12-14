@@ -17,6 +17,7 @@ namespace {
 		}
 		VFuncDetour_Ex->SetupHook(*(BYTE***)pInstance, vFuncIndex, (BYTE*)hookFunc);
 		if (!VFuncDetour_Ex->Hook()) {
+			LOG(LL_ERR, VFuncDetour_Ex->GetLastError().GetString());
 			return E_FAIL;
 		}
 		*originalFunc = VFuncDetour_Ex->GetOriginal<FUNC_TYPE>();
@@ -31,7 +32,7 @@ namespace {
 		}
 		IATHook_ex->SetupHook(dllname, funcName, (BYTE*)hookFunc);
 		if (!IATHook_ex->Hook()) {
-			LOG(IATHook_ex->GetLastError().GetString());
+			LOG(LL_ERR, IATHook_ex->GetLastError().GetString());
 			return E_FAIL;
 		}
 		*originalFunc = IATHook_ex->GetOriginal<FUNC_TYPE>();

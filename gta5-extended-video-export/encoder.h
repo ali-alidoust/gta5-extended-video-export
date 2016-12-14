@@ -42,6 +42,7 @@ namespace Encoder {
 		AVStream *audioStream = NULL;
 		SwrContext* pSwrContext = NULL;
 		AVDictionary *audioOptions = NULL;
+		AVAudioFifo *audioSampleBuffer = NULL;
 
 
 		bool isVideoFinished = false;
@@ -98,6 +99,11 @@ namespace Encoder {
 		AVPixelFormat outputPixelFormat;
 		AVPixelFormat inputPixelFormat;
 		AVSampleFormat inputAudioSampleFormat;
+		AVSampleFormat outputAudioSampleFormat;
+		UINT inputAudioSampleRate;
+		UINT inputAudioChannels;
+		UINT outputAudioSampleRate;
+		UINT outputAudioChannels;
 		char filename[MAX_PATH];
 		//LPWSTR *outputDir;
 		//LPWSTR *outputFile;

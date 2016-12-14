@@ -11,34 +11,40 @@ namespace Encoder {
 		thread_video_encoder(),
 		videoFrameQueue(16)
 	{
-		LOG("Creating session...");
+		PRE();
+		LOG(LL_NFO, "Creating session...");
+		POST();
 	}
 
 	Session::~Session() {
-		LOG("Deleting session...");
+		PRE();
+		LOG(LL_NFO, "Deleting session...");
 		this->isBeingDeleted = true;
 		this->isCapturing = false;
-		LOG_CALL(this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, -1)));
-		LOG_CALL(this->finishVideo());
-		LOG_CALL(this->finishAudio());
-		LOG_CALL(this->endSession());
+		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, -1)));
+		LOG_CALL(LL_DBG, this->finishVideo());
+		LOG_CALL(LL_DBG, this->finishAudio());
+		LOG_CALL(LL_DBG, this->endSession());
 
-		LOG_CALL(av_free(this->oformat));
-		LOG_CALL(av_free(this->fmtContext));
-		LOG_CALL(av_free(this->videoCodecContext));
-		LOG_CALL(av_free(this->inputFrame));
-		LOG_CALL(av_free(this->outputFrame));
-		LOG_CALL(sws_freeContext(this->pSwsContext));
-		LOG_CALL(swr_free(&this->pSwrContext));
+		LOG_CALL(LL_DBG, av_free(this->oformat));
+		LOG_CALL(LL_DBG, av_free(this->fmtContext));
+		LOG_CALL(LL_DBG, av_free(this->videoCodecContext));
+		LOG_CALL(LL_DBG, av_free(this->inputFrame));
+		LOG_CALL(LL_DBG, av_free(this->outputFrame));
+		LOG_CALL(LL_DBG, sws_freeContext(this->pSwsContext));
+		LOG_CALL(LL_DBG, swr_free(&this->pSwrContext));
 		if (this->videoOptions) {
-			LOG_CALL(av_dict_free(&this->videoOptions));
+			LOG_CALL(LL_DBG, av_dict_free(&this->videoOptions));
 		}
-		LOG_CALL(av_free(this->audioCodecContext));
-		LOG_CALL(av_free(this->inputAudioFrame));
+		LOG_CALL(LL_DBG, av_free(this->audioCodecContext));
+		LOG_CALL(LL_DBG, av_free(this->inputAudioFrame));
+		POST();
 	}
 
 	HRESULT Session::createVideoContext(UINT width, UINT height, AVPixelFormat inputPixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat) {
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 		std::lock_guard<std::mutex> guard(this->mxVideoContext);
@@ -72,34 +78,39 @@ namespace Encoder {
 
 		this->thread_video_encoder = std::thread(&Session::encodingThread, this);
 
-		LOG("Video context was created successfully.");
+		LOG(LL_NFO, "Video context was created successfully.");
 		this->isVideoContextCreated = true;
 		this->cvVideoContext.notify_all();
 
 
 		//std::async(std::launch::async, &Session::encodingThread, this);
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset)
 	{
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 		std::lock_guard<std::mutex> guard(this->mxVideoContext);
-		LOG("Create video context:");
-		LOG("  encoder: ", vcodec);
-		LOG("  options: ", preset);
+		LOG(LL_NFO, "Creating video context:");
+		LOG(LL_NFO, "  encoder: ", vcodec);
+		LOG(LL_NFO, "  options: ", preset);
 
 		this->inputPixelFormat = av_get_pix_fmt(inputPixelFormatString.c_str());
 		if (this->inputPixelFormat == AV_PIX_FMT_NONE) {
-			LOG("Unknown input pixel format specified: ", inputPixelFormatString);
+			LOG(LL_ERR, "Unknown input pixel format specified: ", inputPixelFormatString);
+			POST();
 			return E_FAIL;
 		}
 
 		this->outputPixelFormat = av_get_pix_fmt(outputPixelFormatString.c_str());
 		if (this->outputPixelFormat == AV_PIX_FMT_NONE) {
-			LOG("Unknown output pixel format specified: ", outputPixelFormatString);
+			LOG(LL_ERR, "Unknown output pixel format specified: ", outputPixelFormatString);
+			POST();
 			return E_FAIL;
 		}
 
@@ -133,16 +144,18 @@ namespace Encoder {
 		
 		this->thread_video_encoder = std::thread(&Session::encodingThread, this);
 
-		LOG("Video context was created successfully.");
+		LOG(LL_NFO, "Video context was created successfully.");
 		this->isVideoContextCreated = true;
 		this->cvVideoContext.notify_all();
-
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align)
 	{
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 		std::lock_guard<std::mutex> guard(this->mxAudioContext);
@@ -163,27 +176,38 @@ namespace Encoder {
 		inputAudioFrame->format = sampleFormat;
 		inputAudioFrame->sample_rate = sampleRate;
 		inputAudioFrame->channels = numChannels;
-		LOG("Audio context was created successfully.");
+		LOG(LL_NFO, "Audio context was created successfully.");
 		this->isAudioContextCreated = true;
 		this->cvAudioContext.notify_all();
+
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, uint32_t outputSampleRate, std::string outputSampleFormatString, std::string acodec, std::string preset) {
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 		std::lock_guard<std::mutex> guard(this->mxAudioContext);
-		LOG("Create audio context:");
-		LOG("  encoder: ", acodec);
-		LOG("  options: ", preset);
+		LOG(LL_NFO, "Creating audio context:");
+		LOG(LL_NFO, "  encoder: ", acodec);
+		LOG(LL_NFO, "  options: ", preset);
 		//AVCodecID audioCodecId = AV_CODEC_ID_PCM_S16LE;
+
+		this->inputAudioSampleRate = inputSampleRate;
+		this->inputAudioChannels = inputChannels;
+		this->outputAudioSampleRate = outputSampleRate;
+		this->outputAudioChannels = inputChannels; // FIXME
 
 		AVSampleFormat outputSampleFormat = av_get_sample_fmt(outputSampleFormatString.c_str());
 		if (outputSampleFormat == AV_SAMPLE_FMT_NONE) {
-			LOG("Unknown audio sample format specified: ", outputSampleFormatString);
+			LOG(LL_ERR, "Unknown audio sample format specified: ", outputSampleFormatString);
+			POST();
 			return E_FAIL;
 		}
+		this->outputAudioSampleFormat = outputSampleFormat;
 
 		this->audioCodec = avcodec_find_encoder_by_name(acodec.c_str());
 		RET_IF_NULL(this->audioCodec, "Could not find audio codec:" + acodec, E_FAIL);
@@ -202,20 +226,24 @@ namespace Encoder {
 
 		av_dict_parse_string(&this->audioOptions, preset.c_str(), "=", "/", 0);
 
-		LOG("Audio context was created successfully.");
+		LOG(LL_NFO, "Audio context was created successfully.");
 		this->isAudioContextCreated = true;
 		this->cvAudioContext.notify_all();
+
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::createFormatContext(LPCSTR filename)
 	{
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 
 		// Wait until video context is created
-		LOG("Waiting for video context to be created...")
+		LOG(LL_NFO, "Waiting for video context to be created...")
 		{
 			std::unique_lock<std::mutex> lk(this->mxVideoContext);
 			while(!isVideoContextCreated) {
@@ -224,7 +252,7 @@ namespace Encoder {
 		}
 		
 		// Wait until audio context is created
-		LOG("Waiting for audio context to be created...")
+		LOG(LL_NFO, "Waiting for audio context to be created...")
 		{
 			std::unique_lock<std::mutex> lk(this->mxAudioContext);
 			while(!isAudioContextCreated) {
@@ -235,7 +263,7 @@ namespace Encoder {
 		//std::lock_guard<std::mutex> guard(this->mxFormatContext);
 
 		strcpy_s(this->filename, filename);
-		LOG("Exporting to file: ", this->filename);
+		LOG(LL_NFO, "Exporting to file: ", this->filename);
 
 		this->oformat = av_guess_format(NULL, this->filename, NULL);
 		RET_IF_NULL(this->oformat, "Could not create format", E_FAIL);
@@ -272,40 +300,46 @@ namespace Encoder {
 		RET_IF_FAILED_AV(avio_open(&this->fmtContext->pb, filename, AVIO_FLAG_WRITE), "Could not open output file", E_FAIL);
 		RET_IF_NULL(this->fmtContext->pb, "Could not open output file", E_FAIL);
 		RET_IF_FAILED_AV(avformat_write_header(this->fmtContext, NULL), "Could not write header", E_FAIL);
-		LOG("Format context was created successfully.");
+		LOG(LL_NFO, "Format context was created successfully.");
 		this->isCapturing = true;
 		this->isFormatContextCreated = true;
 		this->cvFormatContext.notify_all();
+
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
+		PRE();
 		auto pVector = std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(pData, pData + length));
 		frameQueueItem item(pVector, sampleTime);
 		this->videoFrameQueue.enqueue(item);
+		POST();
 		return S_OK;
 	}
 
 	void Session::encodingThread() {
-		LOG(__func__);
+		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEncodingThread);
 		try {
 			frameQueueItem item = this->videoFrameQueue.dequeue();
 			while (item.data != nullptr) {
-				LOG("Encoding frame: ", item.sampletime);
-				this->writeVideoFrame(item.data->data(), item.data->size(), item.sampletime);
+				LOG(LL_NFO, "Encoding frame: ", item.sampletime);
+				REQUIRE(this->writeVideoFrame(item.data->data(), item.data->size(), item.sampletime), "Failed to write video frame.");
 				item = this->videoFrameQueue.dequeue();
 			}
-			
 		} catch (...) {
 			// Do nothing
 		}
 		this->isEncodingThreadFinished = true;
 		this->cvEncodingThreadFinished.notify_all();
+		POST();
 	}
 
 	HRESULT Session::writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 
@@ -320,7 +354,8 @@ namespace Encoder {
 
 		int bufferLength = av_image_get_buffer_size(this->inputPixelFormat, this->width, this->height, 1);
 		if (length != bufferLength) {
-			LOG("IMFSample buffer size != av_image_get_buffer_size: ", length, " vs ", bufferLength);
+			LOG(LL_ERR, "IMFSample buffer size != av_image_get_buffer_size: ", length, " vs ", bufferLength);
+			POST();
 			return E_FAIL;
 		}
 
@@ -363,12 +398,15 @@ namespace Encoder {
 			av_interleaved_write_frame(this->fmtContext, pPkt.get());
 		}
 
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime)
 	{
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 		// Wait until format context is created
@@ -383,14 +421,39 @@ namespace Encoder {
 
 		this->inputAudioFrame->nb_samples = numSamples;
 		//this->inputAudioFrame->format = this->audioCodecContext->sample_fmt;
+		this->outputAudioFrame->nb_samples = this->audioCodecContext->frame_size;
 
+		uint8_t* outSamples;
+		int numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) + numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
+		this->outputAudioFrame->nb_samples = numOutSamples;
+		//std::unique_ptr<AVFrame, std::function<void(AVFrame*)>> localFrame(av_frame_alloc(), [](AVFrame* p) { av_free(p); });
+		//av_samples_alloc(&outSamples, NULL, this->outputAudioChannels, this->audioCodecContext->frame_size, this->audioCodecContext->sample_fmt, 0);
+		//swr_convert(this->pSwrContext, &outSamples, numOutSamples, &pData, numSamples);
 
 		avcodec_fill_audio_frame(this->inputAudioFrame, this->inputAudioFrame->channels, (AVSampleFormat)this->inputAudioFrame->format, pData, length, this->audioBlockAlign);
 
-		swr_convert_frame(this->pSwrContext, this->inputAudioFrame, this->outputAudioFrame);
+		RET_IF_FAILED_AV(swr_convert_frame(this->pSwrContext, this->outputAudioFrame, this->inputAudioFrame), "Failed to convert audio frame", E_FAIL);
+
+		av_audio_fifo_write(this->audioSampleBuffer, (void**)this->outputAudioFrame->data, this->outputAudioFrame->nb_samples);
+		if (av_audio_fifo_size(this->audioSampleBuffer) < this->audioCodecContext->frame_size) {
+			POST();
+			return S_OK;
+		}
+
+		int bufferSize = av_samples_get_buffer_size(NULL, this->outputAudioChannels, this->audioCodecContext->frame_size, this->outputAudioSampleFormat, 0);
+		uint8_t* localBuffer = new uint8_t[bufferSize];
+		AVFrame* localFrame = av_frame_alloc();
+		localFrame->channel_layout = AV_CH_LAYOUT_STEREO;
+		localFrame->format = this->outputAudioSampleFormat;
+		localFrame->nb_samples = this->audioCodecContext->frame_size;
+		avcodec_fill_audio_frame(localFrame, this->outputAudioChannels, this->outputAudioSampleFormat, localBuffer, bufferSize, 0);
+		av_audio_fifo_read(this->audioSampleBuffer, (void**)localFrame->data, this->audioCodecContext->frame_size);
+
+
+
 		//audioFrame->pts = sampleTime;
 		//audioFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->audioStream->time_base);
-		outputAudioFrame->pts = AV_NOPTS_VALUE;
+		localFrame->pts = AV_NOPTS_VALUE;
 
 		std::shared_ptr<AVPacket> pPkt(new AVPacket(), av_packet_unref);
 
@@ -399,7 +462,10 @@ namespace Encoder {
 		pPkt->size = 0;
 
 		int got_packet;
-		avcodec_encode_audio2(this->audioCodecContext, pPkt.get(), this->outputAudioFrame, &got_packet);
+		avcodec_encode_audio2(this->audioCodecContext, pPkt.get(), localFrame, &got_packet);
+
+		delete[] localBuffer;
+		av_frame_free(&localFrame);
 		if (got_packet != 0) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
 			//av_packet_rescale_ts(&pkt, this->audioCodecContext->time_base, this->audioStream->time_base);
@@ -408,13 +474,16 @@ namespace Encoder {
 			av_interleaved_write_frame(this->fmtContext, pPkt.get());
 		}
 
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::finishVideo()
 	{
+		PRE();
 		std::lock_guard<std::mutex> guard(this->mxFinish);
 		if (this->isVideoFinished) {
+			POST();
 			return S_OK;
 		}
 
@@ -456,18 +525,25 @@ namespace Encoder {
 		}
 
 		this->isVideoFinished = true;
+
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::finishAudio()
 	{
+		PRE();
 		std::lock_guard<std::mutex> guard(this->mxFinish);
 		if (this->isAudioFinished) {
+			POST();
 			return S_OK;
 		}
 
 		// Write delated frames
 		{
+
+			LOG(LL_WRN, "FIXME: Audio samples discarded:", av_audio_fifo_size(this->audioSampleBuffer));
+
 			AVPacket pkt;
 
 			av_init_packet(&pkt);
@@ -489,14 +565,16 @@ namespace Encoder {
 		}
 
 		this->isAudioFinished = true;
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::endSession() {
-
+		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEndSession);
 
 		if (this->isSessionFinished) {
+			POST();
 			return S_OK;
 		}
 
@@ -510,9 +588,9 @@ namespace Encoder {
 		}
 		
 		this->isCapturing = false;
-		LOG("Ending session...");
+		LOG(LL_NFO, "Ending session...");
 
-		LOG("Closing files...");
+		LOG(LL_NFO, "Closing files...");
 		LOG_IF_FAILED_AV(av_write_trailer(this->fmtContext), "Could not finalize the output file.");
 		LOG_IF_FAILED_AV(avio_close(this->fmtContext->pb), "Could not close the output file.");
 		LOG_IF_FAILED_AV(avcodec_close(this->videoCodecContext), "Could not close the video codec.");
@@ -522,13 +600,16 @@ namespace Encoder {
 		
 		this->isSessionFinished = true;
 		this->cvEndSession.notify_all();
-		LOG("Done.");
+		LOG(LL_NFO, "Done.");
 
+		POST();
 		return S_OK;
 	}
 	HRESULT Session::createVideoFrames(uint32_t srcWidth, uint32_t srcHeight, AVPixelFormat srcFmt, uint32_t dstWidth, uint32_t dstHeight, AVPixelFormat dstFmt)
 	{
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 		this->inputFrame = av_frame_alloc();
@@ -545,12 +626,15 @@ namespace Encoder {
 		av_image_alloc(outputFrame->data, outputFrame->linesize, dstWidth, dstHeight, dstFmt, 1);
 
 		this->pSwsContext = sws_getContext(srcWidth, srcHeight, srcFmt, dstWidth, dstHeight, dstFmt, SWS_POINT, NULL, NULL, NULL);
+		POST();
 		return S_OK;
 	}
 
 	HRESULT Session::createAudioFrames(uint32_t inputChannels, AVSampleFormat inputSampleFmt, uint32_t inputSampleRate, uint32_t outputChannels, AVSampleFormat outputSampleFmt, uint32_t outputSampleRate)
 	{
+		PRE();
 		if (this->isBeingDeleted) {
+			POST();
 			return E_FAIL;
 		}
 		this->inputAudioFrame = av_frame_alloc();
@@ -558,12 +642,17 @@ namespace Encoder {
 		inputAudioFrame->format = inputSampleFmt;
 		inputAudioFrame->sample_rate = inputSampleRate;
 		inputAudioFrame->channels = inputChannels;
+		inputAudioFrame->channel_layout = AV_CH_LAYOUT_STEREO;
 
 		this->outputAudioFrame = av_frame_alloc();
 		RET_IF_NULL(inputAudioFrame, "Could not allocate output audio frame", E_FAIL);
 		outputAudioFrame->format = outputSampleFmt;
 		outputAudioFrame->sample_rate = outputSampleRate;
 		outputAudioFrame->channels = outputChannels;
+		outputAudioFrame->channel_layout = AV_CH_LAYOUT_STEREO;
+
+		this->audioSampleBuffer = av_audio_fifo_alloc(outputSampleFmt, outputChannels, 4096);
+
 
 		this->pSwrContext = swr_alloc_set_opts(NULL,
 			AV_CH_LAYOUT_STEREO,
@@ -577,6 +666,7 @@ namespace Encoder {
 		RET_IF_NULL(this->pSwrContext, "Could not allocate audio resampling context", E_FAIL);
 		RET_IF_FAILED_AV(swr_init(pSwrContext), "Could not initialize audio resampling context", E_FAIL);
 
+		POST();
 		return S_OK;
 	}
 }

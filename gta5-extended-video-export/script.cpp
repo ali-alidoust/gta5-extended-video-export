@@ -40,16 +40,28 @@ namespace {
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);
 
-	Encoder::Session* session;
-	std::mutex mxLatestImage;
+	std::unique_ptr<Encoder::Session> session;
+	std::mutex mxSession;
+	//std::mutex mxLatestImage;
 	//ComPtr<ID3D11Texture2D> pPrimaryRenderTarget;
 	//ComPtr<ID3D11Texture2D> pBackbufferRenderTarget = NULL;
-	std::map<std::thread::id, ID3D11RenderTargetView*> createdRTVs;
-	std::map<std::thread::id, ID3D11DepthStencilView*> createdDSVs;
+	//std::map<std::thread::id, ID3D11RenderTargetView*> createdRTVs;
+	//std::map<std::thread::id, ID3D11DepthStencilView*> createdDSVs;
 	std::thread::id mainThreadId;
 	ComPtr<IDXGISwapChain> mainSwapChain;
 
 	struct ExportContext {
+
+		ExportContext() {
+			PRE();
+			POST();
+		}
+
+		~ExportContext() {
+			PRE();
+			POST();
+		}
+
 		bool captureRenderTargetViewReference = false;
 		bool captureDepthStencilViewReference = false;
 		ComPtr<ID3D11RenderTargetView> pExportRenderTargetView;
@@ -93,9 +105,15 @@ tCopyResource oCopyResource;
 tCopySubresourceRegion oCopySubresourceRegion;
 
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
+	//PRE();
 	static char msg[8192];
 	vsnprintf_s(msg, sizeof(msg), fmt, vargs);
-	Logger::instance().write(Logger::instance().getTimestamp(), "AVCODEC: ");
+	Logger::instance().write(
+		Logger::instance().getTimestamp(),
+		" ",
+		Logger::instance().getLogLevelString(LL_NON),
+		" ",
+		Logger::instance().getThreadId(), " AVCODEC: ");
 	if (ptr)
 	{
 		AVClass *avc = *(AVClass**)ptr;
@@ -104,15 +122,13 @@ void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 		Logger::instance().write("): ");
 	}
 	Logger::instance().write(msg);
+	//POST();
 }
 
 void onPresent(IDXGISwapChain *swapChain) {
-
 	mainSwapChain = swapChain;
-
 	static bool once = true;
 	if (once) {
-		LOG("once");
 		try {
 			ComPtr<ID3D11Device> pDevice;
 			ComPtr<ID3D11DeviceContext> pDeviceContext;
@@ -120,28 +136,28 @@ void onPresent(IDXGISwapChain *swapChain) {
 			DXGI_SWAP_CHAIN_DESC desc;
 
 			swapChain->GetDesc(&desc);
-			LOG("BUFFER COUNT: ", desc.BufferCount);
-			REQUIRE(swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)texture.GetAddressOf()), "Failed to get the texture buffer", std::exception());
+			LOG(LL_NFO, "BUFFER COUNT: ", desc.BufferCount);
+			REQUIRE(swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)texture.GetAddressOf()), "Failed to get the texture buffer");
 			//pPrimaryRenderTarget = texture;
-			REQUIRE(swapChain->GetDevice(__uuidof(ID3D11Device), (void**)pDevice.GetAddressOf()), "Failed to get the D3D11 device", std::exception());
+			REQUIRE(swapChain->GetDevice(__uuidof(ID3D11Device), (void**)pDevice.GetAddressOf()), "Failed to get the D3D11 device");
 			pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
-			NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context", std::exception());
+			NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context");
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 9, &Hook_PSSetShader, &oPSSetShader, hkPSSetShader), "Failed to hook ID3DDeviceContext::PSSetShader", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 13, &Hook_Draw, &oDraw, hkDraw), "Failed to hook ID3DDeviceContext::Draw", std::exception());
-			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 33, &Hook_OMSetRenderTargets, &oOMSetRenderTargets, hkOMSetRenderTargets), "Failed to hook ID3DDeviceContext::OMSetRenderTargets", std::exception());
+			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 33, &Hook_OMSetRenderTargets, &oOMSetRenderTargets, hkOMSetRenderTargets), "Failed to hook ID3DDeviceContext::OMSetRenderTargets");
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 44, &RSSetViewports, &oRSSetViewports, hkRSSetViewports), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 45, &RSSetScissorRects, &oRSSetScissorRects, hkRSSetScissorRects), "Failed to hook ID3DDeviceContext::RSSetViewports", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 29, &GetData, &oGetData, hkGetData), "Failed to hook ID3DDeviceContext::GetData", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 14, &Hook_Map, &oMap, hkMap), "Failed to hook ID3DDeviceContext::Map", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 47, &CopyResource, &oCopyResource, hkCopyResource), "Failed to hook ID3DDeviceContext::Map", std::exception());
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 46, &CopySubresourceRegion, &oCopySubresourceRegion, hkCopySubresourceRegion), "Failed to hook ID3DDeviceContext::Map", std::exception());
-			REQUIRE(hookVirtualFunction(pDevice.Get(), 5, &Hook_CreateTexture2D, &oCreateTexture2D, hkCreateTexture2D), "Failed to hook ID3DDeviceContext::Map", std::exception());
-			//REQUIRE(hookVirtualFunction(pDevice.Get(), 9, &Hook_CreateRenderTargetView, &oCreateRenderTargetView, hkCreateRenderTargetView), "Failed to hook ID3DDeviceContext::CreateRenderTargetView", std::exception());
-			//REQUIRE(hookVirtualFunction(pDevice.Get(), 10, &Hook_CreateDepthStencilView, &oCreateDepthStencilView, hkCreateDepthStencilView), "Failed to hook ID3DDeviceContext::CreateDepthStencilView", std::exception());
+			REQUIRE(hookVirtualFunction(pDevice.Get(), 5, &Hook_CreateTexture2D, &oCreateTexture2D, hkCreateTexture2D), "Failed to hook ID3DDeviceContext::Map");
+			REQUIRE(hookVirtualFunction(pDevice.Get(), 9, &Hook_CreateRenderTargetView, &oCreateRenderTargetView, hkCreateRenderTargetView), "Failed to hook ID3DDeviceContext::CreateRenderTargetView");
+			REQUIRE(hookVirtualFunction(pDevice.Get(), 10, &Hook_CreateDepthStencilView, &oCreateDepthStencilView, hkCreateDepthStencilView), "Failed to hook ID3DDeviceContext::CreateDepthStencilView");
 			//REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 50, &Hook_ClearRenderTargetView, &oClearRenderTargetView, hkClearRenderTargetView), "Failed to hook ID3DDeviceContext::Draw", std::exception());
 			once = false;
 		} catch (std::exception& ex) {
-			LOG(ex.what());
+			LOG(LL_ERR, ex.what());
 		}
 	}
 
@@ -190,6 +206,7 @@ void onPresent(IDXGISwapChain *swapChain) {
 }
 
 void initialize() {
+	PRE();
 	//hookNamedFunction("kernel32.dll", "LoadLibraryA", &Hook_LoadLibraryA, &oLoadLibraryA, hkLoadLibraryA);
 	//hookNamedFunction("kernel32.dll", "EnterCriticalSection", &Hook_RtlEnterCriticalSection, &oRtlEnterCriticalSection, hkHook_RtlEnterCriticalSection);
 	if (Config::instance().isModEnabled()) {
@@ -197,41 +214,45 @@ void initialize() {
 			mainThreadId = std::this_thread::get_id();
 			ComPtr<IMFSourceResolver> pSourceResolver;
 			MFCreateSourceResolver(pSourceResolver.GetAddressOf());
-			REQUIRE(hookVirtualFunction(pSourceResolver.Get(), 3, &CreateObjectFromURL, &oCreateObjectFromURL, hkCreateObjectFromURL), "Failed to hook IMFSourceResolver::CreateObjectFromURL", std::exception());
+			REQUIRE(hookVirtualFunction(pSourceResolver.Get(), 3, &CreateObjectFromURL, &oCreateObjectFromURL, hkCreateObjectFromURL), "Failed to hook IMFSourceResolver::CreateObjectFromURL");
 
 			ComPtr<IMFMediaBuffer> pMediaBuffer;
 			MFCreateMemoryBuffer(1, pMediaBuffer.GetAddressOf());
-			REQUIRE(hookVirtualFunction(pMediaBuffer.Get(), 3, &Lock, &oLock, hkLock), "Failed to hook IMFSourceResolver::CreateObjectFromURL", std::exception());
+			REQUIRE(hookVirtualFunction(pMediaBuffer.Get(), 3, &Lock, &oLock, hkLock), "Failed to hook IMFSourceResolver::CreateObjectFromURL");
 
-			REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll", std::exception());
-			REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll", std::exception());
+			REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
+			REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
 
 			
-			LOG_CALL(yr_initialize());
-			REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.", std::exception());
-			REQUIRE(yr_compiler_add_string(pYrCompiler, yara_resolution_fields.c_str(), NULL), "Failed to compile yara rule", std::exception());
+			LOG_CALL(LL_DBG, yr_initialize());
+			REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.");
+			REQUIRE(yr_compiler_add_string(pYrCompiler, yara_resolution_fields.c_str(), NULL), "Failed to compile yara rule");
 
 
-			LOG_CALL(av_register_all());
-			LOG_CALL(avcodec_register_all());
-			LOG_CALL(av_log_set_level(AV_LOG_TRACE));
-			LOG_CALL(av_log_set_callback(&avlog_callback));
+			LOG_CALL(LL_DBG, av_register_all());
+			LOG_CALL(LL_DBG, avcodec_register_all());
+			LOG_CALL(LL_DBG, av_log_set_level(AV_LOG_TRACE));
+			LOG_CALL(LL_DBG, av_log_set_callback(&avlog_callback));
 		} catch (std::exception& ex) {
 			// TODO cleanup
+			POST();
 			throw ex;
 		}
 	} else {
-		LOG("Lossless export is disabled in the config file.");
+		LOG(LL_NON, "Lossless export is disabled in the config file.");
 	}
+	POST();
 }
 
 
 void ScriptMain() {
+	PRE();
 	//LOG("Starting script...");
-	LOG("Starting main loop");
+	LOG(LL_NFO, "Starting main loop");
 	while (true) {
 		WAIT(0);
 	}
+	POST();
 }
 
 static HRESULT CreateObjectFromURL(
@@ -253,17 +274,18 @@ static HRESULT Hook_CoCreateInstance(
 	REFIID    riid,
 	LPVOID    *ppv
 	) {
+	PRE();
 	HRESULT result = oCoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
-
 	char buffer[64];
 	GUIDToString(rclsid, buffer, 64);
-	LOG("CoCreateInstance: ", buffer);
+	LOG(LL_NFO, "CoCreateInstance: ", buffer);
 
 	if (IsEqualCLSID(rclsid, CLSID_CMSH264EncoderMFT)) {
 		LOG_IF_FAILED(hookVirtualFunction((*ppv), 23, &Hook_IMFTransform_ProcessMessage, &oIMFTransform_ProcessMessage, hkIMFTransform_ProcessMessage), "Failed to hook IMFTransform::ProcessMessage");
 		LOG_IF_FAILED(hookVirtualFunction((*ppv), 24, &Hook_IMFTransform_ProcessInput, &oIMFTransform_ProcessInput, hkIMFTransform_ProcessInput), "Failed to hook IMFTransform::ProcessInput");
 	}
 
+	POST();
 	return result;
 }
 
@@ -286,14 +308,14 @@ static void CopySubresourceRegion(
 	UINT                 SrcSubresource,
 	const D3D11_BOX      *pSrcBox
 	) {
-	if ((exportContext != NULL) && (exportContext->pExportRenderTarget != NULL)) {
+	/*if ((exportContext != NULL) && (exportContext->pExportRenderTarget != NULL)) {
 		if ((void*)pSrcResource == (void*)exportContext->pExportRenderTarget.Get()) {
 			LOG("Copying from texture2D");
 		}
 		if ((void*)pDstResource == (void*)exportContext->pExportRenderTarget.Get()) {
 			LOG("Copying to texture2D");
 		}
-	}
+	}*/
 	return oCopySubresourceRegion(pThis, pDstResource, DstSubresource, DstX, DstY, DstZ, pSrcResource, SrcSubresource, pSrcBox);
 }
 
@@ -303,11 +325,9 @@ static HRESULT Hook_CreateRenderTargetView(
 	const D3D11_RENDER_TARGET_VIEW_DESC *pDesc,
 	ID3D11RenderTargetView        **ppRTView
 	) {
-
-	//LOG("ID3D11Device::CreateRenderTargetView");
-
+	PRE();
 	if ((exportContext != NULL) && exportContext->captureRenderTargetViewReference && (std::this_thread::get_id() == mainThreadId)) {
-		LOG("Capturing export render target view...");
+		LOG(LL_NFO, "Capturing export render target view...");
 		exportContext->captureRenderTargetViewReference = false;
 		exportContext->pDevice = pThis;
 		exportContext->pDevice->GetImmediateContext(exportContext->pDeviceContext.GetAddressOf());
@@ -316,10 +336,10 @@ static HRESULT Hook_CreateRenderTargetView(
 		if (SUCCEEDED(pResource->QueryInterface(pOldTexture.GetAddressOf()))) {
 			D3D11_TEXTURE2D_DESC desc;
 			pOldTexture->GetDesc(&desc);
-			if ((exportContext->width != 0) && (exportContext->height != 0)) {
+			/*if ((exportContext->width != 0) && (exportContext->height != 0)) {
 				desc.Width = exportContext->width;
 				desc.Height = exportContext->height;
-			}
+			}*/
 			ComPtr<ID3D11Texture2D> pTexture;
 			pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
 			ComPtr<ID3D11Resource> pRes;
@@ -327,11 +347,13 @@ static HRESULT Hook_CreateRenderTargetView(
 				exportContext->pExportRenderTarget = pTexture;
 				HRESULT result = oCreateRenderTargetView(pThis, pRes.Get(), pDesc, ppRTView);
 				exportContext->pExportRenderTargetView = *(ppRTView);
+				POST();
 				return result;
 			}
 		}
 	}
 	//LOG("createRTV: ", std::this_thread::get_id());
+	POST();
 	return oCreateRenderTargetView(pThis, pResource, pDesc, ppRTView);
 	//createdRTVs[std::this_thread::get_id()] = *ppRTView;
 }
@@ -343,29 +365,31 @@ static HRESULT Hook_CreateDepthStencilView(
 	ID3D11DepthStencilView        **ppDepthStencilView
 	) {
 	if ((exportContext != NULL) && exportContext->captureDepthStencilViewReference && mainThreadId == std::this_thread::get_id()) {
-		exportContext->captureDepthStencilViewReference = false;
-		LOG("Capturing export depth stencil view...");
-		ComPtr<ID3D11Texture2D> pOldTexture;
-		if (SUCCEEDED(pResource->QueryInterface(pOldTexture.GetAddressOf()))) {
+		try {
+			exportContext->captureDepthStencilViewReference = false;
+			LOG(LL_NFO, "Capturing export depth stencil view...");
+			ComPtr<ID3D11Texture2D> pOldTexture;
+			REQUIRE(pResource->QueryInterface(pOldTexture.GetAddressOf()), "Failed to get depth stencil texture");
 			D3D11_TEXTURE2D_DESC desc;
 			pOldTexture->GetDesc(&desc);
-			if ((exportContext->width != 0) && (exportContext->height != 0)) {
+			/*if ((exportContext->width != 0) && (exportContext->height != 0)) {
 				desc.Width = exportContext->width;
 				desc.Height = exportContext->height;
-			}
+			}*/
 			ComPtr<ID3D11Texture2D> pTexture;
 			pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
 
 			ComPtr<ID3D11Resource> pRes;
-			if (SUCCEEDED(pTexture.As(&pRes))) {
-				exportContext->pExportDepthStencil = pTexture;
-				return oCreateDepthStencilView(pThis, pRes.Get(), pDesc, ppDepthStencilView);
-			}
+			REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture to ID3D11Resource.");
+			exportContext->pExportDepthStencil = pTexture;
+			return oCreateDepthStencilView(pThis, pRes.Get(), pDesc, ppDepthStencilView);
+		} catch (...) {
+			LOG(LL_ERR, "Failed to capture depth stencil view");
 		}
 	}
-	LOG("createDSV: ", std::this_thread::get_id());
+	//LOG("createDSV: ", std::this_thread::get_id());
 	HRESULT result = oCreateDepthStencilView(pThis, pResource, pDesc, ppDepthStencilView);
-	createdDSVs[std::this_thread::get_id()] = *ppDepthStencilView;
+	//createdDSVs[std::this_thread::get_id()] = *ppDepthStencilView;
 	return result;
 }
 
@@ -376,11 +400,11 @@ static void RSSetViewports(
 	) {
 	if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
 		D3D11_VIEWPORT* pNewViewports = new D3D11_VIEWPORT[NumViewports];
-		for (int i = 0; i < NumViewports; i++) {
+		for (UINT i = 0; i < NumViewports; i++) {
 			pNewViewports[i] = pViewports[i];
 			if ((exportContext->width != 0) && (exportContext->height != 0)) {
-				pNewViewports[i].Width = exportContext->width;
-				pNewViewports[i].Height = exportContext->height;
+				pNewViewports[i].Width = (float)exportContext->width;
+				pNewViewports[i].Height = (float)exportContext->height;
 			}
 		}
 		return oRSSetViewports(pThis, NumViewports, pNewViewports);
@@ -408,7 +432,7 @@ static void RSSetScissorRects(
 	) {
 	if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
 		D3D11_RECT* pNewRects = new D3D11_RECT[NumRects];
-		for (int i = 0; i < NumRects; i++) {
+		for (UINT i = 0; i < NumRects; i++) {
 			pNewRects[i] = pRects[i];
 			if ((exportContext->width != 0) && (exportContext->height != 0)) {
 				pNewRects[i].right  = exportContext->width;
@@ -502,35 +526,36 @@ static void Hook_OMSetRenderTargets(
 	//LOG(__func__);
 	//return oOMSetRenderTargets(pThis, NumViews, ppRenderTargetViews, pDepthStencilView);
 
+	if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
+		std::lock_guard<std::mutex> sessionLock(mxSession);
+		if ((session != NULL) && (session->isCapturing)) {
+			// Time to capture rendered frame
+			ComPtr<ID3D11ShaderResourceView> pShaderResourceView;
+			pThis->VSGetShaderResources(0, 1, pShaderResourceView.GetAddressOf());
+			D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+			pShaderResourceView->GetDesc(&desc);
 
-	if ((session != NULL) && (session->isCapturing) && (exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
-		// Time to capture rendered frame
-		ComPtr<ID3D11ShaderResourceView> pShaderResourceView;
-		pThis->VSGetShaderResources(0, 1, pShaderResourceView.GetAddressOf());
-		D3D11_SHADER_RESOURCE_VIEW_DESC desc;
-		pShaderResourceView->GetDesc(&desc);
-		LOG(desc.Buffer.NumElements);
+			try {
+				NOT_NULL(exportContext, "No export context detected! Cannot capture lossless frame.");
+				auto& image_ref = *(exportContext->latestImage);
+				LOG_CALL(LL_DBG, DirectX::CaptureTexture(exportContext->pDevice.Get(), exportContext->pDeviceContext.Get(), exportContext->pExportRenderTarget.Get(), image_ref));
+				if (exportContext->latestImage->GetImageCount() == 0) {
+					LOG(LL_ERR, "There is no image to capture.");
+					throw std::exception();
+				}
+				const DirectX::Image* image = exportContext->latestImage->GetImage(0, 0, 0);
+				NOT_NULL(image, "Could not get current frame.");
+				NOT_NULL(image->pixels, "Could not get current frame.");
 
-		try {
-			NOT_NULL(exportContext, "No export context detected! Cannot capture lossless frame.", std::exception());
-			auto& image_ref = *(exportContext->latestImage);
-			LOG_CALL(DirectX::CaptureTexture(exportContext->pDevice.Get(), exportContext->pDeviceContext.Get(), exportContext->pExportRenderTarget.Get(), image_ref));
-			if (exportContext->latestImage->GetImageCount() == 0) {
-				LOG("There is no image to capture.");
-				throw std::exception();
+				REQUIRE(session->enqueueVideoFrame(image->pixels, (int)(image->width * image->height * 4), exportContext->pts++), "Failed to enqueue frame");
+				exportContext->latestImage->Release();
+			} catch (std::exception&) {
+				LOG(LL_ERR, "Reading video frame from D3D Device failed.");
+				exportContext->latestImage->Release();
+				//SafeDelete(session);
+				session.reset();
+				SafeDelete(exportContext);
 			}
-			const DirectX::Image* image = exportContext->latestImage->GetImage(0, 0, 0);
-			NOT_NULL(image, "Could not get current frame.", std::exception());
-			NOT_NULL(image->pixels, "Could not get current frame.", std::exception());
-
-			//LOG_CALL(session->writeVideoFrame(image->pixels, image->width * image->height * 4, exportContext->pts++));
-			REQUIRE(session->enqueueVideoFrame(image->pixels, image->width * image->height * 4, exportContext->pts++), "Failed to enqueue frame", std::exception());
-			exportContext->latestImage->Release();
-		} catch (std::exception& ex) {
-			LOG("Reading video frame from D3D Device failed.");
-			exportContext->latestImage->Release();
-			SafeDelete(session);
-			SafeDelete(exportContext);
 		}
 	}
 	oOMSetRenderTargets(pThis, NumViews, ppRenderTargetViews, pDepthStencilView);
@@ -542,24 +567,27 @@ static HRESULT Hook_MFCreateSinkWriterFromURL(
 	IMFAttributes *pAttributes,
 	IMFSinkWriter **ppSinkWriter
 	) {
-
+	PRE();
 	/*if (mainSwapChain != NULL) {
 		DXGI_SWAP_CHAIN_DESC desc;
 		REQUIRE(mainSwapChain->GetDesc(&desc), "Failed to get swap chain's describer", std::exception());
 		REQUIRE(mainSwapChain->ResizeBuffers(desc.BufferCount, 1920, 1080, DXGI_FORMAT_R8G8B8A8_UNORM, desc.Flags), "Failed to resize swapchain buffers", std::exception());
 	}*/
-
-	LOG(__func__);
-	LOG("CreateSWFU: ", std::this_thread::get_id());
+	/*LOG("CreateSWFU: ", std::this_thread::get_id());
 	LOG(" rtv:", (uint32_t)createdRTVs[std::this_thread::get_id()]);
-	LOG(" dsv:", (uint32_t)createdDSVs[std::this_thread::get_id()]);
+	LOG(" dsv:", (uint32_t)createdDSVs[std::this_thread::get_id()]);*/
 	HRESULT result = oMFCreateSinkWriterFromURL(pwszOutputURL, pByteStream, pAttributes, ppSinkWriter);
 	if (SUCCEEDED(result)) {
-		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 3, &Hook_IMFSinkWriter_AddStream, &oIMFSinkWriter_AddStream, hkIMFSinkWriter_AddStream), "Failed to hook IMFSinkWriter::AddStream");
-		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 4, &IMFSinkWriter_SetInputMediaType, &oIMFSinkWriter_SetInputMediaType, hkIMFSinkWriter_SetInputMediaType), "Failed to hook IMFSinkWriter::SetInputMediaType");
-		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 6, &Hook_IMFSinkWriter_WriteSample, &oIMFSinkWriter_WriteSample, hkIMFSinkWriter_WriteSample), "Failed to hook IMFSinkWriter::WriteSample");
-		LOG_IF_FAILED(hookVirtualFunction(*ppSinkWriter, 11, &Hook_IMFSinkWriter_Finalize, &oIMFSinkWriter_Finalize, hkIMFSinkWriter_Finalize), "Failed to hook IMFSinkWriter::Finalize");
+		try {
+			REQUIRE(hookVirtualFunction(*ppSinkWriter, 3, &Hook_IMFSinkWriter_AddStream, &oIMFSinkWriter_AddStream, hkIMFSinkWriter_AddStream), "Failed to hook IMFSinkWriter::AddStream");
+			REQUIRE(hookVirtualFunction(*ppSinkWriter, 4, &IMFSinkWriter_SetInputMediaType, &oIMFSinkWriter_SetInputMediaType, hkIMFSinkWriter_SetInputMediaType), "Failed to hook IMFSinkWriter::SetInputMediaType");
+			REQUIRE(hookVirtualFunction(*ppSinkWriter, 6, &Hook_IMFSinkWriter_WriteSample, &oIMFSinkWriter_WriteSample, hkIMFSinkWriter_WriteSample), "Failed to hook IMFSinkWriter::WriteSample");
+			REQUIRE(hookVirtualFunction(*ppSinkWriter, 11, &Hook_IMFSinkWriter_Finalize, &oIMFSinkWriter_Finalize, hkIMFSinkWriter_Finalize), "Failed to hook IMFSinkWriter::Finalize");
+		} catch (...) {
+			LOG(LL_ERR, "Hooking IMFSinkWriter functions failed");
+		}
 	}
+	POST();
 	return result;
 	//NullByteStream* stream = new NullByteStream();
 }
@@ -569,16 +597,15 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 	MFT_MESSAGE_TYPE eMessage,
 	ULONG_PTR        ulParam
 	) {
-	LOG(__func__);
+	std::lock_guard<std::mutex> sessionLock(mxSession);
 	if (eMessage == MFT_MESSAGE_NOTIFY_START_OF_STREAM && (session != NULL) && (!session->isVideoContextCreated)) {
-		LOG("MFT_MESSAGE_NOTIFY_START_OF_STREAM");
-		ComPtr<IMFMediaType> pType;
-		pThis->GetInputCurrentType(0, pType.GetAddressOf());
-
 		try {
+			LOG(LL_NFO, "MFT_MESSAGE_NOTIFY_START_OF_STREAM");
+			ComPtr<IMFMediaType> pType;
+			REQUIRE(pThis->GetInputCurrentType(0, pType.GetAddressOf()), "Failed to get current input type");
 			if (pType.Get() != NULL) {
-				LOG("Input media type: ", GetMediaTypeDescription(pType.Get()).c_str());
-				if (session->videoCodecContext == NULL) {
+				LOG(LL_NFO, "Input media type: ", GetMediaTypeDescription(pType.Get()).c_str());
+				if (!session->isVideoContextCreated) {
 					char buffer[128];
 					std::string output_file = Config::instance().outputDir();
 
@@ -593,7 +620,7 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 
 					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
 
-					LOG("Output file: ", filename);
+					LOG(LL_NFO, "Output file: ", filename);
 
 					UINT width, height, fps_num, fps_den;
 					MFGetAttribute2UINT32asUINT64(pType.Get(), MF_MT_FRAME_SIZE, &width, &height);
@@ -608,16 +635,18 @@ static HRESULT Hook_IMFTransform_ProcessMessage(
 					}*/
 
 					//LOG_CALL(session->createVideoContext(width, height, AV_PIX_FMT_BGRA, fps_num, fps_den, AV_PIX_FMT_YUV420P));
-					REQUIRE(session->createVideoContext(width, height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context", std::exception());
-					REQUIRE(session->createFormatContext(filename.c_str()), "Failed to create format context", std::exception());
+					REQUIRE(session->createVideoContext(width, height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
+					REQUIRE(session->createFormatContext(filename.c_str()), "Failed to create format context");
 				}
 			}
-		} catch (std::exception& ex) {
-			SafeDelete(session);
+		} catch (std::exception&) {
+			//SafeDelete(session);
+			session.reset();
 			SafeDelete(exportContext);
 		}
 	} 
-	return oIMFTransform_ProcessMessage(pThis, eMessage, ulParam);
+	return S_OK;
+	//return oIMFTransform_ProcessMessage(pThis, eMessage, ulParam);
 }
 
 static HRESULT Hook_IMFTransform_ProcessInput(
@@ -628,9 +657,9 @@ static HRESULT Hook_IMFTransform_ProcessInput(
 	) {
 	ComPtr<IMFMediaType> mediaType;
 	pThis->GetInputCurrentType(dwInputStreamID, mediaType.GetAddressOf());
-	LOG("IMFTransform::ProcessInput: ", GetMediaTypeDescription(mediaType.Get()).c_str());
+	LOG(LL_NFO, "IMFTransform::ProcessInput: ", GetMediaTypeDescription(mediaType.Get()).c_str());
 
-	return oIMFTransform_ProcessInput(pThis, dwInputStreamID, pSample, dwFlags);
+	return S_OK; // oIMFTransform_ProcessInput(pThis, dwInputStreamID, pSample, dwFlags);
 }
 
 static HRESULT Hook_IMFSinkWriter_AddStream(
@@ -638,7 +667,9 @@ static HRESULT Hook_IMFSinkWriter_AddStream(
 	IMFMediaType  *pTargetMediaType,
 	DWORD         *pdwStreamIndex
 	) {
-	LOG("IMFSinkWriter::AddStream: ", GetMediaTypeDescription(pTargetMediaType).c_str());
+	PRE();
+	LOG(LL_NFO, "IMFSinkWriter::AddStream: ", GetMediaTypeDescription(pTargetMediaType).c_str());
+	POST();
 	return oIMFSinkWriter_AddStream(pThis, pTargetMediaType, pdwStreamIndex);
 }
 
@@ -648,7 +679,8 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 	IMFMediaType  *pInputMediaType,
 	IMFAttributes *pEncodingParameters
 	) {
-	LOG("IMFSinkWriter::SetInputMediaType: ", GetMediaTypeDescription(pInputMediaType).c_str());
+	PRE();
+	LOG(LL_NFO, "IMFSinkWriter::SetInputMediaType: ", GetMediaTypeDescription(pInputMediaType).c_str());
 
 	GUID majorType;
 	if (SUCCEEDED(pInputMediaType->GetMajorType(&majorType))) {
@@ -662,22 +694,25 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 			pInputMediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bitsPerSample);
 			pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
 
+			std::lock_guard<std::mutex> sessionLock(mxSession);
 			if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
 				try {
 					// REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment), "Failed to create audio context.", std::exception());
-					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, Config::instance().audioRate(), Config::instance().audioFmt(), Config::instance().audioEnc(), Config::instance().audioCfg()), "Failed to create audio context.", std::exception());
-				} catch (std::exception& ex) {
-					SafeDelete(session);
+					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, Config::instance().audioRate(), Config::instance().audioFmt(), Config::instance().audioEnc(), Config::instance().audioCfg()), "Failed to create audio context.");
+				} catch (std::exception&) {
+					//SafeDelete(session);
+					session.reset();
 					SafeDelete(exportContext);
 				}
 			} else {
 				char buffer[64];
 				GUIDToString(subType, buffer, 64);
-				LOG("Unsupported input audio format: ", buffer);
+				LOG(LL_ERR, "Unsupported input audio format: ", buffer);
 			}
 		}
 	}
 
+	POST();
 	return oIMFSinkWriter_SetInputMediaType(pThis, dwStreamIndex, pInputMediaType, pEncodingParameters);
 }
 
@@ -686,7 +721,8 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 	DWORD         dwStreamIndex,
 	IMFSample     *pSample
 	) {
-
+	PRE();
+	std::lock_guard<std::mutex> sessionLock(mxSession);
 	if ((session != NULL) && (dwStreamIndex == 1)) {
 		ComPtr<IMFMediaBuffer> pBuffer = NULL;
 		try {
@@ -698,43 +734,49 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 			pBuffer->GetCurrentLength(&length);
 			BYTE *buffer;
 			if (SUCCEEDED(pBuffer->Lock(&buffer, NULL, NULL))) {
-				LOG_CALL(session->writeAudioFrame(buffer, length, sampleTime));
+				LOG_CALL(LL_DBG, session->writeAudioFrame(buffer, length, sampleTime));
 			}
 			
 		} catch (std::exception&) {
-			SafeDelete(session);
+			//SafeDelete(session);
+			session.reset();
 			SafeDelete(exportContext);
 			if (pBuffer != NULL) {
 				pBuffer->Unlock();
 			}
 		}
 	}
-
-	return oIMFSinkWriter_WriteSample(pThis, dwStreamIndex, pSample);
+	POST();
+	return S_OK; // oIMFSinkWriter_WriteSample(pThis, dwStreamIndex, pSample);
 }
 
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
 	) {
+	PRE();
+	std::lock_guard<std::mutex> sessionLock(mxSession);
 	try {
 		if (session != NULL) {
-			LOG_CALL(session->finishAudio());
-			LOG_CALL(session->finishVideo());
-			LOG_CALL(session->endSession());
+			LOG_CALL(LL_DBG, session->finishAudio());
+			LOG_CALL(LL_DBG, session->finishVideo());
+			LOG_CALL(LL_DBG, session->endSession());
 		}
 	} catch (std::exception&) {
 		// Do nothing
 	}
-	SafeDelete(session);
+
+	//SafeDelete(session);
+	session.reset();
 	SafeDelete(exportContext);
-	LOG(__func__);
-	return oIMFSinkWriter_Finalize(pThis);
+	POST();
+	return S_OK; // return oIMFSinkWriter_Finalize(pThis);
 }
 
 
 void finalize() {
-	LOG_CALL(yr_compiler_destroy(pYrCompiler));
-	LOG_CALL(yr_finalize());
+	PRE();
+	LOG_CALL(LL_DBG, yr_compiler_destroy(pYrCompiler));
+	LOG_CALL(LL_DBG, yr_finalize());
 	hkCoCreateInstance->UnHook();
 	hkMFCreateSinkWriterFromURL->UnHook();
 	hkIMFTransform_ProcessInput->UnHook();
@@ -743,6 +785,7 @@ void finalize() {
 	hkIMFSinkWriter_SetInputMediaType->UnHook();
 	hkIMFSinkWriter_WriteSample->UnHook();
 	hkIMFSinkWriter_Finalize->UnHook();
+	POST();
 }
 
 static HRESULT Lock(
@@ -863,18 +906,20 @@ static HRESULT Hook_CreateTexture2D(
 
 	// Detect export buffer creation
 	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId)) {
+		std::lock_guard<std::mutex> sessionLock(mxSession);
 		SafeDelete(exportContext);
-		SafeDelete(session);
+		//SafeDelete(session);
+		session.reset();
 		try {
-			LOG("Creating session...");
-			LOG(" fmt:", conv_dxgi_format_to_string(pDesc->Format),
+			LOG(LL_NFO, "Creating session...");
+			LOG(LL_NFO, " fmt:", conv_dxgi_format_to_string(pDesc->Format),
 				" w:", pDesc->Width,
 				" h:", pDesc->Height);
 			if (Config::instance().isAutoReloadEnabled()) {
-				LOG_CALL(Config::instance().reload());
+				LOG_CALL(LL_DBG,Config::instance().reload());
 			}
-			session = new Encoder::Session();
-			NOT_NULL(session, "Could not create the session.", std::exception());
+			session.reset(new Encoder::Session());
+			NOT_NULL(session, "Could not create the session");
 			exportContext = new ExportContext();
 			exportContext->captureRenderTargetViewReference = true;
 			exportContext->captureDepthStencilViewReference = true;
@@ -886,8 +931,9 @@ static HRESULT Hook_CreateTexture2D(
 			/*desc.Width = exportContext->width;
 			desc.Height = exportContext->height;*/
 			return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);
-		} catch (std::exception& ex) {
-			SafeDelete(session);
+		} catch (std::exception&) {
+			//SafeDelete(session);
+			session.reset();
 			SafeDelete(exportContext);
 		}
 	}
