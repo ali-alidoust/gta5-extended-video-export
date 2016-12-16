@@ -6,6 +6,13 @@
 #include <dxgi.h>
 #include <d3d11.h>
 
+static HRESULT Hook_SetFullscreenState(
+	IDXGISwapChain *pThis,
+	BOOL           Fullscreen,
+	IDXGIOutput    *pTarget
+	);
+
+
 static HRESULT Hook_ResizeBuffers(
 	IDXGISwapChain* pThis,
 	UINT			BufferCount,
@@ -91,6 +98,12 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
+	);
+
+typedef HRESULT (*tSetFullscreenState)(
+	IDXGISwapChain *pThis,
+	BOOL           Fullscreen,
+	IDXGIOutput    *pTarget
 	);
 
 typedef HRESULT (*tResizeBuffers)(

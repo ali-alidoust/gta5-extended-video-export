@@ -28,6 +28,7 @@ namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkCreateDepthStencilView(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkCreateTexture2D(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkResizeBuffers(new PLH::VFuncDetour);
+	std::shared_ptr<PLH::VFuncDetour> hkSetFullscreenState(new PLH::VFuncDetour);
 
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);
@@ -110,6 +111,7 @@ tCreateDepthStencilView oCreateDepthStencilView;
 tRSSetViewports oRSSetViewports;
 tRSSetScissorRects oRSSetScissorRects;
 tResizeBuffers oResizeBuffers;
+tSetFullscreenState oSetFullscreenState;
 
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	static char msg[8192];
@@ -157,10 +159,13 @@ void onPresent(IDXGISwapChain *swapChain) {
 			pHiddenWindow.reset(::CreateWindowA("STATIC", "dummy", 0, 0, 0, 1, 1, NULL, NULL, NULL, NULL));
 			desc.OutputWindow = pHiddenWindow.get();
 			//desc.Flags = 0;
-			desc.Windowed = TRUE;
 			desc.BufferCount = 1;
 			desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 			//REQUIRE(CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.GetAddressOf()), "Failed to create IDXGIFactory instance.");
+			
+			REQUIRE(hookVirtualFunction(swapChain, 10, &Hook_SetFullscreenState, &oSetFullscreenState, hkSetFullscreenState), "Failed to hook DXGISwapBuffer::SetFullscreenState");
+			REQUIRE(hookVirtualFunction(swapChain, 13, &Hook_ResizeBuffers, &oResizeBuffers, hkResizeBuffers), "Failed to hook DXGISwapBuffer::ResizeBuffers");
+
 			ComPtr<IDXGIDevice> pDXGIDevice;
 			REQUIRE(pDevice.As(&pDXGIDevice), "Failed to get IDXGIDevice from ID3D11Device");
 			
@@ -172,7 +177,6 @@ void onPresent(IDXGISwapChain *swapChain) {
 			REQUIRE(pDXGIFactory->CreateSwapChain(pDevice.Get(), &desc, pHiddenSwapChain.GetAddressOf()), "Failed to create hidden swap chain.");
 			REQUIRE(pHiddenSwapChain->Present(0, DXGI_PRESENT_TEST), "Failed to present the hidden swap chain.");
 
-			REQUIRE(hookVirtualFunction(swapChain, 13, &Hook_ResizeBuffers, &oResizeBuffers, hkResizeBuffers), "Failed to hook DXGISwapBuffer::ResizeBuffers");
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}
@@ -235,6 +239,18 @@ static HRESULT Hook_CoCreateInstance(
 	LOG(LL_NFO, "CoCreateInstance: ", buffer);
 	POST();
 	return result;
+}
+
+static HRESULT Hook_SetFullscreenState(
+	IDXGISwapChain *pThis,
+	BOOL           Fullscreen,
+	IDXGIOutput    *pTarget
+	) {
+	if (pThis != pHiddenSwapChain.Get()) {
+		oSetFullscreenState(pHiddenSwapChain.Get(), Fullscreen, NULL);
+	}
+
+	return oSetFullscreenState(pThis, Fullscreen, pTarget);
 }
 
 static HRESULT Hook_ResizeBuffers(
@@ -386,10 +402,6 @@ static void Hook_OMSetRenderTargets(
 		std::lock_guard<std::mutex> sessionLock(mxSession);
 		if ((session != NULL) && (session->isCapturing)) {
 			// Time to capture rendered frame
-			ComPtr<ID3D11ShaderResourceView> pShaderResourceView;
-			pThis->VSGetShaderResources(0, 1, pShaderResourceView.GetAddressOf());
-			D3D11_SHADER_RESOURCE_VIEW_DESC desc;
-			pShaderResourceView->GetDesc(&desc);
 			try {
 				NOT_NULL(exportContext, "No export context detected! Cannot capture lossless frame.");
 
@@ -613,7 +625,7 @@ static HRESULT Hook_CreateTexture2D(
 	ID3D11Texture2D        **ppTexture2D
 	) {
 	// Detect export buffer creation
-	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId)) {
+	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId) && !((pDesc->Width == 512) && (pDesc->Height == 256)) && !((pDesc->Width == 4) && (pDesc->Height == 4))) {
 		std::lock_guard<std::mutex> sessionLock(mxSession);
 		exportContext.reset();
 		session.reset();
