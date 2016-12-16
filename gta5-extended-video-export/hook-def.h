@@ -6,35 +6,6 @@
 #include <dxgi.h>
 #include <d3d11.h>
 
-
-static HRESULT Hook_GetBuffer(
-	IDXGISwapChain *pThis,
-	UINT           Buffer,
-	REFIID         riid,
-	void           **ppSurface
-	);
-
-static HRESULT Hook_ResizeTarget(
-	IDXGISwapChain       *pThis,
-	const DXGI_MODE_DESC *pNewTargetParameters
-	);
-
-static HRESULT Hook_SetFullscreenState(
-	IDXGISwapChain *pThis,
-	BOOL           Fullscreen,
-	IDXGIOutput    *pTarget
-	);
-
-
-static HRESULT Hook_ResizeBuffers(
-	IDXGISwapChain* pThis,
-	UINT			BufferCount,
-	UINT			Width,
-	UINT			Height,
-	DXGI_FORMAT		NewFormat,
-	UINT			SwapChainFlags
-	);
-
 static HRESULT Hook_CreateRenderTargetView(
 	ID3D11Device                  *pThis,
 	ID3D11Resource                *pResource,
@@ -111,33 +82,6 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
-	);
-
-typedef HRESULT (*tGetBuffer)(
-	IDXGISwapChain *pThis,
-	UINT           Buffer,
-	REFIID         riid,
-	void           **ppSurface
-	);
-
-typedef HRESULT (*tResizeTarget)(
-	IDXGISwapChain       *pThis,
-	const DXGI_MODE_DESC *pNewTargetParameters
-	);
-
-typedef HRESULT (*tSetFullscreenState)(
-	IDXGISwapChain *pThis,
-	BOOL           Fullscreen,
-	IDXGIOutput    *pTarget
-	);
-
-typedef HRESULT (*tResizeBuffers)(
-	IDXGISwapChain* pThis,
-	UINT			BufferCount,
-	UINT			Width,
-	UINT			Height,
-	DXGI_FORMAT		NewFormat,
-	UINT			SwapChainFlags
 	);
 
 typedef HRESULT(*tCreateTexture2D)(

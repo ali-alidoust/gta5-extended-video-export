@@ -27,10 +27,6 @@ namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkCreateRenderTargetView(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkCreateDepthStencilView(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkCreateTexture2D(new PLH::VFuncDetour);
-	std::shared_ptr<PLH::VFuncDetour> hkResizeBuffers(new PLH::VFuncDetour);
-	std::shared_ptr<PLH::VFuncDetour> hkSetFullscreenState(new PLH::VFuncDetour);
-	std::shared_ptr<PLH::VFuncDetour> hkResizeTarget(new PLH::VFuncDetour);
-	std::shared_ptr<PLH::VFuncDetour> hkGetBuffer(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkRSSetViewports(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkRSSetScissorRects(new PLH::VFuncDetour);
 	
@@ -46,9 +42,6 @@ namespace {
 
 	ComPtr<IDXGIFactory> pDXGIFactory;
 
-	//ComPtr<IDXGISwapChain> pHiddenSwapChain;
-	//std::shared_ptr<HWND__> pHiddenWindow;
-
 	struct ExportContext {
 
 		ExportContext()
@@ -62,17 +55,6 @@ namespace {
 			POST();
 		}
 
-		HRESULT attachSwapChain(ComPtr<IDXGISwapChain> swapChain) {
-			try {
-				//REQUIRE(swapChain->ResizeBuffers(0, width, height, desc.BufferDesc.Format, desc.Flags), "Could not resize the hidden swap buffer.");
-				this->pSwapChain = swapChain;
-			} catch (std::exception& ex) {
-				LOG(LL_ERR, ex.what());
-				return E_FAIL;
-			}
-			return S_OK;
-		}
-
 		bool captureRenderTargetViewReference = false;
 		bool captureDepthStencilViewReference = false;
 		
@@ -84,13 +66,7 @@ namespace {
 		ComPtr<IDXGIFactory> pDXGIFactory;
 		ComPtr<IDXGISwapChain> pSwapChain;
 
-		std::shared_ptr<DirectX::ScratchImage> latestImage = std::make_shared<DirectX::ScratchImage>();
-		//DirectX::ScratchImage latestImage;
-
-		/*UINT width;
-		UINT height;*/
-		//UINT outputWidth;
-		//UINT outputHeight;
+		std::shared_ptr<DirectX::ScratchImage> capturedImage = std::make_shared<DirectX::ScratchImage>();
 
 		UINT pts = 0;
 
@@ -113,10 +89,6 @@ tCreateRenderTargetView oCreateRenderTargetView;
 tCreateDepthStencilView oCreateDepthStencilView;
 tRSSetViewports oRSSetViewports;
 tRSSetScissorRects oRSSetScissorRects;
-tGetBuffer oGetBuffer;
-tResizeBuffers oResizeBuffers;
-tResizeTarget oResizeTarget;
-tSetFullscreenState oSetFullscreenState;
 
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	static char msg[8192];
@@ -154,7 +126,6 @@ void onPresent(IDXGISwapChain *swapChain) {
 
 			LOG(LL_NFO, "BUFFER COUNT: ", desc.BufferCount);
 			REQUIRE(swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)texture.GetAddressOf()), "Failed to get the texture buffer");
-			//pPrimaryRenderTarget = texture;
 			REQUIRE(swapChain->GetDevice(__uuidof(ID3D11Device), (void**)pDevice.GetAddressOf()), "Failed to get the D3D11 device");
 			pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
 			NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context");
@@ -165,28 +136,6 @@ void onPresent(IDXGISwapChain *swapChain) {
 			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 44, &RSSetViewports, &oRSSetViewports, hkRSSetViewports), "Failed to hook ID3DDeviceContext::RSSetViewports"); 
 			REQUIRE(hookVirtualFunction(pDeviceContext.Get(), 45, &RSSetScissorRects, &oRSSetScissorRects, hkRSSetScissorRects), "Failed to hook ID3DDeviceContext::RSSetViewports"); 
 
-
-			/*D3D11_TEXTURE2D_DESC backbufferDesc;
-			texture->GetDesc(&backbufferDesc);
-			REQUIRE(pDevice->CreateTexture2D(&backbufferDesc, NULL, pHiddenBuffer.GetAddressOf()), "Failed to create back buffer texture");*/
-			//LOG(LL_DBG, "Back buffer created: w:", desc.Width, " h:", desc.Height);
-
-			//createHiddenBuffer(pDevice, desc.BufferDesc.Width, desc.BufferDesc.Height, desc.BufferDesc.Format);
-			//pHiddenWindow.reset(::CreateWindowA("STATIC", "dummy", 0, 0, 0, 1, 1, NULL, NULL, NULL, NULL));
-			/*DXGI_SWAP_CHAIN_DESC newDesc = desc;
-			newDesc.OutputWindow = pHiddenWindow.get();*/
-			//desc.Flags = 0;
-			/*newDesc.BufferCount = 1;
-			newDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;*/
-			//REQUIRE(CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.GetAddressOf()), "Failed to create IDXGIFactory instance.");
-			
-			//REQUIRE(hookVirtualFunction(swapChain, 9, &Hook_GetBuffer, &oGetBuffer, hkGetBuffer), "Failed to hook DXGISwapBuffer::GetBuffer");
-
-
-			REQUIRE(hookVirtualFunction(swapChain, 10, &Hook_SetFullscreenState, &oSetFullscreenState, hkSetFullscreenState), "Failed to hook DXGISwapBuffer::SetFullscreenState");
-			REQUIRE(hookVirtualFunction(swapChain, 13, &Hook_ResizeBuffers, &oResizeBuffers, hkResizeBuffers), "Failed to hook DXGISwapBuffer::ResizeBuffers");
-			REQUIRE(hookVirtualFunction(swapChain, 14, &Hook_ResizeTarget, &oResizeTarget, hkResizeTarget), "Failed to hook DXGISwapBuffer::ResizeTarget");
-
 			ComPtr<IDXGIDevice> pDXGIDevice;
 			REQUIRE(pDevice.As(&pDXGIDevice), "Failed to get IDXGIDevice from ID3D11Device");
 			
@@ -195,21 +144,10 @@ void onPresent(IDXGISwapChain *swapChain) {
 
 			REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)pDXGIFactory.GetAddressOf()), "Failed to get IDXGIFactory");
 
-			//REQUIRE(pDXGIFactory->CreateSwapChain(pDevice.Get(), &newDesc, pHiddenSwapChain.GetAddressOf()), "Failed to create hidden swap chain.");
-
-			//REQUIRE(swapChain->SetFullscreenState(desc.Windowed ? FALSE : TRUE, NULL), "Failed to revert fullscreen status of original swap chain")
-
-			//REQUIRE(pHiddenSwapChain->Present(0, DXGI_PRESENT_TEST), "Failed to present the hidden swap chain.");
-
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}
 	}
-
-	// FIXME: This is a hack that makes sure that ReShade is initialized before exporting video
-	/*if (pHiddenSwapChain) {
-		pHiddenSwapChain->Present(0, DXGI_PRESENT_TEST);
-	}*/
 }
 
 void initialize() {
@@ -261,76 +199,6 @@ static HRESULT Hook_CoCreateInstance(
 	char buffer[64];
 	GUIDToString(rclsid, buffer, 64);
 	LOG(LL_NFO, "CoCreateInstance: ", buffer);
-	POST();
-	return result;
-}
-
-static HRESULT Hook_ResizeTarget(
-	IDXGISwapChain       *pThis,
-	const DXGI_MODE_DESC *pNewTargetParameters
-	) {
-	PRE();
-	POST();
-	return oResizeTarget(pThis, pNewTargetParameters);
-}
-
-static HRESULT Hook_GetBuffer(
-	IDXGISwapChain *pThis,
-	UINT           Buffer,
-	REFIID         riid,
-	void           **ppSurface
-	) {
-	return oGetBuffer(pThis, Buffer, riid, ppSurface);
-}
-
-static HRESULT Hook_SetFullscreenState(
-	IDXGISwapChain *pThis,
-	BOOL           Fullscreen,
-	IDXGIOutput    *pTarget
-	) {
-	PRE();
-	/*if (exportContext != NULL) {
-		LOG(LL_NON, "BYPASS");
-		POST();
-		return S_OK;
-	}*/
-
-	/*if (pThis != pHiddenSwapChain.Get()) {
-		oSetFullscreenState(pHiddenSwapChain.Get(), Fullscreen, NULL);
-	}*/
-
-	POST();
-	return oSetFullscreenState(pThis, Fullscreen, pTarget);
-}
-
-static HRESULT Hook_ResizeBuffers(
-	IDXGISwapChain* pThis,
-	UINT			BufferCount,
-	UINT			Width,
-	UINT			Height,
-	DXGI_FORMAT		NewFormat,
-	UINT			SwapChainFlags
-	) {
-	PRE();
-	//if (exportContext != NULL) {
-	//	LOG(LL_NON, "BYPASS");
-	//	POST();
-	//	return S_OK;
-	//}
-
-	//try {
-	//	if (pThis != pHiddenSwapChain.Get()) {
-	//		REQUIRE(oResizeBuffers(pHiddenSwapChain.Get(), 1, Width, Height, NewFormat, SwapChainFlags), "Failed to resize hidden swap chain buffers");
-	//		//REQUIRE(pHiddenSwapChain->Present(0, DXGI_PRESENT_TEST), "Failed to present the hidden swap chain.");
-	//	}
-	//} catch (std::exception& ex) {
-	//	LOG(LL_ERR, ex.what());
-	//}
-
-	
-
-	HRESULT result = oResizeBuffers(pThis, BufferCount, Width, Height, NewFormat, SwapChainFlags);
-
 	POST();
 	return result;
 }
@@ -469,23 +337,23 @@ static void Hook_OMSetRenderTargets(
 				exportContext->pSwapChain->Present(0, DXGI_PRESENT_TEST);
 
 				ComPtr<ID3D11Texture2D> pSwapChainBuffer;
-				exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)pSwapChainBuffer.GetAddressOf());
+				REQUIRE(exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)pSwapChainBuffer.GetAddressOf()), "Failed to get swap chain's buffer");
 
-				auto& image_ref = *(exportContext->latestImage);
+				auto& image_ref = *(exportContext->capturedImage);
 				LOG_CALL(LL_DBG, DirectX::CaptureTexture(exportContext->pDevice.Get(), exportContext->pDeviceContext.Get(), pSwapChainBuffer.Get(), image_ref));
-				if (exportContext->latestImage->GetImageCount() == 0) {
+				if (exportContext->capturedImage->GetImageCount() == 0) {
 					LOG(LL_ERR, "There is no image to capture.");
 					throw std::exception();
 				}
-				const DirectX::Image* image = exportContext->latestImage->GetImage(0, 0, 0);
+				const DirectX::Image* image = exportContext->capturedImage->GetImage(0, 0, 0);
 				NOT_NULL(image, "Could not get current frame.");
 				NOT_NULL(image->pixels, "Could not get current frame.");
 
 				REQUIRE(session->enqueueVideoFrame(image->pixels, (int)(image->width * image->height * 4), exportContext->pts++), "Failed to enqueue frame");
-				exportContext->latestImage->Release();
+				exportContext->capturedImage->Release();
 			} catch (std::exception&) {
 				LOG(LL_ERR, "Reading video frame from D3D Device failed.");
-				exportContext->latestImage->Release();
+				exportContext->capturedImage->Release();
 				session.reset();
 				exportContext.reset();
 			}
@@ -703,7 +571,7 @@ static HRESULT Hook_CreateTexture2D(
 			session.reset(new Encoder::Session());
 			NOT_NULL(session, "Could not create the session");
 			exportContext.reset(new ExportContext());
-			exportContext->attachSwapChain(mainSwapChain);
+			exportContext->pSwapChain = mainSwapChain;
 			exportContext->captureRenderTargetViewReference = true;
 			exportContext->captureDepthStencilViewReference = true;
 			/*exportContext->width = Config::instance().exportResolution().first;
