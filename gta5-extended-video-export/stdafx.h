@@ -33,5 +33,6 @@ extern "C" {
 #include "libswscale\swscale.h"
 #include "libavutil\audio_fifo.h"
 #include <yara\libyara.h>
+#include <yara\rules.h>
 #include <yara\compiler.h>
 }

@@ -16,9 +16,6 @@
 
 using namespace Microsoft::WRL;
 
-typedef IDXGIFactory IDXGIFactoryX;
-typedef IDXGISwapChain IDXGISwapChainX;
-
 namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkIMFTransform_ProcessInput(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkIMFTransform_ProcessMessage(new PLH::VFuncDetour);
@@ -41,7 +38,7 @@ namespace {
 	std::thread::id mainThreadId;
 	ComPtr<IDXGISwapChain> mainSwapChain;
 
-	ComPtr<IDXGIFactoryX> factory;
+	ComPtr<IDXGIFactory> pDXGIFactory;
 
 	ComPtr<IDXGISwapChain> pHiddenSwapChain;
 	std::shared_ptr<HWND__> pHiddenWindow;
@@ -79,7 +76,7 @@ namespace {
 		ComPtr<ID3D11Texture2D> pExportDepthStencil;
 		ComPtr<ID3D11DeviceContext> pDeviceContext;
 		ComPtr<ID3D11Device> pDevice;
-		ComPtr<IDXGIFactoryX> pDXGIFactory;
+		ComPtr<IDXGIFactory> pDXGIFactory;
 		ComPtr<IDXGISwapChain> pHiddenSwapChain;
 		std::shared_ptr<HWND__> pHiddenWindow;
 
@@ -159,10 +156,21 @@ void onPresent(IDXGISwapChain *swapChain) {
 
 			pHiddenWindow.reset(::CreateWindowA("STATIC", "dummy", 0, 0, 0, 1, 1, NULL, NULL, NULL, NULL));
 			desc.OutputWindow = pHiddenWindow.get();
-			desc.Flags = 0;
-			REQUIRE(CreateDXGIFactory(__uuidof(IDXGIFactoryX), (void**)factory.GetAddressOf()), "Failed to create IDXGIFactory instance.");
-			REQUIRE(factory->CreateSwapChain(pDevice.Get(), &desc, pHiddenSwapChain.GetAddressOf()), "Failed to create hidden swap chain.");
-			REQUIRE(pHiddenSwapChain->Present(0, 0), "Failed to present the hidden swap chain.");
+			//desc.Flags = 0;
+			desc.Windowed = TRUE;
+			desc.BufferCount = 1;
+			desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+			//REQUIRE(CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.GetAddressOf()), "Failed to create IDXGIFactory instance.");
+			ComPtr<IDXGIDevice> pDXGIDevice;
+			REQUIRE(pDevice.As(&pDXGIDevice), "Failed to get IDXGIDevice from ID3D11Device");
+			
+			ComPtr<IDXGIAdapter> pDXGIAdapter;
+			REQUIRE(pDXGIDevice->GetParent(__uuidof(IDXGIAdapter), (void**)pDXGIAdapter.GetAddressOf()), "Failed to get IDXGIAdapter");
+
+			REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)pDXGIFactory.GetAddressOf()), "Failed to get IDXGIFactory");
+
+			REQUIRE(pDXGIFactory->CreateSwapChain(pDevice.Get(), &desc, pHiddenSwapChain.GetAddressOf()), "Failed to create hidden swap chain.");
+			REQUIRE(pHiddenSwapChain->Present(0, DXGI_PRESENT_TEST), "Failed to present the hidden swap chain.");
 
 			REQUIRE(hookVirtualFunction(swapChain, 13, &Hook_ResizeBuffers, &oResizeBuffers, hkResizeBuffers), "Failed to hook DXGISwapBuffer::ResizeBuffers");
 		} catch (std::exception& ex) {
@@ -171,15 +179,13 @@ void onPresent(IDXGISwapChain *swapChain) {
 	}
 
 	// FIXME: This is a hack that makes sure that ReShade is initialized before exporting video
-	if ((exportContext == NULL) && (pHiddenSwapChain != NULL)) {
-		pHiddenSwapChain->Present(0, 0);
+	if (pHiddenSwapChain) {
+		pHiddenSwapChain->Present(0, DXGI_PRESENT_TEST);
 	}
 }
 
 void initialize() {
 	PRE();
-
-
 	try {
 		mainThreadId = std::this_thread::get_id();
 
@@ -190,6 +196,9 @@ void initialize() {
 		LOG_CALL(LL_DBG, yr_initialize());
 		REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.");
 		REQUIRE(yr_compiler_add_string(pYrCompiler, yara_resolution_fields.c_str(), NULL), "Failed to compile yara rule");
+		YR_RULES *rules;
+		REQUIRE(yr_compiler_get_rules(pYrCompiler, &rules), "Failed to get yara rules");
+		//yr_rules_scan_mem(rules, )
 
 		LOG_CALL(LL_DBG, av_register_all());
 		LOG_CALL(LL_DBG, avcodec_register_all());
@@ -240,9 +249,9 @@ static HRESULT Hook_ResizeBuffers(
 	HRESULT result = oResizeBuffers(pThis, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 
 	try {
-		if (pThis == mainSwapChain.Get()) {
-			REQUIRE(pHiddenSwapChain->ResizeBuffers(0, Width, Height, NewFormat, 0), "Failed to resize hidden swap chain buffers");
-			REQUIRE(pHiddenSwapChain->Present(0, 0), "Failed to present the hidden swap chain.");
+		if (pThis != pHiddenSwapChain.Get()) {
+			REQUIRE(oResizeBuffers(pHiddenSwapChain.Get(), 1, Width, Height, NewFormat, SwapChainFlags), "Failed to resize hidden swap chain buffers");
+			REQUIRE(pHiddenSwapChain->Present(0, DXGI_PRESENT_TEST), "Failed to present the hidden swap chain.");
 		}
 	} catch (std::exception& ex) {
 		LOG(LL_ERR, ex.what());
