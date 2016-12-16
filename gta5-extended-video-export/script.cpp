@@ -571,6 +571,7 @@ static HRESULT Hook_CreateTexture2D(
 			session.reset(new Encoder::Session());
 			NOT_NULL(session, "Could not create the session");
 			exportContext.reset(new ExportContext());
+			NOT_NULL(exportContext, "Could not create export context");
 			exportContext->pSwapChain = mainSwapChain;
 			exportContext->captureRenderTargetViewReference = true;
 			exportContext->captureDepthStencilViewReference = true;
