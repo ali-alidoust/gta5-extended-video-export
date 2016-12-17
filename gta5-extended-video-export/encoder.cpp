@@ -12,13 +12,13 @@ namespace Encoder {
 		videoFrameQueue(16)
 	{
 		PRE();
-		LOG(LL_NFO, "Creating session...");
+		LOG(LL_NFO, "Opening session: ", (uint64_t)this);
 		POST();
 	}
 
 	Session::~Session() {
 		PRE();
-		LOG(LL_NFO, "Deleting session...");
+		LOG(LL_NFO, "Closing session: ", (uint64_t)this);
 		this->isBeingDeleted = true;
 		this->isCapturing = false;
 		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, -1)));
@@ -31,8 +31,10 @@ namespace Encoder {
 		LOG_CALL(LL_DBG, this->finishAudio());
 		LOG_CALL(LL_DBG, this->endSession());
 
+
 		LOG_CALL(LL_DBG, av_free(this->oformat));
 		LOG_CALL(LL_DBG, av_free(this->fmtContext));
+		LOG_CALL(LL_DBG, avcodec_close(this->videoCodecContext));
 		LOG_CALL(LL_DBG, av_free(this->videoCodecContext));
 		LOG_CALL(LL_DBG, av_free(this->inputFrame));
 		LOG_CALL(LL_DBG, av_free(this->outputFrame));
@@ -41,8 +43,14 @@ namespace Encoder {
 		if (this->videoOptions) {
 			LOG_CALL(LL_DBG, av_dict_free(&this->videoOptions));
 		}
+		if (this->audioOptions) {
+			LOG_CALL(LL_DBG, av_dict_free(&this->audioOptions));
+		}
+		LOG_CALL(LL_DBG, avcodec_close(this->audioCodecContext));
 		LOG_CALL(LL_DBG, av_free(this->audioCodecContext));
 		LOG_CALL(LL_DBG, av_free(this->inputAudioFrame));
+		LOG_CALL(LL_DBG, av_free(this->outputAudioFrame));
+		LOG_CALL(LL_DBG, av_audio_fifo_free(this->audioSampleBuffer));
 		POST();
 	}
 

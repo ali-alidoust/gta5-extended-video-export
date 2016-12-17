@@ -332,7 +332,6 @@ static void Hook_OMSetRenderTargets(
 		if ((session != NULL) && (session->isCapturing)) {
 			// Time to capture rendered frame
 			try {
-				NOT_NULL(exportContext, "No export context detected! Cannot capture lossless frame.");
 
 				exportContext->pSwapChain->Present(0, DXGI_PRESENT_TEST);
 
