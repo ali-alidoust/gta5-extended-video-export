@@ -157,7 +157,6 @@ void initialize() {
 
 		REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
 		REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
-
 			
 		LOG_CALL(LL_DBG, yr_initialize());
 		REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.");
@@ -209,7 +208,6 @@ static HRESULT Hook_CreateRenderTargetView(
 	const D3D11_RENDER_TARGET_VIEW_DESC *pDesc,
 	ID3D11RenderTargetView        **ppRTView
 	) {
-	//PRE();
 	if ((exportContext != NULL) && exportContext->captureRenderTargetViewReference && (std::this_thread::get_id() == mainThreadId)) {
 		try {
 			LOG(LL_NFO, "Capturing export render target view...");
@@ -243,7 +241,6 @@ static HRESULT Hook_CreateRenderTargetView(
 			LOG(LL_ERR, ex.what());
 		}
 	}
-	//POST();
 	return oCreateRenderTargetView(pThis, pResource, pDesc, ppRTView);
 }
 
@@ -261,10 +258,6 @@ static HRESULT Hook_CreateDepthStencilView(
 			REQUIRE(pResource->QueryInterface(pOldTexture.GetAddressOf()), "Failed to get depth stencil texture");
 			D3D11_TEXTURE2D_DESC desc;
 			pOldTexture->GetDesc(&desc);
-			/*if ((exportContext->width != 0) && (exportContext->height != 0)) {
-				desc.Width = exportContext->width;
-				desc.Height = exportContext->height;
-			}*/
 			ComPtr<ID3D11Texture2D> pTexture;
 			pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
 
@@ -574,17 +567,11 @@ static HRESULT Hook_CreateTexture2D(
 			exportContext->pSwapChain = mainSwapChain;
 			exportContext->captureRenderTargetViewReference = true;
 			exportContext->captureDepthStencilViewReference = true;
-			/*exportContext->width = Config::instance().exportResolution().first;
-			exportContext->height = Config::instance().exportResolution().second;*/
-			/*exportContext->width = 800;
-			exportContext->height = 600;*/
 			D3D11_TEXTURE2D_DESC desc = *(pDesc);
 			DXGI_SWAP_CHAIN_DESC swapChainDesc;
 			exportContext->pSwapChain->GetDesc(&swapChainDesc);
 			desc.Width = swapChainDesc.BufferDesc.Width;
 			desc.Height = swapChainDesc.BufferDesc.Height;
-			/*desc.Width = exportContext->width;
-			desc.Height = exportContext->height;*/
 			return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);
 		} catch (std::exception&) {
 			session.reset();
