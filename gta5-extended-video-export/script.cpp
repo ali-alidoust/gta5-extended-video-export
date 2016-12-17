@@ -333,7 +333,7 @@ static void Hook_OMSetRenderTargets(
 			// Time to capture rendered frame
 			try {
 
-				exportContext->pSwapChain->Present(0, DXGI_PRESENT_TEST);
+				LOG_CALL(LL_DBG,exportContext->pSwapChain->Present(0, DXGI_PRESENT_TEST));
 
 				ComPtr<ID3D11Texture2D> pSwapChainBuffer;
 				REQUIRE(exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)pSwapChainBuffer.GetAddressOf()), "Failed to get swap chain's buffer");
