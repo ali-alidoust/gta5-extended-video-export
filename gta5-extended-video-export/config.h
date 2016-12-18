@@ -132,34 +132,50 @@ private:
 
 
 	void parse_lossless_export() {
-		is_mod_enabled = stringToBoolean(parser->top()[CFG_ENABLE_XVX], true);
+		try {
+			is_mod_enabled = stringToBoolean(parser->top()[CFG_ENABLE_XVX], true);
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
 	}
 
 	void parse_auto_reload_config() {
-		auto_reload_config = stringToBoolean(parser->top()[CFG_AUTO_RELOAD_CONFIG], true);
+		try {
+			auto_reload_config = stringToBoolean(parser->top()[CFG_AUTO_RELOAD_CONFIG], true);
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
 	}
 
 	void parse_output_dir() {
-		this->output_dir = std::string();
+		try {
+			this->output_dir = std::string();
 
-		std::string stringValue = parser->top()[CFG_OUTPUT_DIR];
-		stringValue = std::regex_replace(stringValue, std::regex("(^\\s*)|(\\s*$)"), "");
+			std::string stringValue = parser->top()[CFG_OUTPUT_DIR];
+			stringValue = std::regex_replace(stringValue, std::regex("(^\\s*)|(\\s*$)"), "");
 
-		if ((!stringValue.empty()) && (stringValue.find_first_not_of(' ') != std::string::npos))
-		{
-			this->output_dir += stringValue;
-		} else {
-			char buffer[MAX_PATH];
-			LOG_IF_FAILED(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
-			this->output_dir += buffer;
+			if ((!stringValue.empty()) && (stringValue.find_first_not_of(' ') != std::string::npos))
+			{
+				this->output_dir += stringValue;
+			} else {
+				char buffer[MAX_PATH];
+				REQUIRE(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
+				this->output_dir += buffer;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 	}
 
 	void parse_video_enc() {
-		std::string value = getTrimmed(CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
-		if (!value.empty()) {
-			this->video_enc = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_ENC];
-			return;
+		try {
+			std::string value = getTrimmed(CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
+			if (!value.empty()) {
+				this->video_enc = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_ENC];
+				return;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 
 		LOG(LL_NON, "Video encoder not supplied in .ini file, using default: \"libx264\"");
@@ -167,10 +183,14 @@ private:
 	}
 
 	void parse_video_fmt() {
-		std::string value = getTrimmed(CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
-		if (!value.empty()) {
-			this->video_fmt = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_FMT];
-			return;
+		try {
+			std::string value = getTrimmed(CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
+			if (!value.empty()) {
+				this->video_fmt = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_FMT];
+				return;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 		
 		LOG(LL_NON, "Video pixel format not supplied in .ini file, using default: \"yuv420p\"");
@@ -178,20 +198,28 @@ private:
 	}
 
 	void parse_video_cfg() {
-		std::string value = getTrimmed(CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
-		if (!value.empty()) {
-			this->video_cfg = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_CFG];
-			return;
+		try {
+			std::string value = getTrimmed(CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
+			if (!value.empty()) {
+				this->video_cfg = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_CFG];
+				return;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 
 		this->video_cfg = "";
 	}
 
 	void parse_audio_enc() {
-		std::string value = getTrimmed(CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
-		if (!value.empty()) {
-			this->audio_enc = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_ENC];
-			return;
+		try {
+			std::string value = getTrimmed(CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
+			if (!value.empty()) {
+				this->audio_enc = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_ENC];
+				return;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 
 		LOG(LL_NON, "Audio encoder not supplied in .ini file, using default: \"ac3\"");
@@ -199,20 +227,29 @@ private:
 	}
 
 	void parse_audio_cfg() {
-		std::string value = getTrimmed(CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
-		if (!value.empty()) {
-			this->audio_cfg = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_CFG];
-			return;
+		try {
+			std::string value = getTrimmed(CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
+			if (!value.empty()) {
+				this->audio_cfg = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_CFG];
+				return;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 
 		this->audio_cfg = "";
 	}
 
 	void parse_audio_fmt() {
-		std::string value = getTrimmed(CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
-		if (!value.empty()) {
-			this->audio_fmt = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_FMT];
-			return;
+		std::string value;
+		try {
+			value = getTrimmed(CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
+			if (!value.empty()) {
+				this->audio_fmt = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_FMT];
+				return;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 
 		LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: \"fltp\"");
@@ -220,34 +257,45 @@ private:
 	}
 
 	void parse_audio_rate() {
-		std::string value = getTrimmed(CFG_AUDIO_RATE, CFG_AUDIO_SECTION);
-		if (!value.empty()) {
-			try {
-				this->audio_rate = std::stoul(parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_RATE]);
+		std::string value;
+		try {
+			value = getTrimmed(CFG_AUDIO_RATE, CFG_AUDIO_SECTION);
+			if (!value.empty()) {
+				try {
+					this->audio_rate = std::stoul(parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_RATE]);
 
-			} catch (std::exception&) {
-				LOG(LL_NON, "Failed to parse audio sample rate: ", value);
-				LOG(LL_NON, "using default: 48000");
+				} catch (std::exception&) {
+					LOG(LL_NON, "Failed to parse audio sample rate: ", value);
+					LOG(LL_NON, "using default: 48000");
+				}
+			} else {
+				LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: 48000");
 			}
-		} else {
-			LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: 48000");
+		}
+		catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 		this->audio_rate = 48000;
 	}
 
 	LogLevel parse_log_level() {
-		std::string value = getTrimmed(CFG_LOG_LEVEL);
-		value = toLower(value);
-		if (value == "error") {
-			return LL_ERR;
-		} else if (value == "warn") {
-			return LL_WRN;
-		} else if (value == "info") {
-			return LL_NFO;
-		} else if (value == "debug") {
-			return LL_DBG;
-		} else if (value == "trace") {
-			return LL_TRC;
+		std::string value;
+		try {
+			value = getTrimmed(CFG_LOG_LEVEL);
+			value = toLower(value);
+			if (value == "error") {
+				return LL_ERR;
+			} else if (value == "warn") {
+				return LL_WRN;
+			} else if (value == "info") {
+				return LL_NFO;
+			} else if (value == "debug") {
+				return LL_DBG;
+			} else if (value == "trace") {
+				return LL_TRC;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 
 		LOG(LL_NON, "Could not parse log level, using default: \"error\"");
@@ -255,26 +303,31 @@ private:
 	}
 
 	std::pair<int32_t, int32_t> parse_fps() {
-		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
-		string = std::regex_replace(string, std::regex("\\s+"), "");
+		std::string string;
+		try {
+			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
+			string = std::regex_replace(string, std::regex("\\s+"), "");
 
-		auto result = std::make_pair<int32_t, int32_t>(0, 0);
+			auto result = std::make_pair<int32_t, int32_t>(0, 0);
 
-		if (string.empty()) {
-			return result;
-		}
+			if (string.empty()) {
+				return result;
+			}
 
-		std::smatch match;
-		if (std::regex_match(string, match, std::regex("^(\\d+)/(\\d+)$"))) {
-			return std::make_pair(std::stoi(match[1]), std::stoi(match[2]));
-		}
+			std::smatch match;
+			if (std::regex_match(string, match, std::regex("^(\\d+)/(\\d+)$"))) {
+				return std::make_pair(std::stoi(match[1]), std::stoi(match[2]));
+			}
 
-		match = std::smatch();
-		if (std::regex_match(string, match, std::regex("^\\d+\\(.\\d+)?$"))) {
-			float value = std::stof(string);
-			int32_t num = (int32_t)(value * 1000);
-			int32_t den = 1000;
-			return std::make_pair(num, den);
+			match = std::smatch();
+			if (std::regex_match(string, match, std::regex("^\\d+(\\.\\d+)?$"))) {
+				float value = std::stof(string);
+				int32_t num = (int32_t)(value * 1000);
+				int32_t den = 1000;
+				return std::make_pair(num, den);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
 		}
 
 		LOG(LL_NON, "Could not parse fps value: ", string);
@@ -334,5 +387,4 @@ private:
 		std::istringstream(booleanString) >> std::boolalpha >> value;
 		return value;
 	}
-
 };

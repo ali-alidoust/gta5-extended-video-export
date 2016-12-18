@@ -1,0 +1,49 @@
+00007FF7EAB8C674 | 83 F9 01                     | cmp ecx,1                                                |
+00007FF7EAB8C677 | 77 ??                        | ja gta5.7FF7EAB8C687                                     |
+00007FF7EAB8C679 | 48 63 C1                     | movsxd rax,ecx                                           |
+00007FF7EAB8C67C | 48 8D ?? ?? ?? ?? ??         | lea rcx,qword ptr ds:[7FF7EAF7EBE8]                      |
+00007FF7EAB8C683 | 8B 04 81                     | mov eax,dword ptr ds:[rcx+rax*4]                         |
+00007FF7EAB8C686 | C3                           | ret                                                      |
+00007FF7EAB8C687 | B8 1E 00 00 00               | mov eax,1E                                               |
+00007FF7EAB8C68C | C3                           | ret                                                      |
+
+00007FF76C17BED8 | 0F 2F ?? ?? ?? ?? ??               | comiss xmm0,xmmword ptr ds:[7FF76C56EB68]                                                     |
+00007FF76C17BEDF | 72 ??                              | jb gta5_dump.7FF76C17BEF2                                                                     |
+00007FF76C17BEE1 | 0F 2F ?? ?? ?? ?? ??               | comiss xmm0,xmmword ptr ds:[7FF76C56EB6C]                                                     |
+00007FF76C17BEE8 | 77 ??                              | ja gta5_dump.7FF76C17BEF2                                                                     |
+00007FF76C17BEEA | C7 02 C0 5D 00 00                  | mov dword ptr ds:[rdx],5DC0                                                                   |
+
+00007FF6B53E9A24 | 89 ?? ?? ?? ?? ??                  | mov dword ptr ds:[7FF6B6EA825C],ecx                                                           |
+00007FF6B53E9A2A | C3                                 | ret                                                                                           |
+00007FF6B53E9A2B | CC                                 | int3                                                                                          |
+00007FF6B53E9A2C | 48 8B C4                           | mov rax,rsp                                                                                   |
+00007FF6B53E9A2F | 48 89 58 08                        | mov qword ptr ds:[rax+8],rbx                                                                  |
+
+00007FF6B53E9A22 | C3                                 | ret                                                                                           |
+00007FF6B53E9A23 | 90                                 | nop                                                                                           |
+00007FF6B53E9A24 | 89 ?? ?? ?? ?? ??                  | mov dword ptr ds:[7FF6B6EA825C],ecx                                                           |
+00007FF6B53E9A2A | C3                                 | ret                                                                                           |
+00007FF6B53E9A2B | CC                                 | int3                                                                                          |
+00007FF6B53E9A2C | 48 8B C4                           | mov rax,rsp                                                                                   |
+00007FF6B53E9A2F | 48 89 58 08                        | mov qword ptr ds:[rax+8],rbx                                                                  |
+00007FF6B53E9A33 | 48 89 70 10                        | mov qword ptr ds:[rax+10],rsi                                                                 |
+00007FF6B53E9A37 | 48 89 78 18                        | mov qword ptr ds:[rax+18],rdi                                                                 |
+00007FF6B53E9A3B | 55                                 | push rbp                                                                                      |
+00007FF6B53E9A3C | 48 8D 68 A1                        | lea rbp,qword ptr ds:[rax-5F]                                                                 |
+
+00007FF6B53E2160 | 8B ?? ?? ?? ?? ??                  | mov eax,dword ptr ds:[7FF6B6EA8258]                                                           |
+00007FF6B53E2166 | C3                                 | ret                                                                                           |
+00007FF6B53E2167 | 90                                 | nop                                                                                           |
+00007FF6B53E2168 | 44 0F B7 ?? ?? ?? ?? ??            | movzx r8d,word ptr ds:[7FF6B6EADF78]                                                          |
+00007FF6B53E2170 | 33 D2                              | xor edx,edx                                                                                   |
+00007FF6B53E2172 | 8B C1                              | mov eax,ecx                                                                                   |
+00007FF6B53E2174 | 41 F7 F0                           | div r8d                                                                                       |
+00007FF6B53E2177 | 48 8B ?? ?? ?? ?? ??               | mov rax,qword ptr ds:[7FF6B6EADF70]                                                           |
+00007FF6B53E217E | 41 B8 FF FF 00 00                  | mov r8d,FFFF                                                                                  |
+
+00007FF7F2771C84 | 48 83 EC 28                    | sub rsp,28                                                                                    |
+00007FF7F2771C88 | 48 8B 01                       | mov rax,qword ptr ds:[rcx]                                                                    |
+00007FF7F2771C8B | FF 50 28                       | call qword ptr ds:[rax+28]                                                                    | Gets fps choice
+00007FF7F2771C8E | 8B C8                          | mov ecx,eax                                                                                   |
+00007FF7F2771C90 | 48 83 C4 28                    | add rsp,28                                                                                    |
+00007FF7F2771C94 | E9 ?? ?? ?? ??                 | jmp gta5_dump.7FF7F392C6CC                                                                    |
