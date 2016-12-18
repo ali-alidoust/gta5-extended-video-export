@@ -14,24 +14,21 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		return TRUE;
 	}
 
+
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		initialize();
 		Logger::instance().level = Config::instance().logLevel();
+		LOG_CALL(LL_DBG,initialize());
 		LOG(LL_NFO, "Registering script...");
-		//if (Config::instance().isUseD3DCaptureEnabled()) {
 		LOG_CALL(LL_DBG, presentCallbackRegister((void(*)(void*))onPresent));
-		//}
 		LOG_CALL(LL_DBG, scriptRegister(hModule, ScriptMain));
 		break;
 	case DLL_PROCESS_DETACH:
 		LOG(LL_NFO, "Unregistering DXGI callback");
-		//if (Config::instance().isUseD3DCaptureEnabled()) {
-		LOG_CALL(LL_DBG, presentCallbackUnregister((void(*)(void*))onPresent));
-		//}
-		LOG_CALL(LL_DBG, finalize());
 		LOG_CALL(LL_DBG, scriptUnregister(hModule));
+		LOG_CALL(LL_DBG, presentCallbackUnregister((void(*)(void*))onPresent));
+		LOG_CALL(LL_DBG, finalize());
 		break;
 	}
 	return TRUE;

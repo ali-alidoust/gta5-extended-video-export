@@ -91,6 +91,12 @@
     <ClInclude Include="hook-def.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="yara-helper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="game-detour-def.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -170,6 +176,9 @@
     </ClCompile>
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexWIC.cpp">
       <Filter>Submodules\DirectXTex\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="yara-helper.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

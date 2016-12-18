@@ -38,4 +38,19 @@ namespace {
 		*originalFunc = IATHook_ex->GetOriginal<FUNC_TYPE>();
 		return S_OK;
 	}
+
+	template <class FUNC_TYPE>
+	HRESULT hookX64Function(LPVOID func, LPVOID hookFunc, FUNC_TYPE *originalFunc, std::shared_ptr<PLH::X64Detour> X64Detour_ex) {
+		if (X64Detour_ex->GetOriginal<FUNC_TYPE>() != NULL) {
+			*originalFunc = X64Detour_ex->GetOriginal<FUNC_TYPE>();
+			return E_ABORT;
+		}
+		X64Detour_ex->SetupHook((BYTE*)func, (BYTE*)hookFunc);
+		if (!X64Detour_ex->Hook()) {
+			LOG(LL_ERR, X64Detour_ex->GetLastError().GetString());
+			return E_FAIL;
+		}
+		*originalFunc = X64Detour_ex->GetOriginal<FUNC_TYPE>();
+		return S_OK;
+	}
 }

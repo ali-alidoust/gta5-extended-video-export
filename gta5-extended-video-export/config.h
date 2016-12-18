@@ -11,8 +11,11 @@
 #define CFG_AUTO_RELOAD_CONFIG "auto_reload_config"
 #define CFG_ENABLE_XVX "enable_mod"
 #define CFG_OUTPUT_DIR "output_folder"
+
+#define CFG_EXPORT_SECTION "EXPORT"
+#define CFG_EXPORT_FPS "fps"
+
 #define CFG_LOG_LEVEL "log_level"
-#define CFG_EXPORT_RESOLUTION "resolution"
 #define CFG_VIDEO_SECTION "VIDEO"
 #define CFG_VIDEO_ENC "encoder"
 #define CFG_VIDEO_FMT "pixel_format"
@@ -38,9 +41,9 @@ public:
 		return this->auto_reload_config;
 	}
 
-	//std::pair<uint32_t, uint32_t> exportResolution() {
-	//	return this->resolution;
-	//}
+	std::pair<int32_t, int32_t> getFPS() {
+		return this->fps;
+	}
 
 	std::string outputDir() {
 		return this->output_dir;
@@ -93,6 +96,7 @@ public:
 		this->parse_audio_fmt();
 		this->parse_audio_rate();
 		this->log_level = this->parse_log_level();
+		this->fps = this->parse_fps();
 	}
 
 	static Config& instance()
@@ -124,6 +128,7 @@ private:
 	std::string                     audio_fmt                  = "";
 	uint32_t                        audio_rate                 = 48000;
 	LogLevel						log_level                  = LL_ERR;
+	std::pair<uint32_t, uint32_t>   fps                        = std::make_pair(30000, 1001);
 
 
 	void parse_lossless_export() {
@@ -132,29 +137,6 @@ private:
 
 	void parse_auto_reload_config() {
 		auto_reload_config = stringToBoolean(parser->top()[CFG_AUTO_RELOAD_CONFIG], true);
-	}
-
-	void parse_resolution() {
-		std::string string = parser->top()[CFG_EXPORT_RESOLUTION];
-		string = std::regex_replace(string, std::regex("\\s+"), "");
-
-		if (string.empty()) {
-			resolution = std::make_pair(0, 0);
-			return;
-		}
-
-		std::smatch match;
-		if (!std::regex_match(string, match, std::regex("^(\\d+)x(\\d+)$"))) {
-			LOG(LL_NON, "Could not parse resolution: ", string);
-			resolution = std::make_pair(0, 0);
-			return;
-		}
-
-		uint32_t width = std::stoul(match[1]);
-		uint32_t height = std::stoul(match[2]);
-
-		resolution = std::make_pair(width, height);
-		return;
 	}
 
 	void parse_output_dir() {
@@ -270,6 +252,35 @@ private:
 
 		LOG(LL_NON, "Could not parse log level, using default: \"error\"");
 		return LL_ERR;
+	}
+
+	std::pair<int32_t, int32_t> parse_fps() {
+		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
+		string = std::regex_replace(string, std::regex("\\s+"), "");
+
+		auto result = std::make_pair<int32_t, int32_t>(0, 0);
+
+		if (string.empty()) {
+			return result;
+		}
+
+		std::smatch match;
+		if (std::regex_match(string, match, std::regex("^(\\d+)/(\\d+)$"))) {
+			return std::make_pair(std::stoi(match[1]), std::stoi(match[2]));
+		}
+
+		match = std::smatch();
+		if (std::regex_match(string, match, std::regex("^\\d+\\(.\\d+)?$"))) {
+			float value = std::stof(string);
+			int32_t num = (int32_t)(value * 1000);
+			int32_t den = 1000;
+			return std::make_pair(num, den);
+		}
+
+		LOG(LL_NON, "Could not parse fps value: ", string);
+		LOG(LL_NON, "Using default value: ~30");
+
+		return std::make_pair(30000, 1001);
 	}
 
 

@@ -4,6 +4,7 @@
 #include <mutex>
 #include <iomanip>
 #include <exception>
+#include <sstream>
 extern "C" {
 	#include <libavutil\error.h>
 }
@@ -39,10 +40,22 @@ public:
 		}
 	}
 
-	
+	template <typename T> static std::string hex(T number, int length) {
+		std::stringstream stream;
+		stream
+			<< "0x"
+			<< std::uppercase
+			<< std::setfill('0')
+			<< std::setw(length)
+			<< std::hex
+			<< number;
+
+		return stream.str();
+	}
 
 	void writeLine();
 
+	
 	std::string getTimestamp();
 	std::string getThreadId();
 	std::string getLogLevelString(LogLevel level);

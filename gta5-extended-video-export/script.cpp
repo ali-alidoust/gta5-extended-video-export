@@ -9,7 +9,8 @@
 #include "logger.h"
 #include "config.h"
 #include "util.h"
-#include "yara-patterns.h"
+#include "yara-helper.h"
+#include "game-detour-def.h"
 
 #include "..\DirectXTex\DirectXTex\DirectXTex.h"
 #include "hook-def.h"
@@ -30,9 +31,10 @@ namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkRSSetViewports(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkRSSetScissorRects(new PLH::VFuncDetour);
 	
-
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);
+
+	std::shared_ptr<PLH::X64Detour> hkGetRenderTimeBase(new PLH::X64Detour);
 
 	std::unique_ptr<Encoder::Session> session;
 	std::mutex mxSession;
@@ -74,7 +76,9 @@ namespace {
 	};
 
 	std::shared_ptr<ExportContext> exportContext;
-	YR_COMPILER* pYrCompiler;
+
+	std::shared_ptr<YaraHelper> pYaraHelper;
+
 }
 
 tCoCreateInstance oCoCreateInstance;
@@ -89,6 +93,7 @@ tCreateRenderTargetView oCreateRenderTargetView;
 tCreateDepthStencilView oCreateDepthStencilView;
 tRSSetViewports oRSSetViewports;
 tRSSetScissorRects oRSSetScissorRects;
+tGetRenderTimeBase oGetRenderTimeBase;
 
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	static char msg[8192];
@@ -158,12 +163,45 @@ void initialize() {
 		REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
 		REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
 			
-		LOG_CALL(LL_DBG, yr_initialize());
-		REQUIRE(yr_compiler_create(&pYrCompiler), "Failed to create yara compiler.");
-		REQUIRE(yr_compiler_add_string(pYrCompiler, yara_resolution_fields.c_str(), NULL), "Failed to compile yara rule");
-		YR_RULES *rules;
-		REQUIRE(yr_compiler_get_rules(pYrCompiler, &rules), "Failed to get yara rules");
-		//yr_rules_scan_mem(rules, )
+		pYaraHelper.reset(new YaraHelper());
+		pYaraHelper->initialize();
+		pYaraHelper->performScan();
+
+		/*LOG(LL_DBG, pYaraHelper->getPtr_getVideoFps());
+		hkGetVideoFps->SetupHook((BYTE*)pYaraHelper->getPtr_getVideoFps(), (BYTE*)&Detour_GetVideoFps);
+		if (!hkGetVideoFps->Hook()) {
+			LOG(LL_ERR, "Couldn't hook GetVideoFPS function");
+			LOG(LL_ERR, hkGetVideoFps->GetLastError().GetString());
+			exit(0);
+		} else {
+			oGetVideoFps = hkGetVideoFps->GetOriginal<tGetVideoFps>();
+		}*/
+
+		/*LOG(LL_DBG, pYaraHelper->getPtr_getVideoFpsRational());
+		hkGetVideoFpsRational->SetupHook((BYTE*)pYaraHelper->getPtr_getVideoFpsRational(), (BYTE*)&Detour_GetVideoFpsRational);
+		if (!hkGetVideoFpsRational->Hook()) {
+			LOG(LL_ERR, "Couldn't hook GetVideoFPS function");
+			LOG(LL_ERR, hkGetVideoFpsRational->GetLastError().GetString());
+			exit(0);
+		} else {
+			oGetVideoFpsRational = hkGetVideoFpsRational->GetOriginal<tGetVideoFpsRational>();
+		}*/
+
+		MODULEINFO info;
+		GetModuleInformation(GetCurrentProcess(), GetModuleHandle(NULL), &info, sizeof(info));
+		LOG(LL_NFO, "Image base:", ((void*)info.lpBaseOfDll));
+
+		//LOG(LL_NFO, (VOID*)(0x311C84 + (intptr_t)info.lpBaseOfDll));
+		try {
+			if (pYaraHelper->getPtr_getRenderTimeBase() != NULL) {
+				REQUIRE(hookX64Function((LPVOID)pYaraHelper->getPtr_getRenderTimeBase(), &Detour_GetRenderTimeBase, &oGetRenderTimeBase, hkGetRenderTimeBase), "Failed to hook FPS function.");
+			} else {
+				LOG(LL_ERR, "Could not find the address for FPS function.");
+				LOG(LL_ERR, "Custom FPS support is DISABLED!!!");
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
 
 		LOG_CALL(LL_DBG, av_register_all());
 		LOG_CALL(LL_DBG, avcodec_register_all());
@@ -346,8 +384,8 @@ static void Hook_OMSetRenderTargets(
 			} catch (std::exception&) {
 				LOG(LL_ERR, "Reading video frame from D3D Device failed.");
 				exportContext->capturedImage->Release();
-				session.reset();
-				exportContext.reset();
+				LOG_CALL(LL_DBG, session.reset());
+				LOG_CALL(LL_DBG, exportContext.reset());
 			}
 		}
 	}
@@ -408,7 +446,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 				{
 					UINT width, height, fps_num, fps_den;
 					MFGetAttribute2UINT32asUINT64(exportContext->videoMediaType.Get(), MF_MT_FRAME_SIZE, &width, &height);
-					MFGetAttributeRatio(exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
+					//MFGetAttributeRatio(exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
 
 					GUID pixelFormat;
 					exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
@@ -416,7 +454,9 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					DXGI_SWAP_CHAIN_DESC desc;
 					exportContext->pSwapChain->GetDesc(&desc);
 
-					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
+					auto fps = Config::instance().getFPS();
+
+					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps.first, fps.second, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
 				}
 				
 				// Create Audio Context
@@ -461,8 +501,8 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					REQUIRE(session->createFormatContext(filename.c_str()), "Failed to create format context");
 				}
 			} catch (std::exception&) {
-				session.reset();
-				exportContext.reset();
+				LOG_CALL(LL_DBG, session.reset());
+				LOG_CALL(LL_DBG, exportContext.reset());
 			}
 		}
 	}
@@ -493,8 +533,8 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 			
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
-			session.reset();
-			exportContext.reset();
+			LOG_CALL(LL_DBG, session.reset());
+			LOG_CALL(LL_DBG, exportContext.reset());
 			if (pBuffer != NULL) {
 				pBuffer->Unlock();
 			}
@@ -518,16 +558,14 @@ static HRESULT Hook_IMFSinkWriter_Finalize(
 		LOG(LL_ERR, ex.what());
 	}
 
-	session.reset();
-	exportContext.reset();
+	LOG_CALL(LL_DBG, session.reset());
+	LOG_CALL(LL_DBG, exportContext.reset());
 	POST();
 	return S_OK;
 }
 
 void finalize() {
 	PRE();
-	LOG_CALL(LL_DBG, yr_compiler_destroy(pYrCompiler));
-	LOG_CALL(LL_DBG, yr_finalize());
 	hkCoCreateInstance->UnHook();
 	hkMFCreateSinkWriterFromURL->UnHook();
 	hkIMFTransform_ProcessInput->UnHook();
@@ -546,38 +584,56 @@ static HRESULT Hook_CreateTexture2D(
 	ID3D11Texture2D        **ppTexture2D
 	) {
 	// Detect export buffer creation
-	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId) && !((pDesc->Width == 512) && (pDesc->Height == 256)) && !((pDesc->Width == 4) && (pDesc->Height == 4))) {
-		std::lock_guard<std::mutex> sessionLock(mxSession);
-		exportContext.reset();
-		session.reset();
-		try {
-			LOG(LL_NFO, "Creating session...");
-			LOG(LL_NFO, " fmt:", conv_dxgi_format_to_string(pDesc->Format),
-				" w:", pDesc->Width,
-				" h:", pDesc->Height);
-			if (Config::instance().isAutoReloadEnabled()) {
-				LOG_CALL(LL_DBG,Config::instance().reload());
+	if (pDesc->Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
+		LOG(LL_NFO, "ID3D11Device::CreateTexture2D: fmt:", conv_dxgi_format_to_string(pDesc->Format),
+			" w:", pDesc->Width,
+			" h:", pDesc->Height);
+	}
+	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId) && !((pDesc->Width == 512) && (pDesc->Height == 256)) && !((pDesc->Width == 4) && (pDesc->Height == 4)) && (pDesc->Format == DXGI_FORMAT_B8G8R8A8_UNORM)) {
+		DXGI_SWAP_CHAIN_DESC swapChainDesc;
+		REQUIRE(mainSwapChain->GetDesc(&swapChainDesc), "Failed to get swap chain descriptor");
+
+		LOG(LL_NFO, "ID3D11Device::CreateTexture2D: fmt:", conv_dxgi_format_to_string(pDesc->Format),
+			" w:", pDesc->Width,
+			" h:", pDesc->Height);
+		/*LOG(LL_NFO, swapChainDesc.BufferDesc.Width, " ", swapChainDesc.BufferDesc.Height);*/
+		//if (((abs(int(pDesc->Width - swapChainDesc.BufferDesc.Width)) < 32.0) && (abs(int(pDesc->Height - swapChainDesc.BufferDesc.Height)) < 32.0))) {
+			std::lock_guard<std::mutex> sessionLock(mxSession);
+			LOG_CALL(LL_DBG, exportContext.reset());
+			LOG_CALL(LL_DBG, session.reset());
+			try {
+				LOG(LL_NFO, "Creating session...");
+				
+				if (Config::instance().isAutoReloadEnabled()) {
+					LOG_CALL(LL_DBG, Config::instance().reload());
+				}
+
+
+				session.reset(new Encoder::Session());
+				NOT_NULL(session, "Could not create the session");
+				exportContext.reset(new ExportContext());
+				NOT_NULL(exportContext, "Could not create export context");
+				exportContext->pSwapChain = mainSwapChain;
+				exportContext->captureRenderTargetViewReference = true;
+				exportContext->captureDepthStencilViewReference = true;
+				D3D11_TEXTURE2D_DESC desc = *(pDesc);
+				desc.Width = swapChainDesc.BufferDesc.Width;
+				desc.Height = swapChainDesc.BufferDesc.Height;
+				return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);
 			}
-
-
-			session.reset(new Encoder::Session());
-			NOT_NULL(session, "Could not create the session");
-			exportContext.reset(new ExportContext());
-			NOT_NULL(exportContext, "Could not create export context");
-			exportContext->pSwapChain = mainSwapChain;
-			exportContext->captureRenderTargetViewReference = true;
-			exportContext->captureDepthStencilViewReference = true;
-			D3D11_TEXTURE2D_DESC desc = *(pDesc);
-			DXGI_SWAP_CHAIN_DESC swapChainDesc;
-			exportContext->pSwapChain->GetDesc(&swapChainDesc);
-			desc.Width = swapChainDesc.BufferDesc.Width;
-			desc.Height = swapChainDesc.BufferDesc.Height;
-			return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);
-		} catch (std::exception&) {
-			session.reset();
-			exportContext.reset();
-		}
+			catch (std::exception&) {
+				LOG_CALL(LL_DBG, session.reset());
+				LOG_CALL(LL_DBG, exportContext.reset());
+			}
+		//}
 	}
 
 	return oCreateTexture2D(pThis, pDesc, pInitialData, ppTexture2D);
+}
+
+static float Detour_GetRenderTimeBase(int64_t choice) {
+	std::pair<int32_t, int32_t> fps = Config::instance().getFPS();
+	float result = 1000.0f * (float)fps.second / (float)fps.first;
+	LOG(LL_NFO, "Time step: ", result);
+	return result;
 }
