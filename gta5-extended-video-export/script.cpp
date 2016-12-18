@@ -492,7 +492,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					localtime_s(&timeinfo, &rawtime);
 					strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
 					output_file += buffer;
-					output_file += ".mkv";
+					output_file += "." + Config::instance().getContainerFormat();
 
 					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
 

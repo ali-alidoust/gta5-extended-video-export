@@ -14,6 +14,7 @@
 
 #define CFG_EXPORT_SECTION "EXPORT"
 #define CFG_EXPORT_FPS "fps"
+#define CFG_EXPORT_FORMAT "format"
 
 #define CFG_LOG_LEVEL "log_level"
 #define CFG_VIDEO_SECTION "VIDEO"
@@ -81,6 +82,10 @@ public:
 		return this->log_level;
 	}
 
+	std::string getContainerFormat() {
+		return this->container_format;
+	}
+
 	void reload() {
 		parser.reset(new INI::Parser(INI_FILE_NAME));
 
@@ -129,6 +134,7 @@ private:
 	uint32_t                        audio_rate                 = 48000;
 	LogLevel						log_level                  = LL_ERR;
 	std::pair<uint32_t, uint32_t>   fps                        = std::make_pair(30000, 1001);
+	std::string                     container_format		   = "mkv";
 
 
 	void parse_lossless_export() {
@@ -300,6 +306,25 @@ private:
 
 		LOG(LL_NON, "Could not parse log level, using default: \"error\"");
 		return LL_ERR;
+	}
+
+	std::string parse_container_format() {
+		std::string string;
+		try {
+			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
+			string = std::regex_replace(string, std::regex("\\s+"), "");
+			string = Config::toLower(string);
+
+			if (string == "mkv" || string == "avi" || string == "mp4") {
+				return string;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		LOG(LL_NON, "Could not parse video file format: ", string);
+		LOG(LL_NON, "Using default value: mkv");
+		return "mkv";
 	}
 
 	std::pair<int32_t, int32_t> parse_fps() {
