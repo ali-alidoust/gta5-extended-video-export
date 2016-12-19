@@ -167,26 +167,6 @@ void initialize() {
 		pYaraHelper->initialize();
 		pYaraHelper->performScan();
 
-		/*LOG(LL_DBG, pYaraHelper->getPtr_getVideoFps());
-		hkGetVideoFps->SetupHook((BYTE*)pYaraHelper->getPtr_getVideoFps(), (BYTE*)&Detour_GetVideoFps);
-		if (!hkGetVideoFps->Hook()) {
-			LOG(LL_ERR, "Couldn't hook GetVideoFPS function");
-			LOG(LL_ERR, hkGetVideoFps->GetLastError().GetString());
-			exit(0);
-		} else {
-			oGetVideoFps = hkGetVideoFps->GetOriginal<tGetVideoFps>();
-		}*/
-
-		/*LOG(LL_DBG, pYaraHelper->getPtr_getVideoFpsRational());
-		hkGetVideoFpsRational->SetupHook((BYTE*)pYaraHelper->getPtr_getVideoFpsRational(), (BYTE*)&Detour_GetVideoFpsRational);
-		if (!hkGetVideoFpsRational->Hook()) {
-			LOG(LL_ERR, "Couldn't hook GetVideoFPS function");
-			LOG(LL_ERR, hkGetVideoFpsRational->GetLastError().GetString());
-			exit(0);
-		} else {
-			oGetVideoFpsRational = hkGetVideoFpsRational->GetOriginal<tGetVideoFpsRational>();
-		}*/
-
 		MODULEINFO info;
 		GetModuleInformation(GetCurrentProcess(), GetModuleHandle(NULL), &info, sizeof(info));
 		LOG(LL_NFO, "Image base:", ((void*)info.lpBaseOfDll));
@@ -253,24 +233,24 @@ static HRESULT Hook_CreateRenderTargetView(
 			exportContext->pDevice = pThis;
 			exportContext->pDevice->GetImmediateContext(exportContext->pDeviceContext.GetAddressOf());
 
-			ComPtr<ID3D11Texture2D> pOldTexture;
-			REQUIRE(pResource->QueryInterface(pOldTexture.GetAddressOf()), "Failed to convert ID3D11Resource to ID3D11Texture2D");
+			ComPtr<ID3D11Texture2D> pTexture;
+			REQUIRE(pResource->QueryInterface(pTexture.GetAddressOf()), "Failed to convert ID3D11Resource to ID3D11Texture2D");
 			D3D11_TEXTURE2D_DESC desc;
-			pOldTexture->GetDesc(&desc);
+			pTexture->GetDesc(&desc);
 
-			DXGI_SWAP_CHAIN_DESC swapChainDesc;
-			mainSwapChain->GetDesc(&swapChainDesc);
+			/*DXGI_SWAP_CHAIN_DESC swapChainDesc;
+			mainSwapChain->GetDesc(&swapChainDesc);*/
 
-			desc.Width = swapChainDesc.BufferDesc.Width;
-			desc.Height = swapChainDesc.BufferDesc.Height;
+			/*desc.Width = swapChainDesc.BufferDesc.Width;
+			desc.Height = swapChainDesc.BufferDesc.Height;*/
 
 			LOG(LL_DBG, "Creating render target view: w:", desc.Width, " h:", desc.Height);
 
-			ComPtr<ID3D11Texture2D> pTexture;
+			/*ComPtr<ID3D11Texture2D> pTexture;
 			pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
 			ComPtr<ID3D11Resource> pRes;
-			REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture2D to ID3D11Resource");
-			HRESULT result = oCreateRenderTargetView(pThis, pRes.Get(), pDesc, ppRTView);
+			REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture2D to ID3D11Resource");*/
+			HRESULT result = oCreateRenderTargetView(pThis, pResource, pDesc, ppRTView);
 			exportContext->pExportRenderTarget = pTexture;
 			exportContext->pExportRenderTargetView = *(ppRTView);
 			POST();
@@ -292,17 +272,17 @@ static HRESULT Hook_CreateDepthStencilView(
 		try {
 			exportContext->captureDepthStencilViewReference = false;
 			LOG(LL_NFO, "Capturing export depth stencil view...");
-			ComPtr<ID3D11Texture2D> pOldTexture;
-			REQUIRE(pResource->QueryInterface(pOldTexture.GetAddressOf()), "Failed to get depth stencil texture");
-			D3D11_TEXTURE2D_DESC desc;
-			pOldTexture->GetDesc(&desc);
 			ComPtr<ID3D11Texture2D> pTexture;
-			pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
+			REQUIRE(pResource->QueryInterface(pTexture.GetAddressOf()), "Failed to get depth stencil texture");
+			//D3D11_TEXTURE2D_DESC desc;
+			//pOldTexture->GetDesc(&desc);
+			//ComPtr<ID3D11Texture2D> pTexture;
+			//pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
 
-			ComPtr<ID3D11Resource> pRes;
-			REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture to ID3D11Resource.");
+			//ComPtr<ID3D11Resource> pRes;
+			//REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture to ID3D11Resource.");
 			exportContext->pExportDepthStencil = pTexture;
-			return oCreateDepthStencilView(pThis, pRes.Get(), pDesc, ppDepthStencilView);
+			return oCreateDepthStencilView(pThis, pResource, pDesc, ppDepthStencilView);
 		} catch (...) {
 			LOG(LL_ERR, "Failed to capture depth stencil view");
 		}
@@ -379,7 +359,7 @@ static void Hook_OMSetRenderTargets(
 				NOT_NULL(image, "Could not get current frame.");
 				NOT_NULL(image->pixels, "Could not get current frame.");
 
-				REQUIRE(session->enqueueVideoFrame(image->pixels, (int)(image->width * image->height * 4), exportContext->pts++), "Failed to enqueue frame");
+				REQUIRE(session->enqueueVideoFrame(image->pixels, (int)(image->width * image->height * 4)), "Failed to enqueue frame");
 				exportContext->capturedImage->Release();
 			} catch (std::exception&) {
 				LOG(LL_ERR, "Reading video frame from D3D Device failed.");
@@ -456,7 +436,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 
 					auto fps = Config::instance().getFPS();
 
-					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps.first, fps.second, Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
+					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps.first, fps.second,  Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
 				}
 				
 				// Create Audio Context
@@ -608,7 +588,6 @@ static HRESULT Hook_CreateTexture2D(
 					LOG_CALL(LL_DBG, Config::instance().reload());
 				}
 
-
 				session.reset(new Encoder::Session());
 				NOT_NULL(session, "Could not create the session");
 				exportContext.reset(new ExportContext());
@@ -616,10 +595,10 @@ static HRESULT Hook_CreateTexture2D(
 				exportContext->pSwapChain = mainSwapChain;
 				exportContext->captureRenderTargetViewReference = true;
 				exportContext->captureDepthStencilViewReference = true;
-				D3D11_TEXTURE2D_DESC desc = *(pDesc);
-				desc.Width = swapChainDesc.BufferDesc.Width;
-				desc.Height = swapChainDesc.BufferDesc.Height;
-				return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);
+				/*D3D11_TEXTURE2D_DESC* desc = (D3D11_TEXTURE2D_DESC*)pDesc;
+				desc->Width = swapChainDesc.BufferDesc.Width;
+				desc->Height = swapChainDesc.BufferDesc.Height;
+				return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);*/
 			}
 			catch (std::exception&) {
 				LOG_CALL(LL_DBG, session.reset());

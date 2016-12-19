@@ -34,6 +34,7 @@ namespace Encoder {
 		AVStream *videoStream = NULL;
 		SwsContext *pSwsContext = NULL;
 		AVDictionary *videoOptions = NULL;
+		uint64_t videoPTS = 1;
 
 		AVCodec *audioCodec = NULL;
 		AVCodecContext *audioCodecContext = NULL;
@@ -63,18 +64,15 @@ namespace Encoder {
 
 		struct frameQueueItem {
 			frameQueueItem():
-				data(nullptr),
-				sampletime(0)
+				data(nullptr)
 			{
 				
 			}
-			frameQueueItem(std::shared_ptr<std::vector<uint8_t>> bytes, int64_t sampletime) :
-				data(bytes),
-				sampletime(sampletime)
-				{}
+			frameQueueItem(std::shared_ptr<std::vector<uint8_t>> bytes) :
+				data(bytes)
+			{}
 
 			std::shared_ptr<std::vector<uint8_t>> data;
-			int64_t sampletime;
 		};
 
 		SafeQueue<frameQueueItem> videoFrameQueue;
@@ -86,6 +84,8 @@ namespace Encoder {
 		std::condition_variable cvEncodingThreadFinished;
 		std::mutex mxEncodingThread;
 		std::thread thread_video_encoder;
+		std::vector<uint16_t> motionBlurAccBuffer;
+		std::vector<uint8_t> motionBlurDestBuffer;
 
 		//std::condition_variable cvFormatContext;
 
@@ -114,14 +114,12 @@ namespace Encoder {
 		~Session();
 
 		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset);
-		HRESULT createVideoContext(UINT width, UINT height, AVPixelFormat inputFramePixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat);
 		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, uint32_t outputSampleRate, std::string outputSampleFormatString, std::string acodec, std::string preset);
-		HRESULT createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align);
 		HRESULT createFormatContext(LPCSTR filename);
 
-		HRESULT enqueueVideoFrame(BYTE * pData, int length, LONGLONG sampleTime);
+		HRESULT enqueueVideoFrame(BYTE * pData, int length);
 
-		void encodingThread();
+		void videoEncodingThread();
 
 		HRESULT writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime);
 		HRESULT writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime);

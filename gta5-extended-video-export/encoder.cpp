@@ -21,7 +21,7 @@ namespace Encoder {
 		LOG(LL_NFO, "Closing session: ", (uint64_t)this);
 		this->isBeingDeleted = true;
 		this->isCapturing = false;
-		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, -1)));
+		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr)));
 
 		if (thread_video_encoder.joinable()) {
 			thread_video_encoder.join();
@@ -52,53 +52,6 @@ namespace Encoder {
 		LOG_CALL(LL_DBG, av_free(this->outputAudioFrame));
 		LOG_CALL(LL_DBG, av_audio_fifo_free(this->audioSampleBuffer));
 		POST();
-	}
-
-	HRESULT Session::createVideoContext(UINT width, UINT height, AVPixelFormat inputPixelFormat, UINT fps_num, UINT fps_den, AVPixelFormat outputPixelFormat) {
-		PRE();
-		if (this->isBeingDeleted) {
-			POST();
-			return E_FAIL;
-		}
-		std::lock_guard<std::mutex> guard(this->mxVideoContext);
-		this->width = width;
-		this->height = height;
-		this->inputPixelFormat = inputPixelFormat;
-		this->outputPixelFormat = outputPixelFormat;
-
-		this->createVideoFrames(width, height, inputPixelFormat, width, height, outputPixelFormat);
-
-		AVCodecID videoCodecId = AV_CODEC_ID_FFV1;
-
-		this->videoCodec = avcodec_find_encoder(videoCodecId);
-		RET_IF_NULL(this->videoCodec, "Could not find video codec", E_FAIL);
-
-		
-		this->videoCodecContext = avcodec_alloc_context3(this->videoCodec);
-		RET_IF_NULL(this->videoCodecContext, "Could not allocate context for the codec", E_FAIL);
-
-		this->videoCodecContext->slices = 16;
-		this->videoCodecContext->codec = this->videoCodec;
-		this->videoCodecContext->codec_id = videoCodecId;
-
-		this->videoCodecContext->pix_fmt = outputPixelFormat;
-		this->videoCodecContext->width = this->width;
-		this->videoCodecContext->height = this->height;
-		this->videoCodecContext->time_base = av_make_q(fps_den, fps_num);
-		this->videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
-
-		this->videoCodecContext->gop_size = 1;
-
-		this->thread_video_encoder = std::thread(&Session::encodingThread, this);
-
-		LOG(LL_NFO, "Video context was created successfully.");
-		this->isVideoContextCreated = true;
-		this->cvVideoContext.notify_all();
-
-
-		//std::async(std::launch::async, &Session::encodingThread, this);
-		POST();
-		return S_OK;
 	}
 
 	HRESULT Session::createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset)
@@ -155,44 +108,11 @@ namespace Encoder {
 		this->videoCodecContext->time_base = av_make_q(fps_den, fps_num);
 		this->videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
 		
-		this->thread_video_encoder = std::thread(&Session::encodingThread, this);
+		this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
 
 		LOG(LL_NFO, "Video context was created successfully.");
 		this->isVideoContextCreated = true;
 		this->cvVideoContext.notify_all();
-		POST();
-		return S_OK;
-	}
-
-	HRESULT Session::createAudioContext(UINT numChannels, UINT sampleRate, UINT bitsPerSample, AVSampleFormat sampleFormat, UINT align)
-	{
-		PRE();
-		if (this->isBeingDeleted) {
-			POST();
-			return E_FAIL;
-		}
-		std::lock_guard<std::mutex> guard(this->mxAudioContext);
-		AVCodecID audioCodecId = AV_CODEC_ID_PCM_S16LE;
-		this->audioCodec = avcodec_find_encoder(audioCodecId);
-		this->audioCodecContext = avcodec_alloc_context3(this->audioCodec);
-
-		this->audioCodecContext->channels = numChannels;
-		this->audioCodecContext->sample_rate = sampleRate;
-		this->audioCodecContext->bits_per_raw_sample = bitsPerSample;
-		this->audioCodecContext->bit_rate = sampleRate * bitsPerSample * numChannels;
-		this->audioCodecContext->sample_fmt = sampleFormat;
-		this->audioCodecContext->time_base = { 1, (int)sampleRate }; // Probably unused.
-		this->audioBlockAlign = align;
-
-		this->inputAudioFrame = av_frame_alloc();
-		RET_IF_NULL(inputAudioFrame, "Could not allocate audio frame", E_FAIL);
-		inputAudioFrame->format = sampleFormat;
-		inputAudioFrame->sample_rate = sampleRate;
-		inputAudioFrame->channels = numChannels;
-		LOG(LL_NFO, "Audio context was created successfully.");
-		this->isAudioContextCreated = true;
-		this->cvAudioContext.notify_all();
-
 		POST();
 		return S_OK;
 	}
@@ -322,27 +242,27 @@ namespace Encoder {
 		return S_OK;
 	}
 
-	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
+	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length) {
 		PRE();
 		if (this->isBeingDeleted) {
 			POST();
 			return E_FAIL;
 		}
 		auto pVector = std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(pData, pData + length));
-		frameQueueItem item(pVector, sampleTime);
+		frameQueueItem item(pVector);
 		this->videoFrameQueue.enqueue(item);
 		POST();
 		return S_OK;
 	}
 
-	void Session::encodingThread() {
+	void Session::videoEncodingThread() {
 		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEncodingThread);
 		try {
 			frameQueueItem item = this->videoFrameQueue.dequeue();
 			while (item.data != nullptr) {
-				LOG(LL_NFO, "Encoding frame: ", item.sampletime);
-				REQUIRE(this->writeVideoFrame(item.data->data(), item.data->size(), item.sampletime), "Failed to write video frame.");
+				LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
+				REQUIRE(this->writeVideoFrame(item.data->data(), item.data->size(), this->videoPTS++), "Failed to write video frame.");
 				item = this->videoFrameQueue.dequeue();
 			}
 		} catch (...) {
@@ -376,25 +296,7 @@ namespace Encoder {
 			return E_FAIL;
 		}
 
-		//BYTE *pDataTarget = new BYTE[length];
-		/*switch (this->inputPixelFormat) {
-
-		case AV_PIX_FMT_ARGB:
-		case AV_PIX_FMT_YUV420P:
-			memcpy_s(pDataTarget, length, pData, length);
-			break;
-
-		case AV_PIX_FMT_NV12:
-			this->convertNV12toYUV420P(pData, pDataTarget, this->width, this->height);
-			break;
-
-		default:
-			LOG("Could not recognize pixel format.");
-			delete[] pDataTarget;
-			return E_FAIL;
-		}*/
 		RET_IF_FAILED(av_image_fill_arrays(inputFrame->data, inputFrame->linesize, pData, this->inputPixelFormat, this->width, this->height, 1), "Could not fill the frame with data from the buffer", E_FAIL);
-		//videoFrame->pts = av_rescale_q(sampleTime, MF_TIME_BASE, this->videoStream->time_base);
 
 		sws_scale(pSwsContext, inputFrame->data, inputFrame->linesize, 0, this->height, outputFrame->data, outputFrame->linesize);
 		//outputFrame->pts = av_rescale_q(sampleTime, this->videoCodecContext->time_base, this->videoStream->time_base);
@@ -503,7 +405,7 @@ namespace Encoder {
 		// Wait until the video encoding thread is finished.
 		{
 			// Write end of the stream object with a nullptr
-			this->videoFrameQueue.enqueue(frameQueueItem(nullptr, -1));
+			this->videoFrameQueue.enqueue(frameQueueItem(nullptr));
 			std::unique_lock<std::mutex> lock(this->mxEncodingThread);
 			while (!this->isEncodingThreadFinished) {
 				this->cvEncodingThreadFinished.wait(lock);
