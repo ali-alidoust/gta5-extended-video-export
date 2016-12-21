@@ -13,9 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="ini">
-      <UniqueIdentifier>{e9b46500-a24c-4b4c-a059-fd3c6c291bca}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Submodules">
       <UniqueIdentifier>{0eeed479-794c-41e6-8b2c-0aac6f0dc3c4}</UniqueIdentifier>
     </Filter>
@@ -28,10 +25,16 @@
     <Filter Include="Submodules\DirectXTex\Source Files">
       <UniqueIdentifier>{67468996-9eef-424f-bede-abf329d92d4f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="deploy">
+      <UniqueIdentifier>{e9b46500-a24c-4b4c-a059-fd3c6c291bca}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
     <Text Include="AVCodecContextParams.txt" />
+    <Text Include="ReadMe.txt">
+      <Filter>deploy</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetver.h">
@@ -183,7 +186,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="default.ini">
-      <Filter>ini</Filter>
+      <Filter>deploy</Filter>
     </None>
     <None Include="packages.config" />
   </ItemGroup>

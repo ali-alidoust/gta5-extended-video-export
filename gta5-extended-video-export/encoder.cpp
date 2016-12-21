@@ -54,7 +54,7 @@ namespace Encoder {
 		POST();
 	}
 
-	HRESULT Session::createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset)
+	HRESULT Session::createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, std::string outputPixelFormatString, std::string vcodec, std::string preset)
 	{
 		PRE();
 		if (this->isBeingDeleted) {
@@ -82,6 +82,10 @@ namespace Encoder {
 
 		this->width = width;
 		this->height = height;
+		this->motionBlurSamples = motionBlurSamples;
+		this->motionBlurAccBuffer = std::valarray<uint16_t>(width * height * 4);
+		this->motionBlurTempBuffer = std::valarray<uint16_t>(width * height * 4);
+		this->motionBlurDestBuffer = std::valarray<uint8_t>(width * height * 4);
 
 		RET_IF_FAILED(this->createVideoFrames(width, height, this->inputPixelFormat, width, height, this->outputPixelFormat), "Could not create video frames", E_FAIL);
 
@@ -152,7 +156,7 @@ namespace Encoder {
 		//this->audioCodecContext->bits_per_raw_sample = bitsPerSample;
 		//this->audioCodecContext->bit_rate = sampleRate * bitsPerSample * numChannels;
 		this->audioCodecContext->sample_fmt = outputSampleFormat;
-		this->audioCodecContext->time_base = { 1, (int)inputSampleRate}; // FIXME: What should I do with it?
+		this->audioCodecContext->time_base = { 1, (int)inputSampleRate }; // FIXME: What should I do with it?
 		this->audioBlockAlign = inputAlignment;
 
 		RET_IF_FAILED(this->createAudioFrames(inputChannels, inputSampleFormat, inputSampleRate, inputChannels, outputSampleFormat, outputSampleRate), "Could not create audio frames", E_FAIL);
@@ -248,7 +252,10 @@ namespace Encoder {
 			POST();
 			return E_FAIL;
 		}
-		auto pVector = std::shared_ptr<std::vector<uint8_t>>(new std::vector<uint8_t>(pData, pData + length));
+		auto pVector = std::shared_ptr<std::valarray<uint8_t>>(new std::valarray<uint8_t>(length));
+
+		std::copy(pData, pData + length, std::begin(*pVector));
+
 		frameQueueItem item(pVector);
 		this->videoFrameQueue.enqueue(item);
 		POST();
@@ -261,8 +268,27 @@ namespace Encoder {
 		try {
 			frameQueueItem item = this->videoFrameQueue.dequeue();
 			while (item.data != nullptr) {
-				LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
-				REQUIRE(this->writeVideoFrame(item.data->data(), item.data->size(), this->videoPTS++), "Failed to write video frame.");
+				auto& data = *(item.data);
+				if (this->motionBlurSamples == 0) {
+					LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
+					REQUIRE(this->writeVideoFrame(std::begin(data), item.data->size(), this->videoPTS++), "Failed to write video frame.");
+				} else {
+					int frameRemainder = this->motionBlurPTS++ % (this->motionBlurSamples + 1);
+					std::copy(std::begin(data), std::end(data), std::begin(this->motionBlurTempBuffer));
+					if (frameRemainder == this->motionBlurSamples) {
+						// Flush motion blur buffer
+						this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+						this->motionBlurAccBuffer /= (motionBlurSamples + 1);
+						std::copy(std::begin(this->motionBlurAccBuffer), std::end(this->motionBlurAccBuffer), std::begin(this->motionBlurDestBuffer));
+						REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer), this->motionBlurDestBuffer.size(), this->videoPTS++), "Failed to write video frame");
+					} else if (frameRemainder == 0) {
+						// Reset accumulation buffer
+						this->motionBlurAccBuffer = this->motionBlurTempBuffer;
+					} else {
+						// Accumulate motion blur buffer
+						this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+					}
+				}
 				item = this->videoFrameQueue.dequeue();
 			}
 		} catch (...) {
@@ -324,10 +350,16 @@ namespace Encoder {
 	HRESULT Session::writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime)
 	{
 		PRE();
+		LOG(LL_DBG, sampleTime);
 		if (this->isBeingDeleted) {
 			POST();
 			return E_FAIL;
 		}
+
+		/*if (this->audioPTS++ % (this->motionBlurSamples + 1) != 0) {
+			return S_OK;
+		}*/
+
 		// Wait until format context is created
 		{
 			std::unique_lock<std::mutex> lk(this->mxFormatContext);

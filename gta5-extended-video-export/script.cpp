@@ -31,10 +31,16 @@ namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkRSSetViewports(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkRSSetScissorRects(new PLH::VFuncDetour);
 	
+	
+	
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);
 
+	std::shared_ptr<PLH::X64Detour> hkGetFrameRateFraction(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetRenderTimeBase(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkGetFrameRate(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkGetAudioSamples(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkUnk01(new PLH::X64Detour);
 
 	std::unique_ptr<Encoder::Session> session;
 	std::mutex mxSession;
@@ -56,6 +62,8 @@ namespace {
 			PRE();
 			POST();
 		}
+
+		bool isAudioExportDisabled = false;
 
 		bool captureRenderTargetViewReference = false;
 		bool captureDepthStencilViewReference = false;
@@ -94,6 +102,10 @@ tCreateDepthStencilView oCreateDepthStencilView;
 tRSSetViewports oRSSetViewports;
 tRSSetScissorRects oRSSetScissorRects;
 tGetRenderTimeBase oGetRenderTimeBase;
+//tGetFrameRate oGetFrameRate;
+//tGetAudioSamples oGetAudioSamples;
+//tgetFrameRateFraction ogetFrameRateFraction;
+//tUnk01 oUnk01;
 
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	static char msg[8192];
@@ -175,6 +187,14 @@ void initialize() {
 		try {
 			if (pYaraHelper->getPtr_getRenderTimeBase() != NULL) {
 				REQUIRE(hookX64Function((LPVOID)pYaraHelper->getPtr_getRenderTimeBase(), &Detour_GetRenderTimeBase, &oGetRenderTimeBase, hkGetRenderTimeBase), "Failed to hook FPS function.");
+				////0x14CC6AC;
+				//REQUIRE(hookX64Function((BYTE*)(0x14CC6AC + (intptr_t)info.lpBaseOfDll), &Detour_GetFrameRate, &oGetFrameRate, hkGetFrameRate), "Failed to hook frame rate function.");
+				////0x14CC64C;
+				//REQUIRE(hookX64Function((BYTE*)(0x14CC64C + (intptr_t)info.lpBaseOfDll), &Detour_GetAudioSamples, &oGetAudioSamples, hkGetAudioSamples), "Failed to hook audio sample function.");
+				//0x14CBED8;
+				//REQUIRE(hookX64Function((BYTE*)(0x14CBED8 + (intptr_t)info.lpBaseOfDll), &Detour_getFrameRateFraction, &ogetFrameRateFraction, hkGetFrameRateFraction), "Failed to hook audio sample function.");
+				//0x87CC80;
+				//REQUIRE(hookX64Function((BYTE*)(0x87CC80 + (intptr_t)info.lpBaseOfDll), &Detour_Unk01, &oUnk01, hkUnk01), "Failed to hook audio sample function.");
 			} else {
 				LOG(LL_ERR, "Could not find the address for FPS function.");
 				LOG(LL_ERR, "Custom FPS support is DISABLED!!!");
@@ -436,7 +456,13 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 
 					auto fps = Config::instance().getFPS();
 
-					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps.first, fps.second,  Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
+					if (((float)fps.first * ((float)Config::instance().getMotionBlurSamples() + 1) / (float)fps.second) > 60.0f) {
+						LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
+						LOG(LL_NON, "Audio export will be disabled!!!");
+						exportContext->isAudioExportDisabled = true;
+					}
+
+					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps.first, fps.second, Config::instance().getMotionBlurSamples(),  Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
 				}
 				
 				// Create Audio Context
@@ -497,7 +523,10 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 	IMFSample     *pSample
 	) {
 	std::lock_guard<std::mutex> sessionLock(mxSession);
-	if ((session != NULL) && (dwStreamIndex == 1)) {
+	if ((session != NULL) && (dwStreamIndex == 1) && (!exportContext->isAudioExportDisabled)) {
+
+		static std::ofstream stream = std::ofstream("t:\\temp.raw", std::ofstream::app | std::ofstream::binary);
+
 		ComPtr<IMFMediaBuffer> pBuffer = NULL;
 		try {
 			LONGLONG sampleTime;
@@ -508,6 +537,7 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 			pBuffer->GetCurrentLength(&length);
 			BYTE *buffer;
 			if (SUCCEEDED(pBuffer->Lock(&buffer, NULL, NULL))) {
+				stream.write((char*)buffer, length);
 				LOG_CALL(LL_DBG, session->writeAudioFrame(buffer, length, sampleTime));
 			}
 			
@@ -611,8 +641,27 @@ static HRESULT Hook_CreateTexture2D(
 }
 
 static float Detour_GetRenderTimeBase(int64_t choice) {
+	StackDump(64, __func__);
 	std::pair<int32_t, int32_t> fps = Config::instance().getFPS();
-	float result = 1000.0f * (float)fps.second / (float)fps.first;
+	float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)Config::instance().getMotionBlurSamples() + 1));
 	LOG(LL_NFO, "Time step: ", result);
 	return result;
 }
+
+//static float Detour_GetFrameRate(int32_t choice) {
+//	std::pair<int32_t, int32_t> fps = Config::instance().getFPS();
+//	return (float)fps.first / (float)fps.second;
+//}
+//
+//static void Detour_getFrameRateFraction(float input, uint32_t* num, uint32_t* den) {
+//	ogetFrameRateFraction(input, num, den);
+//	*num = 120;
+//	*den = 1;
+//	LOG(LL_DBG, input, " ", *num, "/", *den);
+//}
+//
+//static float Detour_Unk01(float x0, float x1, float x2, float x3) {
+//	float result = oUnk01(x0, x1, x2, x3);
+//	//LOG(LL_DBG, "(", x0, ",", x1, ",", x2, ",", x3, ") -> ", result);
+//	return result;
+//}

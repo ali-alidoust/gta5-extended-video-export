@@ -13,6 +13,7 @@
 #define CFG_OUTPUT_DIR "output_folder"
 
 #define CFG_EXPORT_SECTION "EXPORT"
+#define CFG_EXPORT_MB_SAMPLES "motion_blur_samples"
 #define CFG_EXPORT_FPS "fps"
 #define CFG_EXPORT_FORMAT "format"
 
@@ -44,6 +45,10 @@ public:
 
 	std::pair<int32_t, int32_t> getFPS() {
 		return this->fps;
+	}
+
+	uint8_t getMotionBlurSamples() {
+		return this->motion_blur_samples;
 	}
 
 	std::string outputDir() {
@@ -102,6 +107,7 @@ public:
 		this->parse_audio_rate();
 		this->log_level = this->parse_log_level();
 		this->fps = this->parse_fps();
+		this->motion_blur_samples = this->parse_motion_blur_samples();
 	}
 
 	static Config& instance()
@@ -134,6 +140,7 @@ private:
 	uint32_t                        audio_rate                 = 48000;
 	LogLevel						log_level                  = LL_ERR;
 	std::pair<uint32_t, uint32_t>   fps                        = std::make_pair(30000, 1001);
+	uint8_t                         motion_blur_samples        = 0;
 	std::string                     container_format		   = "mkv";
 
 
@@ -306,6 +313,29 @@ private:
 
 		LOG(LL_NON, "Could not parse log level, using default: \"error\"");
 		return LL_ERR;
+	}
+
+	uint8_t parse_motion_blur_samples() {
+		std::string string;
+		try {
+			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_SAMPLES];
+			string = std::regex_replace(string, std::regex("\\s+"), "");
+			uint64_t value = std::stoul(string);
+			if (value > 255) {
+				LOG(LL_NON, "Specified motion blur samples exceed 255");
+				LOG(LL_NON, "Using maximum value of 255");
+				return 255;
+			} else {
+				return (uint8_t)value;
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_NON, ex.what());
+		}
+
+		LOG(LL_NON, "Could not parse motion blur samples: ", string);
+		LOG(LL_NON, "Using default value of 0 (disabled)");
+		return 0;
+
 	}
 
 	std::string parse_container_format() {

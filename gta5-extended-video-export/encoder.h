@@ -10,6 +10,8 @@
 #include <mfidl.h>
 #include <mutex>
 #include <future>
+#include <vector>
+#include <valarray>
 #include "SafeQueue.h"
 extern "C" {
 #include <libavcodec\avcodec.h>
@@ -34,7 +36,8 @@ namespace Encoder {
 		AVStream *videoStream = NULL;
 		SwsContext *pSwsContext = NULL;
 		AVDictionary *videoOptions = NULL;
-		uint64_t videoPTS = 1;
+		uint64_t videoPTS = 0;
+		uint64_t motionBlurPTS = 0;
 
 		AVCodec *audioCodec = NULL;
 		AVCodecContext *audioCodecContext = NULL;
@@ -44,6 +47,7 @@ namespace Encoder {
 		SwrContext* pSwrContext = NULL;
 		AVDictionary *audioOptions = NULL;
 		AVAudioFifo *audioSampleBuffer = NULL;
+		uint64_t audioPTS = 0;
 
 
 		bool isVideoFinished = false;
@@ -68,11 +72,11 @@ namespace Encoder {
 			{
 				
 			}
-			frameQueueItem(std::shared_ptr<std::vector<uint8_t>> bytes) :
+			frameQueueItem(std::shared_ptr<std::valarray<uint8_t>> bytes) :
 				data(bytes)
 			{}
 
-			std::shared_ptr<std::vector<uint8_t>> data;
+			std::shared_ptr<std::valarray<uint8_t>> data;
 		};
 
 		SafeQueue<frameQueueItem> videoFrameQueue;
@@ -84,8 +88,9 @@ namespace Encoder {
 		std::condition_variable cvEncodingThreadFinished;
 		std::mutex mxEncodingThread;
 		std::thread thread_video_encoder;
-		std::vector<uint16_t> motionBlurAccBuffer;
-		std::vector<uint8_t> motionBlurDestBuffer;
+		std::valarray<uint16_t> motionBlurAccBuffer;
+		std::valarray<uint16_t> motionBlurTempBuffer;
+		std::valarray<uint8_t> motionBlurDestBuffer;
 
 		//std::condition_variable cvFormatContext;
 
@@ -95,6 +100,7 @@ namespace Encoder {
 		UINT width;
 		UINT height;
 		UINT framerate;
+		uint32_t motionBlurSamples;
 		UINT audioBlockAlign;
 		AVPixelFormat outputPixelFormat;
 		AVPixelFormat inputPixelFormat;
@@ -113,7 +119,7 @@ namespace Encoder {
 
 		~Session();
 
-		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, std::string outputPixelFormatString, std::string vcodec, std::string preset);
+		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, std::string outputPixelFormatString, std::string vcodec, std::string preset);
 		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, uint32_t outputSampleRate, std::string outputSampleFormatString, std::string acodec, std::string preset);
 		HRESULT createFormatContext(LPCSTR filename);
 

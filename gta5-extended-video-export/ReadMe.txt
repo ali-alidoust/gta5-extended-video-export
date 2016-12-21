@@ -1,48 +1,273 @@
-========================================================================
-    DYNAMIC LINK LIBRARY : gta5-lossless-render Project Overview
-========================================================================
+Extended Video Export
+=========================
+Extended Video Export is an enhancement mod for GTA V, aimed at directors who want better export options from Rockstar editor.
 
-AppWizard has created this gta5-lossless-render DLL for you.
+IMPORTANT: Due to the way this mod works, the original Rockstar Editor video file will NOT be saved to the disk (actually it does, but it will be empty). The complete video will be exported to the folder specified in the .ini file.
 
-This file contains a summary of what you will find in each of the files that
-make up your gta5-lossless-render application.
+How to install:
+=========================
+Just extract the ASI script and the DLL files into the game directory.
+
+Configuration:
+=========================
+You can change the configuration by editing ExtendedVideoExport.ini file.
+Information about each setting is included in the .ini file as comments. For high resolution exports without DSR, use this guide by Kravencedesign
+
+Current Features:
+=========================
+
+* **High Quality Export:**
+Whenever you export a video via Rockstar Editor, this script saves it with a custom quality in the current user's video folder. The quality of the exported video can be configured using the .ini file. Even lossless exports are possible too.
+
+* **Custom Video Encoder:**
+Supported video encoders include (but not limited to) x264, x265, FFV1, VP8, VP9 and more.
+
+* **Custom Audio Encoder:**
+Supported audio encoders include FLAC, AC3, Vorbis and more.
+
+* **ReShade/ENB Support:**
+If you are using ReShade or ENB graphics mods, your exported videos will have the effects too.
+
+* **Nvidia DSR Support:**
+You can now export higher resolution videos using Nvidia DSR. Note that this will only work if you use DSR in Fullscreen mode. Windowed and Borderless Windowed modes are not supported. ATI VSR might work too, but it is not tested.
 
 
-gta5-lossless-render.vcxproj
-    This is the main project file for VC++ projects generated using an Application Wizard.
-    It contains information about the version of Visual C++ that generated the file, and
-    information about the platforms, configurations, and project features selected with the
-    Application Wizard.
 
-gta5-lossless-render.vcxproj.filters
-    This is the filters file for VC++ projects generated using an Application Wizard. 
-    It contains information about the association between the files in your project 
-    and the filters. This association is used in the IDE to show grouping of files with
-    similar extensions under a specific node (for e.g. ".cpp" files are associated with the
-    "Source Files" filter).
+Important things to note:
+=========================
 
-gta5-lossless-render.cpp
-    This is the main DLL source file.
+* The default video codec is libx264, but you can change it in the .ini file. There are a number of example codec configurations in the .ini file, you can try them or change the configuration as you like.
+* Exporting a video using this mod might take much longer times than the original export, especially towards the end. You might think that the process has freezed, but most probably it's not.
+* Lossless video files tend to get really large (around 1GB for 20 seconds of 1080p video @60fps in my case). These files are to be used with video editing software. They can also be played using MPC-HC and VLC, but it requires a lot of CPU power. The stuttering you may experience is because of the large size of the file and the complexity of the decoding process, the rendered files themselves have no stutter.
 
-	When created, this DLL does not export any symbols. As a result, it
-	will not produce a .lib file when it is built. If you wish this project
-	to be a project dependency of some other project, you will either need to
-	add code to export some symbols from the DLL so that an export library
-	will be produced, or you can set the Ignore Input Library property to Yes
-	on the General propert page of the Linker folder in the project's Property
-	Pages dialog box.
 
-/////////////////////////////////////////////////////////////////////////////
-Other standard files:
 
-StdAfx.h, StdAfx.cpp
-    These files are used to build a precompiled header (PCH) file
-    named gta5-lossless-render.pch and a precompiled types file named StdAfx.obj.
+Planned features:
+=========================
+* Custom frame rate support.
+* Motion blur.
+* Depth buffer export
 
-/////////////////////////////////////////////////////////////////////////////
-Other notes:
+Changelog
+=========================
 
-AppWizard uses "TODO:" comments to indicate parts of the source code you
-should add to or customize.
+**Important:** This release contains both v0.1.3beta and v0.1.4beta. Custom frame rate support in v0.1.4beta is still experimental and might crash your game.
 
-/////////////////////////////////////////////////////////////////////////////
+**Changes in v0.1.4beta (Experimental)**
+* Added custom frame rate support
+* Added motion blur support
+
+**Changes in v0.1.3beta**
+* Added option to export mp4 and avi files too.
+* Fixed a number of crashes.
+
+**Changes in v0.1.2beta**
+* Fixed a bug where game freezed when exporting a video.
+
+**Changes in v0.1.1beta**
+* ReShade/ENB support added.
+* High resolution export added using Nvidia DSR
+* Fixed some random crashes.
+
+**Changes in v0.1.0beta**
+* Changed the way the frames are captures, so now full RGB exports are possible.
+* Added configurable video and audio codecs support.
+* Better memory management.
+* Automatically reload the .ini file before each export.
+* Different log levels.
+* Experimental ENB/ReShade support removed since it was not good enough (actually it sucked).
+
+**Changes in v0.0.5alpha**
+* Added experimental ReShade/ENB support
+
+**Changes in v0.0.4alpha**
+* Added .ini configuration file support.
+* Fixed a crash due to a race condition in the encoder.
+
+**Changes in v0.0.3alpha**
+* Added audio to the exported video file (also lossless).
+* Better memory management
+
+**Changes in v0.0.2alpha**
+* Fixed crash in some resolutions/configurations.
+
+**Changes in v0.0.1alpha:**
+* Lossless video export
+
+Configuration
+=========================
+
+### enable_mod
+* Values: true, false
+* Description: If set to false, the script won't be run.
+* Warning: Auto reload feature does not update this value, you have to restart the game for it to take effect  
+* Example:
+  * enable_mod = true
+
+### auto_reload_config
+* Values: true, false
+* Description: If set to true, this config file will be automatically reloaded whenever you export a new video.
+  Especially useful if you want to toy with encoder settings
+* Example:
+  * auto_reload_config = true
+
+### output_folder
+* Description: Videos will be exported to this folder. If left empty, current user's videos directory will be used.
+* Values: [empty] or a valid path
+* Warning: 
+* Example:
+  * output_folder = D:\MyVideos\
+
+### log_level
+* Description: Sets the detail of the mod's logging feature. Please use "trace" level to report bugs.
+* Values: error, warn, info, debug, trace
+* Example:
+  * log_level = trace
+
+## [EXPORT] Section
+
+### format
+* Description: Output file format.
+* Values: mkv, mp4, avi
+* Example:
+  * format = avi
+
+### fps
+* Description: FPS value. 
+* Values: It can be a floating point value (like 20.3), or a fraction (like 30000/1001)
+* Warning: 
+* Examples: 
+  * fps = 60
+  * fps = 23.976
+  * fps = 30000/1001
+
+### motion_blur_samples
+* Description: Number of motion blur samples. The higher the value, the higher the quality of motion blur, and higher exporting time. A value of zero means motion blur is disabled.
+* Values: 0-255 (0 means disabled)
+* Warning: Setting this to a high value will make export take a very long time.
+* Example:
+  * motion_blur_samples = 10
+
+## [VIDEO] Section
+
+### encoder
+* Description: Sets the video encoder
+* Values: Any FFMPEG video codec name. See <https://ffmpeg.org/ffmpeg-codecs.html#Video-Encoders> for supported encoders.
+* Warning: Not all of the encoders are tested. Changing this might crash your game.
+* Example:
+  * encoder = libx265
+
+### pixel_format
+* Description: Pixel format of the output video
+* Values: Any format supported by the selected encoder. Most common formats are "yuv444p" and "yuv420p".
+* Warning: The game might crash if the encoder does not support the pixel format.
+* Example:
+  * pixel_format = yuv444p
+
+### options
+* Description: Video encoder options
+* Values: Any number of key=value pairs seperated by '/'. See <https://ffmpeg.org/ffmpeg-codecs.html#Video-Encoders> for each encoder's available settings.
+* Note: "b" is for bitrate
+* Example:
+  * options = preset=slow / b=40000000
+
+
+## [AUDIO] Section
+
+###
+* Description: 
+* Values: 
+* Warning: 
+* Example:
+  * 
+
+### encoder
+* Description: Sets the audio encoder.
+* Values: Any FFMPEG audio codec name. See <https://ffmpeg.org/ffmpeg-codecs.html#Audio-Encoders> for supported codecs.
+* Warning: Not all of the encoders are tested. Changing this might crash your game.
+* Example:
+  * encoder = flac
+
+### sample_format
+* Description: Sets the audio sample format. 
+* Values: Any format supported by the selected encoder. Most common formats are "s16" and "fltp".
+* Warning: 
+* Example:
+  * sample_format = fltp
+
+### sample_rate
+* Description: Audio sampling rate.
+* Values: Any sampling rate you want. Sampling rates above 48000 are not useful since the game doesn't support them.
+* Example:
+  * sample_rate = 48000
+
+### options
+* Description: 
+* Values: 
+* Note: "b" is for bitrate
+* Example: Any number of key=value pairs seperated by '/'. See <https://ffmpeg.org/ffmpeg-codecs.html#Audio-Encoders> for each encoder's available settings.
+  * b=320000
+
+## Example [VIDEO] presets
+
+### Lossless H.264 (Very slow)
+encoder = libx264
+
+pixel_format = yuv420p
+
+options = preset=veryslow / crf=0
+
+
+### Lossless H.264 (Fast)
+encoder = libx264
+
+pixel_format = yuv420p
+
+options = preset=ultrafast / crf=0
+
+
+### H.265 (HEVC) (Slow)
+encoder = libx265
+
+pixel_format = yuv420p
+
+options = preset=slow / b=40000000
+
+
+### H.265 (HEVC) (Very slow)
+encoder = libx265
+
+pixel_format = yuv420p
+
+options = preset=veryslow / b=40000000
+
+
+### Lossless FFV1 (Full RGB, Very Large Files)
+enocder = ffv1
+
+pixel_format = bgr0
+
+options = slices=16 / slicecrc=1
+
+
+
+## Example [AUDIO] presets
+
+### Lossless FLAC
+encoder = flac
+
+sample_format = s16
+
+sample_rate = 48000
+
+options = 
+
+
+### AC3 320Kbps
+encoder = ac3
+
+sample_format = fltp
+
+sample_rate = 48000
+
+options = b=320000

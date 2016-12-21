@@ -121,7 +121,8 @@
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*</Command>
+      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*
+xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -163,11 +164,13 @@
       <IgnoreSpecificDefaultLibraries>libcmt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*</Command>
+      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*
+xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Text Include="AVCodecContextParams.txt" />
+    <Text Include="ReadMe.txt" />
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
