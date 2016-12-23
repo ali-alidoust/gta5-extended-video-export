@@ -27,6 +27,7 @@
 #include <wmcodecdsp.h>
 #include <wrl.h>
 
+#include "config.h"
 
 extern "C" {
 #include "libavcodec\avcodec.h"

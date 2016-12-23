@@ -2,23 +2,21 @@
 #include "stdafx.h"
 #include "script.h"
 #include "logger.h"
-#include "config.h"
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
 					 )
 {
-	if (!Config::instance().isModEnabled()) {
-		LOG(LL_NON, "Extended Video Export mod is disabled in the config file. Exiting...");
-		return TRUE;
-	}
-
-
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		Logger::instance().level = Config::instance().logLevel();
+		config::reload();
+		if (!config::is_mod_enabled) {
+			LOG(LL_NON, "Extended Video Export mod is disabled in the config file. Exiting...");
+			return TRUE;
+		}
+		Logger::instance().level = config::log_level;
 		LOG_CALL(LL_DBG,initialize());
 		LOG(LL_NFO, "Registering script...");
 		LOG_CALL(LL_DBG, presentCallbackRegister((void(*)(void*))onPresent));

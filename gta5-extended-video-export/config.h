@@ -1,11 +1,15 @@
 #pragma once
 
+#ifndef _MY_CONFIG_H_
+#define _MY_CONFIG_H_
+
 #include <ini.hpp>
 #include <string>
 #include <algorithm>
 #include <sstream>
 #include <ShlObj.h>
 #include <regex>
+#include "logger.h"
 
 #define CFG_XVX_SECTION "XVX"
 #define CFG_AUTO_RELOAD_CONFIG "auto_reload_config"
@@ -32,373 +36,52 @@
 //#define CFG_AUDIO_CODEC "audio_codec"
 #define INI_FILE_NAME TARGET_NAME ".ini"
 
-class Config {
+static class config {
 public:
+	static bool                            is_mod_enabled;
+	static bool							   auto_reload_config;
+	static std::pair<uint32_t, uint32_t>   resolution;
+	static std::string                     output_dir;
+	static std::string                     video_enc;
+	static std::string                     video_fmt;
+	static std::string                     video_cfg;
+	static std::string                     audio_enc;
+	static std::string                     audio_cfg;
+	static std::string                     audio_fmt;
+	static uint32_t                        audio_rate;
+	static LogLevel                        log_level;
+	static std::pair<uint32_t, uint32_t>   fps;
+	static uint8_t                         motion_blur_samples;
+	static std::string                     container_format;
 
-	bool isModEnabled() {
-		return this->is_mod_enabled;
-	}
-
-	bool isAutoReloadEnabled() {
-		return this->auto_reload_config;
-	}
-
-	std::pair<int32_t, int32_t> getFPS() {
-		return this->fps;
-	}
-
-	uint8_t getMotionBlurSamples() {
-		return this->motion_blur_samples;
-	}
-
-	std::string outputDir() {
-		return this->output_dir;
-	}
-
-	std::string videoEnc() {
-		return this->video_enc;
-	}
-
-	std::string videoFmt() {
-		return this->video_fmt;
-	}
-
-	std::string videoCfg() {
-		return this->video_cfg;
-	}
-
-	std::string audioEnc() {
-		return this->audio_enc;
-	}
-
-	std::string audioCfg() {
-		return this->audio_cfg;
-	}
-
-	std::string audioFmt() {
-		return this->audio_fmt;
-	}
-
-	uint32_t audioRate() {
-		return this->audio_rate;
-	}
-
-	LogLevel logLevel() {
-		return this->log_level;
-	}
-
-	std::string getContainerFormat() {
-		return this->container_format;
-	}
-
-	void reload() {
+	static void reload() {
 		parser.reset(new INI::Parser(INI_FILE_NAME));
 
-		this->parse_lossless_export();
-		this->parse_auto_reload_config();
-		this->parse_output_dir();
-		//this->parse_resolution();
-		this->parse_video_enc();
-		this->parse_video_fmt();
-		this->parse_video_cfg();
-		this->parse_audio_enc();
-		this->parse_audio_cfg();
-		this->parse_audio_fmt();
-		this->parse_audio_rate();
-		this->container_format = this->parse_container_format();
-		this->log_level = this->parse_log_level();
-		this->fps = this->parse_fps();
-		this->motion_blur_samples = this->parse_motion_blur_samples();
+		is_mod_enabled = parse_lossless_export();
+		auto_reload_config = parse_auto_reload_config();
+		output_dir = parse_output_dir();
+		video_enc = parse_video_enc();
+		video_fmt = parse_video_fmt();
+		video_cfg = parse_video_cfg();
+		audio_enc = parse_audio_enc();
+		audio_cfg = parse_audio_cfg();
+		audio_fmt = parse_audio_fmt();
+		audio_rate = parse_audio_rate();
+		container_format = parse_container_format();
+		log_level = parse_log_level();
+		fps = parse_fps();
+		motion_blur_samples = parse_motion_blur_samples();
 	}
-
-	static Config& instance()
-	{
-		static Config cfg;
-		return cfg;
-	}
-
-	Config(Config const&) = delete;
-	void operator=(Config const&) = delete;
 
 private:
-	std::unique_ptr<INI::Parser> parser;
+	static std::unique_ptr<INI::Parser> parser;
 
-	Config() {
-		this->reload();
-	};
-	~Config() {};
-
-	bool                            is_mod_enabled             = true;
-	bool							auto_reload_config         = true;
-	std::pair<uint32_t, uint32_t>   resolution                 = std::make_pair(0, 0);
-	std::string                     output_dir                 = "";
-	std::string                     video_enc                  = "";
-	std::string                     video_fmt                  = "";
-	std::string                     video_cfg                  = "";
-	std::string                     audio_enc                  = "";
-	std::string                     audio_cfg                  = "";
-	std::string                     audio_fmt                  = "";
-	uint32_t                        audio_rate                 = 48000;
-	LogLevel						log_level                  = LL_ERR;
-	std::pair<uint32_t, uint32_t>   fps                        = std::make_pair(30000, 1001);
-	uint8_t                         motion_blur_samples        = 0;
-	std::string                     container_format		   = "mkv";
-
-
-	void parse_lossless_export() {
-		try {
-			is_mod_enabled = stringToBoolean(parser->top()[CFG_ENABLE_XVX], true);
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-	}
-
-	void parse_auto_reload_config() {
-		try {
-			auto_reload_config = stringToBoolean(parser->top()[CFG_AUTO_RELOAD_CONFIG], true);
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-	}
-
-	void parse_output_dir() {
-		try {
-			this->output_dir = std::string();
-
-			std::string stringValue = parser->top()[CFG_OUTPUT_DIR];
-			stringValue = std::regex_replace(stringValue, std::regex("(^\\s*)|(\\s*$)"), "");
-
-			if ((!stringValue.empty()) && (stringValue.find_first_not_of(' ') != std::string::npos))
-			{
-				this->output_dir += stringValue;
-			} else {
-				char buffer[MAX_PATH];
-				REQUIRE(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
-				this->output_dir += buffer;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-	}
-
-	void parse_video_enc() {
-		try {
-			std::string value = getTrimmed(CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
-			if (!value.empty()) {
-				this->video_enc = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_ENC];
-				return;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		LOG(LL_NON, "Video encoder not supplied in .ini file, using default: \"libx264\"");
-		this->video_enc = "libx264";
-	}
-
-	void parse_video_fmt() {
-		try {
-			std::string value = getTrimmed(CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
-			if (!value.empty()) {
-				this->video_fmt = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_FMT];
-				return;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-		
-		LOG(LL_NON, "Video pixel format not supplied in .ini file, using default: \"yuv420p\"");
-		this->video_fmt = "yuv420p";
-	}
-
-	void parse_video_cfg() {
-		try {
-			std::string value = getTrimmed(CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
-			if (!value.empty()) {
-				this->video_cfg = parser->top()(CFG_VIDEO_SECTION)[CFG_VIDEO_CFG];
-				return;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		this->video_cfg = "";
-	}
-
-	void parse_audio_enc() {
-		try {
-			std::string value = getTrimmed(CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
-			if (!value.empty()) {
-				this->audio_enc = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_ENC];
-				return;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		LOG(LL_NON, "Audio encoder not supplied in .ini file, using default: \"ac3\"");
-		this->audio_enc = "ac3";
-	}
-
-	void parse_audio_cfg() {
-		try {
-			std::string value = getTrimmed(CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
-			if (!value.empty()) {
-				this->audio_cfg = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_CFG];
-				return;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		this->audio_cfg = "";
-	}
-
-	void parse_audio_fmt() {
-		std::string value;
-		try {
-			value = getTrimmed(CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
-			if (!value.empty()) {
-				this->audio_fmt = parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_FMT];
-				return;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: \"fltp\"");
-		this->audio_fmt = "fltp";
-	}
-
-	void parse_audio_rate() {
-		std::string value;
-		try {
-			value = getTrimmed(CFG_AUDIO_RATE, CFG_AUDIO_SECTION);
-			if (!value.empty()) {
-				try {
-					this->audio_rate = std::stoul(parser->top()(CFG_AUDIO_SECTION)[CFG_AUDIO_RATE]);
-
-				} catch (std::exception&) {
-					LOG(LL_NON, "Failed to parse audio sample rate: ", value);
-					LOG(LL_NON, "using default: 48000");
-				}
-			} else {
-				LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: 48000");
-			}
-		}
-		catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-		this->audio_rate = 48000;
-	}
-
-	LogLevel parse_log_level() {
-		std::string value;
-		try {
-			value = getTrimmed(CFG_LOG_LEVEL);
-			value = toLower(value);
-			if (value == "error") {
-				return LL_ERR;
-			} else if (value == "warn") {
-				return LL_WRN;
-			} else if (value == "info") {
-				return LL_NFO;
-			} else if (value == "debug") {
-				return LL_DBG;
-			} else if (value == "trace") {
-				return LL_TRC;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		LOG(LL_NON, "Could not parse log level, using default: \"error\"");
-		return LL_ERR;
-	}
-
-	uint8_t parse_motion_blur_samples() {
-		std::string string;
-		try {
-			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_SAMPLES];
-			string = std::regex_replace(string, std::regex("\\s+"), "");
-			uint64_t value = std::stoul(string);
-			if (value > 255) {
-				LOG(LL_NON, "Specified motion blur samples exceed 255");
-				LOG(LL_NON, "Using maximum value of 255");
-				return 255;
-			} else {
-				return (uint8_t)value;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_NON, ex.what());
-		}
-
-		LOG(LL_NON, "Could not parse motion blur samples: ", string);
-		LOG(LL_NON, "Using default value of 0 (disabled)");
-		return 0;
-
-	}
-
-	std::string parse_container_format() {
-		std::string string;
-		try {
-			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FORMAT];
-			string = std::regex_replace(string, std::regex("\\s+"), "");
-			string = Config::toLower(string);
-
-			if (string == "mkv" || string == "avi" || string == "mp4") {
-				return string;
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		LOG(LL_NON, "Could not parse video file format: ", string);
-		LOG(LL_NON, "Using default value: mkv");
-		return "mkv";
-	}
-
-	std::pair<int32_t, int32_t> parse_fps() {
-		std::string string;
-		try {
-			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
-			string = std::regex_replace(string, std::regex("\\s+"), "");
-
-			auto result = std::make_pair<int32_t, int32_t>(0, 0);
-
-			if (string.empty()) {
-				return result;
-			}
-
-			std::smatch match;
-			if (std::regex_match(string, match, std::regex("^(\\d+)/(\\d+)$"))) {
-				return std::make_pair(std::stoi(match[1]), std::stoi(match[2]));
-			}
-
-			match = std::smatch();
-			if (std::regex_match(string, match, std::regex("^\\d+(\\.\\d+)?$"))) {
-				float value = std::stof(string);
-				int32_t num = (int32_t)(value * 1000);
-				int32_t den = 1000;
-				return std::make_pair(num, den);
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-
-		LOG(LL_NON, "Could not parse fps value: ", string);
-		LOG(LL_NON, "Using default value: ~30");
-
-		return std::make_pair(30000, 1001);
-	}
-
-
-	std::string getTrimmed(std::string config_name) {
+	static std::string getTrimmed(std::string config_name) {
 		std::string orig_str = parser->top()[config_name];
 		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
 	}
 
-	std::string getTrimmed(std::string config_name, std::string section) {
+	static std::string getTrimmed(std::string config_name, std::string section) {
 		std::string orig_str = parser->top()(section)[config_name];
 		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
 	}
@@ -433,14 +116,252 @@ private:
 		return result;
 	}
 
-	static bool stringToBoolean(std::string booleanString, bool defaultValue) {
-		if (booleanString.empty()) {
-			return defaultValue;
-		}
+	static bool stringToBoolean(std::string booleanString) {
 		std::transform(booleanString.begin(), booleanString.end(), booleanString.begin(), ::tolower);
 
 		bool value;
 		std::istringstream(booleanString) >> std::boolalpha >> value;
 		return value;
 	}
+
+	template <typename T>
+	static T failed(std::string key, std::string value, T def) {
+		LOG(LL_NON, "Failed to parse value for \"", key, "\": ", value);
+		LOG(LL_NON, "Using default value of \"", def, "\" for \"", key, "\"");
+		return def;
+	}
+
+	template <typename T1, typename T2>
+	static std::pair<T1, T2> failed(std::string key, std::string value, std::pair<T1, T2> def) {
+		LOG(LL_NON, "Failed to parse value for \"", key, "\": ", value);
+		LOG(LL_NON, "Using default value of <", def.first, ", ", def.second, "> for \"", key, "\"");
+		return def;
+	}
+
+	template <typename T>
+	static T succeeded(std::string key, T value) {
+		LOG(LL_NON, "Loaded value for \"", key, "\": ", value);
+		return value;
+	}
+
+	template <typename T1, typename T2>
+	static std::pair<T1, T2> succeeded(std::string key, std::pair<T1, T2> value) {
+		LOG(LL_NON, "Loaded value for \"", key, "\": <", value.first, ", ", value.second, ">");
+		return value;
+	}
+
+	static bool parse_lossless_export() {
+		std::string string = parser->top()[CFG_ENABLE_XVX];
+
+		try {
+			return succeeded(CFG_ENABLE_XVX, stringToBoolean(string));
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_ENABLE_XVX, string, true);
+	}
+
+	static bool parse_auto_reload_config() {
+		std::string string = parser->top()[CFG_AUTO_RELOAD_CONFIG];
+
+		try {
+			return succeeded(CFG_AUTO_RELOAD_CONFIG, stringToBoolean(parser->top()[CFG_AUTO_RELOAD_CONFIG]));
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_AUTO_RELOAD_CONFIG, string, true);
+	}
+
+	static std::string parse_output_dir() {
+		try {
+			std::string string = parser->top()[CFG_OUTPUT_DIR];
+			string = std::regex_replace(string, std::regex("(^\\s*)|(\\s*$)"), "");
+
+			if ((!string.empty()) && (string.find_first_not_of(' ') != std::string::npos))
+			{
+				return succeeded(CFG_OUTPUT_DIR, string);
+			} else {
+				char buffer[MAX_PATH] = { 0 };
+				REQUIRE(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
+				return failed(CFG_OUTPUT_DIR, string, buffer);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+	}
+
+	static std::string parse_video_enc() {
+		std::string string = getTrimmed(CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
+		try {
+			if (!string.empty()) {
+				return succeeded(CFG_VIDEO_ENC, string);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_VIDEO_ENC, string, "libx264");
+	}
+
+	static std::string parse_video_fmt() {
+		std::string string = getTrimmed(CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
+		try {
+			if (!string.empty()) {
+				return succeeded(CFG_VIDEO_FMT, string);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_VIDEO_FMT, string, "yuv420p");
+	}
+
+	static std::string parse_video_cfg() {
+		std::string string = getTrimmed(CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
+		try {
+			if (!string.empty()) {
+				return succeeded(CFG_VIDEO_CFG, string);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_VIDEO_CFG, string, "");
+	}
+
+	static std::string parse_audio_enc() {
+		std::string string = getTrimmed(CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
+		try {
+			if (!string.empty()) {
+				return succeeded(CFG_AUDIO_ENC, string);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_AUDIO_ENC, string, "ac3");
+	}
+
+	static std::string parse_audio_cfg() {
+		std::string string = getTrimmed(CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
+		try {
+			if (!string.empty()) {
+				return succeeded(CFG_AUDIO_CFG, string);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_AUDIO_CFG, string, "");
+	}
+
+	static std::string parse_audio_fmt() {
+		std::string string = getTrimmed(CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
+		try {
+			if (!string.empty()) {
+				return succeeded(CFG_AUDIO_FMT, string);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_AUDIO_FMT, string, "fltp");
+	}
+
+	static uint32_t parse_audio_rate() {
+		std::string string = getTrimmed(CFG_AUDIO_RATE, CFG_AUDIO_SECTION);;
+		try {
+			if (!string.empty()) {
+				return succeeded(CFG_AUDIO_RATE, std::stoul(string));
+			} else {
+				LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: 48000");
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+		return failed(CFG_AUDIO_RATE, string, 48000);
+	}
+
+	static LogLevel parse_log_level() {
+		std::string string = toLower(getTrimmed(CFG_LOG_LEVEL));
+		try {
+			if (string == "error") {
+				return succeeded(CFG_LOG_LEVEL, LL_ERR);
+			} else if (string == "warn") {
+				return succeeded(CFG_LOG_LEVEL, LL_WRN);
+			} else if (string == "info") {
+				return succeeded(CFG_LOG_LEVEL, LL_NFO);
+			} else if (string == "debug") {
+				return succeeded(CFG_LOG_LEVEL, LL_DBG);
+			} else if (string == "trace") {
+				return succeeded(CFG_LOG_LEVEL, LL_TRC);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_LOG_LEVEL, string, LL_ERR);
+	}
+
+	static uint8_t parse_motion_blur_samples() {
+		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_SAMPLES];;
+		string = std::regex_replace(string, std::regex("\\s+"), "");
+		try {
+			uint64_t value = std::stoul(string);
+			if (value > 255) {
+				LOG(LL_NON, "Specified motion blur samples exceed 255");
+				LOG(LL_NON, "Using maximum value of 255");
+				return 255;
+			} else {
+				return succeeded(CFG_EXPORT_MB_SAMPLES, (uint8_t)value);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_NON, ex.what());
+		}
+
+		return failed(CFG_EXPORT_MB_SAMPLES, string, 0);
+
+	}
+
+	static std::string parse_container_format() {
+		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FORMAT];
+		string = std::regex_replace(string, std::regex("\\s+"), "");
+		string = toLower(string);
+		try {
+			if (string == "mkv" || string == "avi" || string == "mp4") {
+				return succeeded(CFG_EXPORT_FORMAT, string);
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_EXPORT_FORMAT, string, "mp4");
+	}
+
+	static std::pair<int32_t, int32_t> parse_fps() {
+		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
+		string = std::regex_replace(string, std::regex("\\s+"), "");
+		try {
+			std::smatch match;
+			if (std::regex_match(string, match, std::regex("^(\\d+)/(\\d+)$"))) {
+				return succeeded(CFG_EXPORT_FPS, std::make_pair(std::stoi(match[1]), std::stoi(match[2])));
+			}
+
+			match = std::smatch();
+			if (std::regex_match(string, match, std::regex("^\\d+(\\.\\d+)?$"))) {
+				float value = std::stof(string);
+				int32_t num = (int32_t)(value * 1000);
+				int32_t den = 1000;
+				return succeeded(CFG_EXPORT_FPS, std::make_pair(num, den));
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_EXPORT_FPS, string, std::make_pair(30000, 1001));
+	}
 };
+
+#endif _MY_CONFIG_H_

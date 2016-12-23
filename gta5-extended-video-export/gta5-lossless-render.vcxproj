@@ -217,6 +217,7 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexUtil.cpp" />
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexWIC.cpp" />
     <ClCompile Include="..\PolyHook\PolyHook\PolyHook.cpp" />
+    <ClCompile Include="config.cpp" />
     <ClCompile Include="dllmain.cpp">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">

@@ -7,7 +7,6 @@
 #include "MFUtility.h"
 #include "encoder.h"
 #include "logger.h"
-#include "config.h"
 #include "util.h"
 #include "yara-helper.h"
 #include "game-detour-def.h"
@@ -459,19 +458,19 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 
 					
 					if (isCustomFrameRateSupported) {
-						auto fps = Config::instance().getFPS();
+						auto fps = config::fps;
 						fps_num = fps.first;
 						fps_den = fps.second;
 
 
-						if (((float)fps.first * ((float)Config::instance().getMotionBlurSamples() + 1) / (float)fps.second) > 60.0f) {
+						if (((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second) > 60.0f) {
 							LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
 							LOG(LL_NON, "Audio export will be disabled!!!");
 							exportContext->isAudioExportDisabled = true;
 						}
 					}
 
-					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den, Config::instance().getMotionBlurSamples(),  Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
+					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den, config::motion_blur_samples,  config::video_fmt, config::video_enc, config::video_cfg), "Failed to create video context");
 				}
 				
 				// Create Audio Context
@@ -486,7 +485,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
 
 					if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
-						REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, Config::instance().audioRate(), Config::instance().audioFmt(), Config::instance().audioEnc(), Config::instance().audioCfg()), "Failed to create audio context.");
+						REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, config::audio_rate, config::audio_fmt, config::audio_enc, config::audio_cfg), "Failed to create audio context.");
 					} else {
 						char buffer[64];
 						GUIDToString(subType, buffer, 64);
@@ -498,7 +497,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 				// Create Format Context
 				{
 					char buffer[128];
-					std::string output_file = Config::instance().outputDir();
+					std::string output_file = config::output_dir;
 
 					output_file += "\\XVX-";
 					time_t rawtime;
@@ -507,7 +506,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					localtime_s(&timeinfo, &rawtime);
 					strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
 					output_file += buffer;
-					output_file += "." + Config::instance().getContainerFormat();
+					output_file += "." + config::container_format;
 
 					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
 
@@ -603,11 +602,6 @@ static HRESULT Hook_CreateTexture2D(
 	ID3D11Texture2D        **ppTexture2D
 	) {
 	// Detect export buffer creation
-	if (pDesc->Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
-		LOG(LL_NFO, "ID3D11Device::CreateTexture2D: fmt:", conv_dxgi_format_to_string(pDesc->Format),
-			" w:", pDesc->Width,
-			" h:", pDesc->Height);
-	}
 	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId) && !((pDesc->Width == 512) && (pDesc->Height == 256)) && !((pDesc->Width == 4) && (pDesc->Height == 4)) && (pDesc->Format == DXGI_FORMAT_B8G8R8A8_UNORM)) {
 		DXGI_SWAP_CHAIN_DESC swapChainDesc;
 		REQUIRE(mainSwapChain->GetDesc(&swapChainDesc), "Failed to get swap chain descriptor");
@@ -623,8 +617,8 @@ static HRESULT Hook_CreateTexture2D(
 			try {
 				LOG(LL_NFO, "Creating session...");
 				
-				if (Config::instance().isAutoReloadEnabled()) {
-					LOG_CALL(LL_DBG, Config::instance().reload());
+				if (config::auto_reload_config) {
+					LOG_CALL(LL_DBG, config::reload());
 				}
 
 				session.reset(new Encoder::Session());
@@ -650,9 +644,8 @@ static HRESULT Hook_CreateTexture2D(
 }
 
 static float Detour_GetRenderTimeBase(int64_t choice) {
-	StackDump(64, __func__);
-	std::pair<int32_t, int32_t> fps = Config::instance().getFPS();
-	float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)Config::instance().getMotionBlurSamples() + 1));
+	std::pair<int32_t, int32_t> fps = config::fps;
+	float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
 	LOG(LL_NFO, "Time step: ", result);
 	return result;
 }
