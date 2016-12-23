@@ -1,8 +1,10 @@
+**IMPORTANT:** Due to the way this mod works, **the original Rockstar Editor video file will NOT be saved to the disk** (actually it does, but it will be empty). The complete video will be exported to the folder specified in the .ini file.
+
+**NOTE:** For high resolution exports without DSR, use [this](http://steamcommunity.com/sharedfiles/filedetails/?id=787616403) guide by [Kravencedesign](https://www.gta5-mods.com/users/Kravencedesign)
+
 Extended Video Export
 =========================
 Extended Video Export is an enhancement mod for GTA V, aimed at directors who want better export options from Rockstar editor.
-
-IMPORTANT: Due to the way this mod works, the original Rockstar Editor video file will NOT be saved to the disk (actually it does, but it will be empty). The complete video will be exported to the folder specified in the .ini file.
 
 How to install:
 =========================
@@ -10,8 +12,7 @@ Just extract the ASI script and the DLL files into the game directory.
 
 Configuration:
 =========================
-You can change the configuration by editing ExtendedVideoExport.ini file.
-Information about each setting is included in the .ini file as comments. For high resolution exports without DSR, use this guide by Kravencedesign
+You can change the configuration by editing ExtendedVideoExport.ini file. Help about each option can be found in ExtendedVideoExport.txt
 
 Current Features:
 =========================
@@ -31,6 +32,11 @@ If you are using ReShade or ENB graphics mods, your exported videos will have th
 * **Nvidia DSR Support:**
 You can now export higher resolution videos using Nvidia DSR. Note that this will only work if you use DSR in Fullscreen mode. Windowed and Borderless Windowed modes are not supported. ATI VSR might work too, but it is not tested.
 
+* **Custom frame rate (Experimental):**
+You can now set the frame rate in the config file. Be careful that setting it too high might disable the exported file's audio. Also note that this feature has only been tested on 1.0.350.1 version of the game. If you tested on another version and it worked, please leave a comment and let me know.
+
+* **Motion blur (Experimental):**
+Videos can have high quality motion blur effect. Be careful when setting motion_blur_samples config, setting it too high will make the exporting take a very long time.
 
 
 Important things to note:
@@ -44,14 +50,17 @@ Important things to note:
 
 Planned features:
 =========================
-* Custom frame rate support.
-* Motion blur.
 * Depth buffer export
 
 Changelog
 =========================
 
-**Important:** This release contains both v0.1.3beta and v0.1.4beta. Custom frame rate support in v0.1.4beta is still experimental and might crash your game.
+**Changes in v0.1.6beta**
+* Custom FPS and Motion Blur should now work in more recent versions of the game.
+
+**Changes in v0.1.5beta**
+* Fixed a parsing error in .ini file that made the mod always export as .mkv
+* Added auto use of custom fps is it is supported by the game version
 
 **Changes in v0.1.4beta (Experimental)**
 * Added custom frame rate support
@@ -97,42 +106,48 @@ Changelog
 Configuration
 =========================
 
-### enable_mod
-* Values: true, false
+**enable_mod**
+
 * Description: If set to false, the script won't be run.
+* Values: true, false
 * Warning: Auto reload feature does not update this value, you have to restart the game for it to take effect  
 * Example:
   * enable_mod = true
 
-### auto_reload_config
-* Values: true, false
+**auto_reload_config**
+
 * Description: If set to true, this config file will be automatically reloaded whenever you export a new video.
   Especially useful if you want to toy with encoder settings
+* Values: true, false
 * Example:
   * auto_reload_config = true
 
-### output_folder
+**output_folder**
+
 * Description: Videos will be exported to this folder. If left empty, current user's videos directory will be used.
 * Values: [empty] or a valid path
 * Warning: 
 * Example:
   * output_folder = D:\MyVideos\
 
-### log_level
+**log_level**
+
 * Description: Sets the detail of the mod's logging feature. Please use "trace" level to report bugs.
 * Values: error, warn, info, debug, trace
 * Example:
   * log_level = trace
 
-## [EXPORT] Section
+**[EXPORT] Section**
 
-### format
+**format**
+
 * Description: Output file format.
 * Values: mkv, mp4, avi
 * Example:
   * format = avi
 
-### fps
+**fps**
+
 * Description: FPS value. 
 * Values: It can be a floating point value (like 20.3), or a fraction (like 30000/1001)
 * Warning: 
@@ -141,30 +156,34 @@ Configuration
   * fps = 23.976
   * fps = 30000/1001
 
-### motion_blur_samples
+**motion_blur_samples**
+
 * Description: Number of motion blur samples. The higher the value, the higher the quality of motion blur, and higher exporting time. A value of zero means motion blur is disabled.
 * Values: 0-255 (0 means disabled)
 * Warning: Setting this to a high value will make export take a very long time.
 * Example:
   * motion_blur_samples = 10
 
-## [VIDEO] Section
+**[VIDEO] Section**
 
-### encoder
+**encoder**
+
 * Description: Sets the video encoder
 * Values: Any FFMPEG video codec name. See <https://ffmpeg.org/ffmpeg-codecs.html#Video-Encoders> for supported encoders.
 * Warning: Not all of the encoders are tested. Changing this might crash your game.
 * Example:
   * encoder = libx265
 
-### pixel_format
+**pixel_format**
+
 * Description: Pixel format of the output video
 * Values: Any format supported by the selected encoder. Most common formats are "yuv444p" and "yuv420p".
 * Warning: The game might crash if the encoder does not support the pixel format.
 * Example:
   * pixel_format = yuv444p
 
-### options
+**options**
+
 * Description: Video encoder options
 * Values: Any number of key=value pairs seperated by '/'. See <https://ffmpeg.org/ffmpeg-codecs.html#Video-Encoders> for each encoder's available settings.
 * Note: "b" is for bitrate
@@ -174,100 +193,88 @@ Configuration
 
 ## [AUDIO] Section
 
-###
-* Description: 
-* Values: 
-* Warning: 
-* Example:
-  * 
+**encoder**
 
-### encoder
 * Description: Sets the audio encoder.
 * Values: Any FFMPEG audio codec name. See <https://ffmpeg.org/ffmpeg-codecs.html#Audio-Encoders> for supported codecs.
 * Warning: Not all of the encoders are tested. Changing this might crash your game.
 * Example:
   * encoder = flac
 
-### sample_format
+**sample_format**
+
 * Description: Sets the audio sample format. 
 * Values: Any format supported by the selected encoder. Most common formats are "s16" and "fltp".
 * Warning: 
 * Example:
   * sample_format = fltp
 
-### sample_rate
+**sample_rate**
+
 * Description: Audio sampling rate.
 * Values: Any sampling rate you want. Sampling rates above 48000 are not useful since the game doesn't support them.
 * Example:
   * sample_rate = 48000
 
-### options
+**options**
+
 * Description: 
 * Values: 
 * Note: "b" is for bitrate
-* Example: Any number of key=value pairs seperated by '/'. See <https://ffmpeg.org/ffmpeg-codecs.html#Audio-Encoders> for each encoder's available settings.
+* Example:
   * b=320000
 
-## Example [VIDEO] presets
+**Example [VIDEO] presets**
 
-### Lossless H.264 (Very slow)
-encoder = libx264
+**Lossless H.264 (Very slow)**
 
-pixel_format = yuv420p
-
-options = preset=veryslow / crf=0
-
-
-### Lossless H.264 (Fast)
-encoder = libx264
-
-pixel_format = yuv420p
-
-options = preset=ultrafast / crf=0
+* encoder = libx264
+* pixel_format = yuv420p
+* options = preset=veryslow / crf=0
 
 
-### H.265 (HEVC) (Slow)
-encoder = libx265
+**Lossless H.264 (Fast)**
 
-pixel_format = yuv420p
-
-options = preset=slow / b=40000000
-
-
-### H.265 (HEVC) (Very slow)
-encoder = libx265
-
-pixel_format = yuv420p
-
-options = preset=veryslow / b=40000000
+* encoder = libx264
+* pixel_format = yuv420p
+* options = preset=ultrafast / crf=0
 
 
-### Lossless FFV1 (Full RGB, Very Large Files)
-enocder = ffv1
+**H.265 (HEVC) (Slow)**
 
-pixel_format = bgr0
+* encoder = libx265
+* pixel_format = yuv420p
+* options = preset=slow / b=40000000
 
-options = slices=16 / slicecrc=1
+
+**H.265 (HEVC) (Very slow)**
+
+* encoder = libx265
+* pixel_format = yuv420p
+* options = preset=veryslow / b=40000000
+
+
+**Lossless FFV1 (Full RGB, Very Large Files)**
+
+* enocder = ffv1
+* pixel_format = bgr0
+* options = slices=16 / slicecrc=1
 
 
 
-## Example [AUDIO] presets
+**Example [AUDIO] presets**
 
-### Lossless FLAC
-encoder = flac
+**Lossless FLAC**
 
-sample_format = s16
-
-sample_rate = 48000
-
-options = 
+* encoder = flac
+* sample_format = s16
+* sample_rate = 48000
+* options = 
 
 
-### AC3 320Kbps
-encoder = ac3
+**AC3 320Kbps**
 
-sample_format = fltp
-
-sample_rate = 48000
-
-options = b=320000
+* encoder = ac3
+* sample_format = fltp
+* sample_rate = 48000
+* options = b=320000

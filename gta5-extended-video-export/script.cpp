@@ -41,6 +41,7 @@ namespace {
 	std::shared_ptr<PLH::X64Detour> hkGetFrameRate(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetAudioSamples(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkUnk01(new PLH::X64Detour);
+	bool isCustomFrameRateSupported = false;
 
 	std::unique_ptr<Encoder::Session> session;
 	std::mutex mxSession;
@@ -187,6 +188,7 @@ void initialize() {
 		try {
 			if (pYaraHelper->getPtr_getRenderTimeBase() != NULL) {
 				REQUIRE(hookX64Function((LPVOID)pYaraHelper->getPtr_getRenderTimeBase(), &Detour_GetRenderTimeBase, &oGetRenderTimeBase, hkGetRenderTimeBase), "Failed to hook FPS function.");
+				isCustomFrameRateSupported = true;
 				////0x14CC6AC;
 				//REQUIRE(hookX64Function((BYTE*)(0x14CC6AC + (intptr_t)info.lpBaseOfDll), &Detour_GetFrameRate, &oGetFrameRate, hkGetFrameRate), "Failed to hook frame rate function.");
 				////0x14CC64C;
@@ -446,7 +448,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 				{
 					UINT width, height, fps_num, fps_den;
 					MFGetAttribute2UINT32asUINT64(exportContext->videoMediaType.Get(), MF_MT_FRAME_SIZE, &width, &height);
-					//MFGetAttributeRatio(exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
+					MFGetAttributeRatio(exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
 
 					GUID pixelFormat;
 					exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
@@ -454,15 +456,22 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					DXGI_SWAP_CHAIN_DESC desc;
 					exportContext->pSwapChain->GetDesc(&desc);
 
-					auto fps = Config::instance().getFPS();
 
-					if (((float)fps.first * ((float)Config::instance().getMotionBlurSamples() + 1) / (float)fps.second) > 60.0f) {
-						LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
-						LOG(LL_NON, "Audio export will be disabled!!!");
-						exportContext->isAudioExportDisabled = true;
+					
+					if (isCustomFrameRateSupported) {
+						auto fps = Config::instance().getFPS();
+						fps_num = fps.first;
+						fps_den = fps.second;
+
+
+						if (((float)fps.first * ((float)Config::instance().getMotionBlurSamples() + 1) / (float)fps.second) > 60.0f) {
+							LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
+							LOG(LL_NON, "Audio export will be disabled!!!");
+							exportContext->isAudioExportDisabled = true;
+						}
 					}
 
-					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps.first, fps.second, Config::instance().getMotionBlurSamples(),  Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
+					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den, Config::instance().getMotionBlurSamples(),  Config::instance().videoFmt(), Config::instance().videoEnc(), Config::instance().videoCfg()), "Failed to create video context");
 				}
 				
 				// Create Audio Context

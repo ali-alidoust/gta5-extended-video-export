@@ -170,8 +170,7 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Text Include="AVCodecContextParams.txt" />
-    <Text Include="ReadMe.txt" />
-    <Text Include="ReadMe.txt" />
+    <Text Include="readme.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\DirectXTex\DirectXTex\BC.h" />

@@ -30,9 +30,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
     <Text Include="AVCodecContextParams.txt" />
     <Text Include="ReadMe.txt">
+      <Filter>deploy</Filter>
+    </Text>
+    <Text Include="readme.txt">
       <Filter>deploy</Filter>
     </Text>
   </ItemGroup>

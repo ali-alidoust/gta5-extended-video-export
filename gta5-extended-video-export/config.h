@@ -105,6 +105,7 @@ public:
 		this->parse_audio_cfg();
 		this->parse_audio_fmt();
 		this->parse_audio_rate();
+		this->container_format = this->parse_container_format();
 		this->log_level = this->parse_log_level();
 		this->fps = this->parse_fps();
 		this->motion_blur_samples = this->parse_motion_blur_samples();
@@ -341,7 +342,7 @@ private:
 	std::string parse_container_format() {
 		std::string string;
 		try {
-			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
+			string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FORMAT];
 			string = std::regex_replace(string, std::regex("\\s+"), "");
 			string = Config::toLower(string);
 

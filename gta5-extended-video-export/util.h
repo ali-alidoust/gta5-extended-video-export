@@ -134,7 +134,7 @@ void StackDump(size_t size, std::string prefix) {
 	uint64_t x = 0xDEADBEEFBAADF00D;
 	void** ptr = (void**)&x;
 	for (int i = 0; i < size; i++) {
-		LOG(LL_TRC, "Stack dump: ", Logger::hex(i, 4), ": 0x", *(ptr + i));
+		LOG(LL_TRC, "Stack dump: ", prefix, Logger::hex(i, 4), ": 0x", *(ptr + i));
 	}
 }
 
