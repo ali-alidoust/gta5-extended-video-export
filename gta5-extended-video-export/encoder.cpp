@@ -279,6 +279,7 @@ namespace Encoder {
 		this->exrImageQueue.enqueue(exr_queue_item(cRGB, mHDR.pData, cDepthStencil, mDepthStencil.pData));
 
 		POST();
+		return S_OK;
 	}
 
 	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length) {

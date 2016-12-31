@@ -331,7 +331,7 @@ private:
 				LOG(LL_NON, "Using maximum value of 255");
 				return 255;
 			} else {
-				return succeeded(CFG_EXPORT_MB_SAMPLES, (uint8_t)value);
+				return (uint8_t)succeeded(CFG_EXPORT_MB_SAMPLES, value);
 			}
 		} catch (std::exception& ex) {
 			LOG(LL_NON, ex.what());

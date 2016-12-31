@@ -15,8 +15,11 @@ typedef float (*tGetRenderTimeBase)(int64_t choice);
 //static float Detour_Unk01(float x0, float x1, float x2, float x3);
 //typedef float (*tUnk01)(float x0, float x1, float x2, float x3);
 
-static void** Detour_CreateTexture(int32_t a, char *name, void *c, uint32_t width, uint32_t height, int32_t format, void *d, bool e, void* f);
-typedef void** (*tCreateTexture)(int32_t a, char *name, void *c, uint32_t width, uint32_t height, int32_t format, void *d, bool e, void* f);
+//static void** Detour_CreateTexture(int32_t a, char *name, void *c, uint32_t width, uint32_t height, int32_t format, void *d, bool e, void* f);
+//typedef void** (*tCreateTexture)(int32_t a, char *name, void *c, uint32_t width, uint32_t height, int32_t format, void *d, bool e, void* f);
+
+static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30);
+typedef void* (*tCreateTexture)(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30);
 
 //static void* Detour_GetGlobalVariableIndex(char* name, uint32_t edx);
 //typedef void* (*tGetGlobalVariableIndex)(char* name, uint32_t edx);

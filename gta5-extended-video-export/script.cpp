@@ -43,11 +43,13 @@ namespace {
 	std::shared_ptr<PLH::X64Detour> hkGetAudioSamples(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkUnk01(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkCreateTexture(new PLH::X64Detour);
-	std::shared_ptr<PLH::X64Detour> hkGetGlobalVariableIndex(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkCreateExportTexture(new PLH::X64Detour);
+
+	/*std::shared_ptr<PLH::X64Detour> hkGetGlobalVariableIndex(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetVariable(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetMatrices(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetVar(new PLH::X64Detour);
-	std::shared_ptr<PLH::X64Detour> hkGetVarPtrByHash(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkGetVarPtrByHash(new PLH::X64Detour);*/
 	ComPtr<ID3D11Texture2D> pGameDepthBuffer;
 	ComPtr<ID3D11Texture2D> pGameBackBuffer;
 	//std::shared_ptr<PLH::X64Detour> hkGetTexture(new PLH::X64Detour);
@@ -81,9 +83,7 @@ namespace {
 		bool captureRenderTargetViewReference = false;
 		bool captureDepthStencilViewReference = false;
 		
-		ComPtr<ID3D11RenderTargetView> pExportRenderTargetView;
 		ComPtr<ID3D11Texture2D> pExportRenderTarget;
-		ComPtr<ID3D11Texture2D> pExportDepthStencil;
 		ComPtr<ID3D11DeviceContext> pDeviceContext;
 		ComPtr<ID3D11Device> pDevice;
 		ComPtr<IDXGIFactory> pDXGIFactory;
@@ -216,8 +216,10 @@ void initialize() {
 		LOG(LL_NFO, "Image base:", ((void*)info.lpBaseOfDll));
 
 		void* pGetRenderTimeBase = NULL;
+		//void* pCreateExportTexture = NULL;
 		void* pCreateTexture = NULL;
 		pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function, &pGetRenderTimeBase);
+		//pYaraHelper->addEntry("yara_create_export_texture_function", yara_create_export_texture_function, &pCreateExportTexture);
 		pYaraHelper->addEntry("yara_create_texture_function", yara_create_texture_function, &pCreateTexture);
 		/*pYaraHelper->addEntry("yara_global_unk01_command", yara_global_unk01_command, &pGlobalUnk01Cmd);
 		pYaraHelper->addEntry("yara_get_var_ptr_by_hash_2", yara_get_var_ptr_by_hash_2, &pGetVarPtrByHash);*/
@@ -239,6 +241,10 @@ void initialize() {
 			} else {
 				LOG(LL_ERR, "Could not find the address for CreateTexture function.");
 			}
+
+			/*if (pCreateExportTexture) {
+				REQUIRE(hookX64Function(pCreateExportTexture, &Detour_CreateTexture, &oCreateTexture, hkCreateExportTexture), "Failed to hook CreateExportTexture function.");
+			}*/
 
 			/*if (pGlobalUnk01Cmd) {
 				uint32_t offset = *(uint32_t*)((uint8_t*)pGlobalUnk01Cmd + 3);
@@ -323,39 +329,39 @@ static HRESULT Hook_CreateRenderTargetView(
 	const D3D11_RENDER_TARGET_VIEW_DESC *pDesc,
 	ID3D11RenderTargetView        **ppRTView
 	) {
-	if ((exportContext != NULL) && exportContext->captureRenderTargetViewReference && (std::this_thread::get_id() == mainThreadId)) {
-		try {
-			LOG(LL_NFO, "Capturing export render target view...");
-			exportContext->captureRenderTargetViewReference = false;
-			exportContext->pDevice = pThis;
-			exportContext->pDevice->GetImmediateContext(exportContext->pDeviceContext.GetAddressOf());
+	//if ((exportContext != NULL) && exportContext->captureRenderTargetViewReference && (std::this_thread::get_id() == mainThreadId)) {
+	//	try {
+	//		LOG(LL_NFO, "Capturing export render target view...");
+	//		exportContext->captureRenderTargetViewReference = false;
+	//		exportContext->pDevice = pThis;
+	//		exportContext->pDevice->GetImmediateContext(exportContext->pDeviceContext.GetAddressOf());
 
-			ComPtr<ID3D11Texture2D> pTexture;
-			REQUIRE(pResource->QueryInterface(pTexture.GetAddressOf()), "Failed to convert ID3D11Resource to ID3D11Texture2D");
-			D3D11_TEXTURE2D_DESC desc;
-			pTexture->GetDesc(&desc);
+	//		ComPtr<ID3D11Texture2D> pTexture;
+	//		REQUIRE(pResource->QueryInterface(pTexture.GetAddressOf()), "Failed to convert ID3D11Resource to ID3D11Texture2D");
+	//		D3D11_TEXTURE2D_DESC desc;
+	//		pTexture->GetDesc(&desc);
 
-			/*DXGI_SWAP_CHAIN_DESC swapChainDesc;
-			mainSwapChain->GetDesc(&swapChainDesc);*/
+	//		/*DXGI_SWAP_CHAIN_DESC swapChainDesc;
+	//		mainSwapChain->GetDesc(&swapChainDesc);*/
 
-			/*desc.Width = swapChainDesc.BufferDesc.Width;
-			desc.Height = swapChainDesc.BufferDesc.Height;*/
+	//		/*desc.Width = swapChainDesc.BufferDesc.Width;
+	//		desc.Height = swapChainDesc.BufferDesc.Height;*/
 
-			LOG(LL_DBG, "Creating render target view: w:", desc.Width, " h:", desc.Height);
+	//		LOG(LL_DBG, "Creating render target view: w:", desc.Width, " h:", desc.Height);
 
-			/*ComPtr<ID3D11Texture2D> pTexture;
-			pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
-			ComPtr<ID3D11Resource> pRes;
-			REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture2D to ID3D11Resource");*/
-			HRESULT result = oCreateRenderTargetView(pThis, pResource, pDesc, ppRTView);
-			exportContext->pExportRenderTarget = pTexture;
-			exportContext->pExportRenderTargetView = *(ppRTView);
-			POST();
-			return result;
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-	}
+	//		/*ComPtr<ID3D11Texture2D> pTexture;
+	//		pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
+	//		ComPtr<ID3D11Resource> pRes;
+	//		REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture2D to ID3D11Resource");*/
+	//		HRESULT result = oCreateRenderTargetView(pThis, pResource, pDesc, ppRTView);
+	//		exportContext->pExportRenderTarget = pTexture;
+	//		exportContext->pExportRenderTargetView = *(ppRTView);
+	//		POST();
+	//		return result;
+	//	} catch (std::exception& ex) {
+	//		LOG(LL_ERR, ex.what());
+	//	}
+	//}
 	return oCreateRenderTargetView(pThis, pResource, pDesc, ppRTView);
 }
 
@@ -365,26 +371,6 @@ static HRESULT Hook_CreateDepthStencilView(
 	const D3D11_DEPTH_STENCIL_VIEW_DESC *pDesc,
 	ID3D11DepthStencilView        **ppDepthStencilView
 	) {
-	if ((exportContext != NULL) && exportContext->captureDepthStencilViewReference && mainThreadId == std::this_thread::get_id()) {
-		try {
-			exportContext->captureDepthStencilViewReference = false;
-			LOG(LL_NFO, "Capturing export depth stencil view...");
-			ComPtr<ID3D11Texture2D> pTexture;
-			REQUIRE(pResource->QueryInterface(pTexture.GetAddressOf()), "Failed to get depth stencil texture");
-			//D3D11_TEXTURE2D_DESC desc;
-			//pOldTexture->GetDesc(&desc);
-			//ComPtr<ID3D11Texture2D> pTexture;
-			//pThis->CreateTexture2D(&desc, NULL, pTexture.GetAddressOf());
-
-			//ComPtr<ID3D11Resource> pRes;
-			//REQUIRE(pTexture.As(&pRes), "Failed to convert ID3D11Texture to ID3D11Resource.");
-			exportContext->pExportDepthStencil = pTexture;
-			return oCreateDepthStencilView(pThis, pResource, pDesc, ppDepthStencilView);
-		} catch (...) {
-			LOG(LL_ERR, "Failed to capture depth stencil view");
-		}
-	}
-
 	HRESULT result = oCreateDepthStencilView(pThis, pResource, pDesc, ppDepthStencilView);
 	return result;
 }
@@ -394,7 +380,7 @@ static void RSSetViewports(
 	UINT                 NumViewports,
 	const D3D11_VIEWPORT *pViewports
 	) {
-	if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
+	/*if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
 		D3D11_VIEWPORT* pNewViewports = new D3D11_VIEWPORT[NumViewports];
 		for (UINT i = 0; i < NumViewports; i++) {
 			pNewViewports[i] = pViewports[i];
@@ -404,7 +390,7 @@ static void RSSetViewports(
 			pNewViewports[i].Height = static_cast<float>(desc.BufferDesc.Height);
 		}
 		return oRSSetViewports(pThis, NumViewports, pNewViewports);
-	}
+	}*/
 
 	return oRSSetViewports(pThis, NumViewports, pViewports);
 }
@@ -414,7 +400,7 @@ static void RSSetScissorRects(
 	UINT          NumRects,
 	const D3D11_RECT *  pRects
 	) {
-	if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
+	/*if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
 		D3D11_RECT* pNewRects = new D3D11_RECT[NumRects];
 		for (UINT i = 0; i < NumRects; i++) {
 			pNewRects[i] = pRects[i];
@@ -424,7 +410,7 @@ static void RSSetScissorRects(
 			pNewRects[i].bottom = desc.BufferDesc.Height;
 		}
 		return oRSSetScissorRects(pThis, NumRects, pNewRects);
-	}
+	}*/
 
 	return oRSSetScissorRects(pThis, NumRects, pRects);
 }
@@ -435,7 +421,11 @@ static void Hook_OMSetRenderTargets(
 	ID3D11RenderTargetView *const *ppRenderTargetViews,
 	ID3D11DepthStencilView        *pDepthStencilView
 	) {
-	if ((exportContext != NULL) && isCurrentRenderTargetView(pThis, exportContext->pExportRenderTargetView)) {
+	ComPtr<ID3D11Resource> pRTVTexture;
+	if ((ppRenderTargetViews) && (ppRenderTargetViews[0])) {
+		ppRenderTargetViews[0]->GetResource(pRTVTexture.GetAddressOf());
+	}
+	if ((exportContext != NULL) && (exportContext->pExportRenderTarget != NULL) && (exportContext->pExportRenderTarget == pRTVTexture)) {
 		std::lock_guard<std::mutex> sessionLock(mxSession);
 		if ((session != NULL) && (session->isCapturing)) {
 			// Time to capture rendered frame
@@ -709,44 +699,6 @@ static HRESULT Hook_CreateTexture2D(
 	const D3D11_SUBRESOURCE_DATA *pInitialData,
 	ID3D11Texture2D        **ppTexture2D
 	) {
-	// Detect export buffer creation
-	if (pDesc && (pDesc->CPUAccessFlags & D3D11_CPU_ACCESS_READ) && (std::this_thread::get_id() == mainThreadId) && !((pDesc->Width == 512) && (pDesc->Height == 256)) && !((pDesc->Width == 4) && (pDesc->Height == 4)) && (pDesc->Format == DXGI_FORMAT_B8G8R8A8_UNORM)) {
-		DXGI_SWAP_CHAIN_DESC swapChainDesc;
-		REQUIRE(mainSwapChain->GetDesc(&swapChainDesc), "Failed to get swap chain descriptor");
-
-		LOG(LL_NFO, "ID3D11Device::CreateTexture2D: fmt:", conv_dxgi_format_to_string(pDesc->Format),
-			" w:", pDesc->Width,
-			" h:", pDesc->Height);
-		std::lock_guard<std::mutex> sessionLock(mxSession);
-		LOG_CALL(LL_DBG, exportContext.reset());
-		LOG_CALL(LL_DBG, session.reset());
-		try {
-			LOG(LL_NFO, "Creating session...");
-				
-			if (config::auto_reload_config) {
-				LOG_CALL(LL_DBG, config::reload());
-			}
-
-			session.reset(new Encoder::Session());
-			NOT_NULL(session, "Could not create the session");
-			exportContext.reset(new ExportContext());
-			NOT_NULL(exportContext, "Could not create export context");
-			exportContext->pSwapChain = mainSwapChain;
-			//REQUIRE(pThis->CreateDeferredContext(0, session->pD3DCtx.GetAddressOf()), "Failed to create deferred context");
-			exportContext->captureRenderTargetViewReference = true;
-			exportContext->captureDepthStencilViewReference = true;
-			/*D3D11_TEXTURE2D_DESC* desc = (D3D11_TEXTURE2D_DESC*)pDesc;
-			desc->Width = swapChainDesc.BufferDesc.Width;
-			desc->Height = swapChainDesc.BufferDesc.Height;
-			return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);*/
-		}
-		catch (std::exception&) {
-			LOG_CALL(LL_DBG, session.reset());
-			LOG_CALL(LL_DBG, exportContext.reset());
-		}
-		//}
-	}
-
 	return oCreateTexture2D(pThis, pDesc, pInitialData, ppTexture2D);
 }
 
@@ -835,39 +787,39 @@ static float Detour_GetRenderTimeBase(int64_t choice) {
 //	return result;
 //}
 
-static void** Detour_CreateTexture(int32_t a, char *name, void *c, uint32_t width, uint32_t height, int32_t format, void *d, bool e, void* f) {
-	void** result = oCreateTexture(a, name, c, width, height, format, d, e, f);
-	LOG(LL_TRC,
-		" a:", a,
+static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30) {
+	PRE();
+	void* result = oCreateTexture(rcx, name, r8d, width, height, format, rsp30);
+
+	void** vresult = (void**)result;
+
+	LOG(LL_TRC, "CreateExportTexture:",
+		" rcx:", rcx,
 		" name:", name ? name : "<NULL>",
-		" c:", c,
-		" w:", width,
-		" h:", height,
+		" r8d:", Logger::hex(r8d, 8),
+		" width:", width,
+		" height:", height,
 		" fmt:", format,
-		" d:", d,
-		" e:", e,
-		" f:", f,
-		" r:", result,
-		" *r+0:", result ? *(result + 0) : "<NULL>",
-		" *r+1:", result ? *(result + 1) : "<NULL>",
-		" *r+2:", result ? *(result + 2) : "<NULL>",
-		" *r+3:", result ? *(result + 3) : "<NULL>",
-		" *r+4:", result ? *(result + 4) : "<NULL>",
-		" *r+5:", result ? *(result + 5) : "<NULL>",
-		" *r+6:", result ? *(result + 6) : "<NULL>",
-		" *r+7:", result ? *(result + 7) : "<NULL>",
-		" *r+8:", result ? *(result + 8) : "<NULL>",
-		" *r+9:", result ? *(result + 9) : "<NULL>",
-		" *r+10:", result ? *(result + 10) : "<NULL>",
-		" *r+11:", result ? *(result + 11) : "<NULL>",
-		" *r+12:", result ? *(result + 12) : "<NULL>",
-		" *r+13:", result ? *(result + 13) : "<NULL>",
-		" *r+14:", result ? *(result + 14) : "<NULL>",
-		" *r+15:", result ? *(result + 15) : "<NULL>"
-		);
+		" result:", result,
+		" *r+0:", vresult ? *(vresult + 0) : "<NULL>",
+		" *r+1:", vresult ? *(vresult + 1) : "<NULL>",
+		" *r+2:", vresult ? *(vresult + 2) : "<NULL>",
+		" *r+3:", vresult ? *(vresult + 3) : "<NULL>",
+		" *r+4:", vresult ? *(vresult + 4) : "<NULL>",
+		" *r+5:", vresult ? *(vresult + 5) : "<NULL>",
+		" *r+6:", vresult ? *(vresult + 6) : "<NULL>",
+		" *r+7:", vresult ? *(vresult + 7) : "<NULL>",
+		" *r+8:", vresult ? *(vresult + 8) : "<NULL>",
+		" *r+9:", vresult ? *(vresult + 9) : "<NULL>",
+		" *r+10:", vresult ? *(vresult + 10) : "<NULL>",
+		" *r+11:", vresult ? *(vresult + 11) : "<NULL>",
+		" *r+12:", vresult ? *(vresult + 12) : "<NULL>",
+		" *r+13:", vresult ? *(vresult + 13) : "<NULL>",
+		" *r+14:", vresult ? *(vresult + 14) : "<NULL>",
+		" *r+15:", vresult ? *(vresult + 15) : "<NULL>");
 
 	if ((name != NULL) && (result != NULL)) {
-		IUnknown* pUnknown = (IUnknown*)(*(result + 7));
+		IUnknown* pUnknown = (IUnknown*)(*(vresult + 7));
 		if (std::string("DepthBuffer_Resolved").compare(name) == 0) {
 			pUnknown->QueryInterface(pGameDepthBuffer.GetAddressOf());
 		} else if (std::string("BackBuffer_Resolved").compare(name) == 0) {
@@ -875,10 +827,82 @@ static void** Detour_CreateTexture(int32_t a, char *name, void *c, uint32_t widt
 			D3D11_TEXTURE2D_DESC desc;
 			pGameBackBuffer->GetDesc(&desc);
 			LOG(LL_DBG, "BackBuffer: fmt", conv_dxgi_format_to_string(desc.Format));
+		} else if (std::string("VideoEncode").compare(name) == 0) {
+			ComPtr<ID3D11Texture2D> pExportTexture;
+			pUnknown->QueryInterface(pExportTexture.GetAddressOf());
+			DXGI_SWAP_CHAIN_DESC swapChainDesc;
+			REQUIRE(mainSwapChain->GetDesc(&swapChainDesc), "Failed to get swap chain descriptor");
+
+			D3D11_TEXTURE2D_DESC desc;
+			pExportTexture->GetDesc(&desc);
+
+			LOG(LL_NFO, "Detour_CreateTexture: fmt:", conv_dxgi_format_to_string(desc.Format),
+				" w:", desc.Width,
+				" h:", desc.Height);
+			std::lock_guard<std::mutex> sessionLock(mxSession);
+			LOG_CALL(LL_DBG, exportContext.reset());
+			LOG_CALL(LL_DBG, session.reset());
+			try {
+				LOG(LL_NFO, "Creating session...");
+
+				if (config::auto_reload_config) {
+					LOG_CALL(LL_DBG, config::reload());
+				}
+
+				session.reset(new Encoder::Session());
+				NOT_NULL(session, "Could not create the session");
+				exportContext.reset(new ExportContext());
+				NOT_NULL(exportContext, "Could not create export context");
+				exportContext->pSwapChain = mainSwapChain;
+				exportContext->pExportRenderTarget = pExportTexture;
+
+				
+				pExportTexture->GetDevice(exportContext->pDevice.GetAddressOf());
+				exportContext->pDevice->GetImmediateContext(exportContext->pDeviceContext.GetAddressOf());
+				//exportContext->pDevice = pThis;
+				/*exportContext->pDevice->GetImmediateContext(exportContext->pDeviceContext.GetAddressOf());*/
+				//REQUIRE(pThis->CreateDeferredContext(0, session->pD3DCtx.GetAddressOf()), "Failed to create deferred context");
+			/*	exportContext->captureRenderTargetViewReference = true;
+				exportContext->captureDepthStencilViewReference = true;*/
+				/*D3D11_TEXTURE2D_DESC* desc = (D3D11_TEXTURE2D_DESC*)pDesc;
+				desc->Width = swapChainDesc.BufferDesc.Width;
+				desc->Height = swapChainDesc.BufferDesc.Height;
+				return oCreateTexture2D(pThis, &desc, pInitialData, ppTexture2D);*/
+			} catch (std::exception& ex) {
+				LOG(LL_ERR, ex.what());
+				LOG_CALL(LL_DBG, session.reset());
+				LOG_CALL(LL_DBG, exportContext.reset());
+			}
+			//}
 		}
 	}
 
+	//if (*(vrcx + 2)) {
+	//	LOG(LL_DBG, 1);
+	//	ComPtr<ID3D11Texture2D> pDeferredContext;
+	//	IUnknown* pUnknown = (IUnknown*)(*(void**)*((void**)(vrcx + 2)+1));
+	//	LOG(LL_DBG, 2);
+	//	if (SUCCEEDED(pUnknown->QueryInterface(pDeferredContext.GetAddressOf()))) {
+	//		LOG(LL_DBG, "Yeah!");
 
+	//		D3D11_TEXTURE2D_DESC desc;
+	//		pDeferredContext->GetDesc(&desc);
+	//		LOG(LL_DBG, conv_dxgi_format_to_string(desc.Format));
+	//		//ComPtr<ID3D11RenderTargetView> pRTV;
+	//		/*pDeferredContext->OMGetRenderTargets(1, pRTV.GetAddressOf(), NULL);
+	//		if (pRTV) {
+	//			D3D11_RENDER_TARGET_VIEW_DESC desc;
+	//			pRTV->GetDesc(&desc);
+	//			LOG(LL_DBG, conv_dxgi_format_to_string(desc.Format));
+	//		}*/
+	//	}
+	//	LOG(LL_DBG, 3);
+	//	//D3D11_TEXTURE2D_DESC desc;
+	//	LOG(LL_DBG, 4);
+	//	//LOG(LL_DBG, "BackBuffer: fmt", conv_dxgi_format_to_string(desc.Format));
+	//}
+
+	POST();
 	return result;
 }
 
