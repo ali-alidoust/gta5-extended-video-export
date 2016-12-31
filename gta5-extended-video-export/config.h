@@ -20,6 +20,7 @@
 #define CFG_EXPORT_MB_SAMPLES "motion_blur_samples"
 #define CFG_EXPORT_FPS "fps"
 #define CFG_EXPORT_FORMAT "format"
+#define CFG_EXPORT_OPENEXR "export_openexr"
 
 #define CFG_LOG_LEVEL "log_level"
 #define CFG_VIDEO_SECTION "VIDEO"
@@ -36,10 +37,11 @@
 //#define CFG_AUDIO_CODEC "audio_codec"
 #define INI_FILE_NAME TARGET_NAME ".ini"
 
-static class config {
+class config {
 public:
 	static bool                            is_mod_enabled;
 	static bool							   auto_reload_config;
+	static bool                            export_openexr;
 	static std::pair<uint32_t, uint32_t>   resolution;
 	static std::string                     output_dir;
 	static std::string                     video_enc;
@@ -71,6 +73,7 @@ public:
 		log_level = parse_log_level();
 		fps = parse_fps();
 		motion_blur_samples = parse_motion_blur_samples();
+		export_openexr = parse_export_openexr();
 	}
 
 private:
@@ -174,6 +177,18 @@ private:
 		return failed(CFG_AUTO_RELOAD_CONFIG, string, true);
 	}
 
+	static bool parse_export_openexr() {
+		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_OPENEXR];
+
+		try {
+			return succeeded(CFG_EXPORT_OPENEXR, stringToBoolean(string));
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_EXPORT_OPENEXR, string, false);
+	}
+
 	static std::string parse_output_dir() {
 		try {
 			std::string string = parser->top()[CFG_OUTPUT_DIR];
@@ -190,6 +205,7 @@ private:
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}
+		throw std::logic_error("Could not parse output directory");
 	}
 
 	static std::string parse_video_enc() {

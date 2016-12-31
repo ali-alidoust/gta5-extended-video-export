@@ -13,6 +13,11 @@
 #include <vector>
 #include <valarray>
 #include "SafeQueue.h"
+#include <d3d11.h>
+#include <wrl.h>
+
+using namespace Microsoft::WRL;
+
 extern "C" {
 #include <libavcodec\avcodec.h>
 #include <libavformat\avformat.h>
@@ -79,7 +84,32 @@ namespace Encoder {
 			std::shared_ptr<std::valarray<uint8_t>> data;
 		};
 
+		struct exr_queue_item {
+			exr_queue_item() :
+				cHDR(nullptr),
+				pHDRData(nullptr),
+				cDepthStencil(nullptr),
+				pDepthStencilData(nullptr),
+				isEndOfStream(true)
+			{ }
+
+			exr_queue_item(ComPtr<ID3D11Texture2D> cHDR, void *pHDRData, ComPtr<ID3D11Texture2D> cDepthStencil, void *pDepthStencilData) :
+				cHDR(cHDR),
+				pHDRData(pHDRData),
+				cDepthStencil(cDepthStencil),
+				pDepthStencilData(pDepthStencilData)
+			{ }
+
+			bool isEndOfStream = false;
+
+			ComPtr<ID3D11Texture2D> cHDR;
+			void* pHDRData;
+			ComPtr<ID3D11Texture2D> cDepthStencil;
+			void* pDepthStencilData;
+		};
+
 		SafeQueue<frameQueueItem> videoFrameQueue;
+		SafeQueue<exr_queue_item> exrImageQueue;
 
 		bool isVideoContextCreated = false;
 		bool isAudioContextCreated = false;
@@ -91,6 +121,12 @@ namespace Encoder {
 		std::valarray<uint16_t> motionBlurAccBuffer;
 		std::valarray<uint16_t> motionBlurTempBuffer;
 		std::valarray<uint8_t> motionBlurDestBuffer;
+
+		bool isEXREncodingThreadFinished = false;
+		std::condition_variable cvEXREncodingThreadFinished;
+		std::mutex mxEXREncodingThread;
+		std::thread thread_exr_encoder;
+
 
 		//std::condition_variable cvFormatContext;
 
@@ -111,6 +147,8 @@ namespace Encoder {
 		UINT outputAudioSampleRate;
 		UINT outputAudioChannels;
 		char filename[MAX_PATH];
+		std::string exrOutputPath;
+		uint64_t exrPTS=0;
 		//LPWSTR *outputDir;
 		//LPWSTR *outputFile;
 		//FILE *file;
@@ -121,11 +159,13 @@ namespace Encoder {
 
 		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, std::string outputPixelFormatString, std::string vcodec, std::string preset);
 		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, uint32_t outputSampleRate, std::string outputSampleFormatString, std::string acodec, std::string preset);
-		HRESULT createFormatContext(LPCSTR filename);
+		HRESULT createFormatContext(LPCSTR filename, std::string exrOutputPath);
 
 		HRESULT enqueueVideoFrame(BYTE * pData, int length);
+		HRESULT enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepthStencil);
 
 		void videoEncodingThread();
+		void exrEncodingThread();
 
 		HRESULT writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime);
 		HRESULT writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime);

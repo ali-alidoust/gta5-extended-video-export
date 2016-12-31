@@ -17,3 +17,4 @@ LogLevel                        config::log_level;
 std::pair<uint32_t, uint32_t>   config::fps;
 uint8_t                         config::motion_blur_samples;
 std::string                     config::container_format;
+bool                            config::export_openexr;

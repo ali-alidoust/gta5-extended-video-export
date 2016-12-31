@@ -6,9 +6,14 @@ Extended Video Export
 =========================
 Extended Video Export is an enhancement mod for GTA V, aimed at directors who want better export options from Rockstar editor.
 
+Requirements
+=========================
+* Latest version of [ScriptHookV](http://www.dev-c.com/gtav/scripthookv/)
+* Latest version of [Microsoft C++ 2015 Redistributable Package (both x86 and x64)](https://www.microsoft.com/en-us/download/details.aspx?id=48145)
+
 How to install:
 =========================
-Just extract the ASI script and the DLL files into the game directory.
+Just extract all the files to the game directory.
 
 Configuration:
 =========================

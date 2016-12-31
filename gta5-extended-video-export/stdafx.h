@@ -11,6 +11,11 @@
 #pragma comment(lib, "swresample.lib")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "IlmImf.lib")
+#pragma comment(lib, "Half.lib")
+#pragma comment(lib, "IlmThread.lib")
+#pragma comment(lib, "Iex.lib")
+#pragma comment(lib, "zlibstatic.lib")
 
 #include <sstream>
 
@@ -28,6 +33,8 @@
 #include <wrl.h>
 
 #include "config.h"
+
+#include <ImfImage.h>
 
 extern "C" {
 #include "libavcodec\avcodec.h"

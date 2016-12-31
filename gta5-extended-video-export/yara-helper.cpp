@@ -25,13 +25,19 @@ void YaraHelper::initialize()
 	LOG_CALL(LL_DBG, yr_initialize());
 	REQUIRE(yr_compiler_create(&this->pYrCompiler), "Failed to create yara compiler.");
 	REQUIRE(yr_compiler_add_string(this->pYrCompiler, yara_get_render_time_base_function.c_str(), NULL), "Failed to compile yara rule");
-	REQUIRE(yr_compiler_get_rules(this->pYrCompiler, &this->rules), "Failed to get yara rules");
 	POST();
 }
 
 void YaraHelper::performScan()
 {
 	PRE();
+	
+	REQUIRE(yr_compiler_get_rules(this->pYrCompiler, &this->rules), "Failed to get yara rules");
+
+	for (std::pair<std::string, entry> item : entries) {
+		*item.second.dest = NULL;
+	}
+
 	yr_rules_scan_mem(this->rules, static_cast<uint8_t*>(this->moduleInfo.lpBaseOfDll), this->moduleInfo.SizeOfImage, 0, YaraHelper::callback_function, static_cast<void*>(this), 0);
 
 	std::unique_lock<std::mutex> lk(this->mxScan);
@@ -41,9 +47,21 @@ void YaraHelper::performScan()
 	POST();
 }
 
-void * YaraHelper::getPtr_getRenderTimeBase()
-{
-	return this->_ptr_yara_get_render_time_base_function;
+void YaraHelper::addEntry(std::string name, std::string pattern, void ** dest) {
+	REQUIRE(yr_compiler_add_string(this->pYrCompiler, build_yara_rule(name, pattern).c_str() , NULL), "Failed to compile yara rule");
+	entries[name] = entry(name, pattern, dest);
+}
+
+inline std::string YaraHelper::build_yara_rule(std::string name, std::string pattern) {
+	return "	rule " + name + R"__(
+	{
+		strings:
+			$pattern = { )__" + pattern + R"__( }
+
+		condition:
+			$pattern
+	}
+	)__";
 }
 
 int YaraHelper::callback_function(int message, void * message_data, void * user_data)
@@ -60,27 +78,25 @@ int YaraHelper::callback_function(int message, void * message_data, void * user_
 	case CALLBACK_MSG_RULE_MATCHING:
 		pRule = static_cast<YR_RULE*>(message_data);
 		LOG(LL_NFO, "CALLBACK_MSG_RULE_MATCHING: ", pRule->identifier);
-		if (std::string("yara_get_render_time_base_function").compare(pRule->identifier) == 0) {
+
+		if (pThis->entries.count(pRule->identifier) > 0) {
 			YR_STRING* pString;
 			yr_rule_strings_foreach(pRule, pString) {
 				LOG(LL_DBG, pString->identifier, "(Matches found:", pString->matches->count, ")");
 				if (pString->matches->count > 1) {
-					pThis->_ptr_yara_get_render_time_base_function = NULL;
-					POST();
-					return 0;
+					*(pThis->entries[pRule->identifier].dest) = NULL;
+					break;
 				}
 
 				YR_MATCH* pMatch;
 				yr_string_matches_foreach(pString, pMatch) {
-					LOG(LL_DBG, " b:", (void*)pMatch->base, " o:", (void*)pMatch->offset);
-					pThis->_ptr_yara_get_render_time_base_function = reinterpret_cast<void*>(pMatch->offset + (int64_t)pThis->moduleInfo.lpBaseOfDll);
-					POST();
-					return 0;
+					LOG(LL_DBG, "Match: ", " b:", (void*)pMatch->base, " o:", (void*)pMatch->offset);
+					*(pThis->entries[pRule->identifier].dest) = reinterpret_cast<void*>(pMatch->offset + (int64_t)pThis->moduleInfo.lpBaseOfDll);
+					break;
 				}
-
+				break;
 			}
 		}
-
 		break;
 	case CALLBACK_MSG_SCAN_FINISHED:
 		std::lock_guard<std::mutex> guard(pThis->mxScan);

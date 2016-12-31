@@ -134,7 +134,7 @@ void StackDump(size_t size, std::string prefix) {
 	uint64_t x = 0xDEADBEEFBAADF00D;
 	void** ptr = (void**)&x;
 	for (int i = 0; i < size; i++) {
-		LOG(LL_TRC, "Stack dump: ", prefix, Logger::hex(i, 4), ": 0x", *(ptr + i));
+		LOG(LL_TRC, "Stack dump: ", prefix, " ", Logger::hex(i, 4), ": 0x", *(ptr + i));
 	}
 }
 
@@ -155,6 +155,36 @@ template< class T > void SafeDeleteArray(T*& pVal)
 {
 	delete[] pVal;
 	pVal = NULL;
+}
+
+std::string hexdump(void *ptr, int buflen) {
+	unsigned char *buf = (unsigned char*)ptr;
+	std::stringstream sstream;
+	char temp[4096];
+	int i, j;
+	for (i = 0; i<buflen; i += 16) {
+		sprintf_s(temp, "%06x: ", i);
+		sstream << temp;
+		for (j = 0; j < 16; j++) {
+			if (i + j < buflen) {
+				sprintf_s(temp, "%02x ", buf[i + j]);
+			} else {
+				sprintf_s(temp, "   ");
+			}
+			sstream << temp;
+		}
+
+		sstream << " ";
+		for (j = 0; j < 16; j++) {
+			if (i + j < buflen) {
+				sprintf_s(temp, "%c", isprint(buf[i + j]) ? buf[i + j] : '.');
+				sstream << temp;
+			}
+		}
+
+		sstream << " ";
+	}
+	return sstream.str();
 }
 
 #undef RETURN_STR

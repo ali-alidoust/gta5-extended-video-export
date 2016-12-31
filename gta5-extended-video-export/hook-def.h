@@ -6,6 +6,13 @@
 #include <dxgi.h>
 #include <d3d11.h>
 
+static void VSSetConstantBuffers(
+	ID3D11DeviceContext *pThis,
+	UINT                StartSlot,
+	UINT                NumBuffers,
+	ID3D11Buffer *const *ppConstantBuffers
+	);
+
 static HRESULT Hook_CreateRenderTargetView(
 	ID3D11Device                  *pThis,
 	ID3D11Resource                *pResource,
@@ -33,7 +40,7 @@ static void RSSetScissorRects(
 	);
 
 static HRESULT Hook_CreateTexture2D(
-	ID3D11Device*				 *pThis,
+	ID3D11Device 				 *pThis,
 	const D3D11_TEXTURE2D_DESC   *pDesc,
 	const D3D11_SUBRESOURCE_DATA *pInitialData,
 	ID3D11Texture2D        **ppTexture2D
@@ -84,8 +91,15 @@ static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
 	);
 
+typedef void (*tVSSetConstantBuffers)(
+	ID3D11DeviceContext *pThis,
+	UINT                StartSlot,
+	UINT                NumBuffers,
+	ID3D11Buffer *const *ppConstantBuffers
+	);
+
 typedef HRESULT(*tCreateTexture2D)(
-	ID3D11Device*				 *pThis,
+	ID3D11Device 				 *pThis,
 	const D3D11_TEXTURE2D_DESC   *pDesc,
 	const D3D11_SUBRESOURCE_DATA *pInitialData,
 	ID3D11Texture2D        **ppTexture2D

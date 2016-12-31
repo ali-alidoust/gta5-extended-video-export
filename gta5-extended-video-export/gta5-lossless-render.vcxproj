@@ -76,9 +76,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\Program Files %28x86%29\Windows Kits\8.1\Lib\winv6.3\um\x64;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\Program Files %28x86%29\Windows Kits\8.1\Lib\winv6.3\um\x64;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -86,9 +86,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <LibraryPath>C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -109,7 +109,7 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
     </ClCompile>
@@ -150,7 +150,7 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>

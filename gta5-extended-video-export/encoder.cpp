@@ -1,6 +1,13 @@
 #include "stdafx.h"
 #include "encoder.h"
 #include "logger.h"
+#include <ImfHeader.h>
+#include <ImfFloatAttribute.h>
+#include <ImfChannelList.h>
+#include <ImfIO.h>
+#include <ImfOutputFile.h>
+#include <ImfRgbaFile.h>
+#include <ImfRgba.h>
 
 
 namespace Encoder {
@@ -9,7 +16,8 @@ namespace Encoder {
 
 	Session::Session() :
 		thread_video_encoder(),
-		videoFrameQueue(16)
+		videoFrameQueue(16),
+		exrImageQueue(16)
 	{
 		PRE();
 		LOG(LL_NFO, "Opening session: ", (uint64_t)this);
@@ -113,6 +121,7 @@ namespace Encoder {
 		this->videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
 		
 		this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
+		this->thread_exr_encoder = std::thread(&Session::exrEncodingThread, this);
 
 		LOG(LL_NFO, "Video context was created successfully.");
 		this->isVideoContextCreated = true;
@@ -171,7 +180,7 @@ namespace Encoder {
 		return S_OK;
 	}
 
-	HRESULT Session::createFormatContext(LPCSTR filename)
+	HRESULT Session::createFormatContext(LPCSTR filename, std::string exrOutputPath)
 	{
 		PRE();
 		if (this->isBeingDeleted) {
@@ -196,6 +205,8 @@ namespace Encoder {
 				this->cvAudioContext.wait_for(lk, std::chrono::milliseconds(100));
 			}
 		}
+
+		this->exrOutputPath = exrOutputPath;
 
 		//std::lock_guard<std::mutex> guard(this->mxFormatContext);
 
@@ -244,6 +255,30 @@ namespace Encoder {
 
 		POST();
 		return S_OK;
+	}
+
+	HRESULT Session::enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepthStencil) {
+		PRE();
+
+		if (this->isBeingDeleted) {
+			POST();
+			return E_FAIL;
+		}
+
+		D3D11_MAPPED_SUBRESOURCE mHDR = { 0 };
+		D3D11_MAPPED_SUBRESOURCE mDepthStencil = { 0 };
+
+		if (cRGB) {
+			REQUIRE(pDeviceContext->Map(cRGB.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mHDR), "Failed to map HDR texture");
+		}
+
+		if (cDepthStencil) { 
+			REQUIRE(pDeviceContext->Map(cDepthStencil.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mDepthStencil), "Failed to map depth stencil texture");
+		}
+
+		this->exrImageQueue.enqueue(exr_queue_item(cRGB, mHDR.pData, cDepthStencil, mDepthStencil.pData));
+
+		POST();
 	}
 
 	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length) {
@@ -296,6 +331,110 @@ namespace Encoder {
 		}
 		this->isEncodingThreadFinished = true;
 		this->cvEncodingThreadFinished.notify_all();
+		POST();
+	}
+
+	void Session::exrEncodingThread()
+	{
+		PRE();
+		std::lock_guard<std::mutex> lock(this->mxEXREncodingThread);
+		try {
+			exr_queue_item item = this->exrImageQueue.dequeue();
+			while (!item.isEndOfStream) {
+				struct RGBA {
+					half R;
+					half G;
+					half B;
+					half A;
+				};
+
+				struct DepthStencil {
+					float depth;
+					uint8_t stencil;
+					uint8_t unused[3];
+				};
+
+				Imf::Header header(this->width, this->height);
+				Imf::FrameBuffer framebuffer;
+
+				if (item.cHDR != nullptr) {
+					header.channels().insert("R", Imf::Channel(Imf::HALF));
+					header.channels().insert("G", Imf::Channel(Imf::HALF));
+					header.channels().insert("B", Imf::Channel(Imf::HALF));
+					header.channels().insert("A", Imf::Channel(Imf::HALF));
+					RGBA* mHDRArray = (RGBA*)item.pHDRData;
+
+					framebuffer.insert("R",
+						Imf::Slice(
+							Imf::HALF,
+							(char*)&mHDRArray[0].R,
+							sizeof(RGBA),
+							sizeof(RGBA) * this->width
+							));
+
+					framebuffer.insert("G",
+						Imf::Slice(
+							Imf::HALF,
+							(char*)&mHDRArray[0].G,
+							sizeof(RGBA),
+							sizeof(RGBA) * this->width
+							));
+
+					framebuffer.insert("B",
+						Imf::Slice(
+							Imf::HALF,
+							(char*)&mHDRArray[0].B,
+							sizeof(RGBA),
+							sizeof(RGBA) * this->width
+							));
+
+					framebuffer.insert("A",
+						Imf::Slice(
+							Imf::HALF,
+							(char*)&mHDRArray[0].A,
+							sizeof(RGBA),
+							sizeof(RGBA) * this->width
+							));
+				}
+				
+				if (item.cDepthStencil != nullptr) {
+					header.channels().insert("depth.Z", Imf::Channel(Imf::FLOAT));
+					header.channels().insert("objectID", Imf::Channel(Imf::UINT));
+					DepthStencil* mDSArray = (DepthStencil*)item.pDepthStencilData;
+
+					framebuffer.insert("depth.Z",
+						Imf::Slice(
+							Imf::FLOAT,
+							(char*)&mDSArray[0].depth,
+							sizeof(DepthStencil),
+							sizeof(DepthStencil) * this->width
+							));
+
+					framebuffer.insert("objectID",
+						Imf::Slice(
+							Imf::UINT,
+							(char*)&mDSArray[0].stencil,
+							sizeof(DepthStencil),
+							sizeof(DepthStencil) * this->width
+							));
+				}
+
+				if (CreateDirectoryA(this->exrOutputPath.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError()) {
+					std::stringstream sstream;
+					sstream << std::setw(5) << std::setfill('0') << this->exrPTS++;
+					Imf::OutputFile file((this->exrOutputPath + "\\frame" +  sstream.str() + ".exr").c_str(), header);
+					file.setFrameBuffer(framebuffer);
+					file.writePixels(this->height);
+				}
+
+
+				item = this->exrImageQueue.dequeue();
+			}
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+		this->isEXREncodingThreadFinished = true;
+		this->cvEXREncodingThreadFinished.notify_all();
 		POST();
 	}
 
@@ -444,8 +583,23 @@ namespace Encoder {
 			}
 		}
 
+		// Wait until the depth encoding thread is finished
+		{
+			// Write end of the stream object with a nullptr
+			this->exrImageQueue.enqueue(exr_queue_item());
+			std::unique_lock<std::mutex> lock(this->mxEXREncodingThread);
+			while (!this->isEXREncodingThreadFinished) {
+				this->cvEXREncodingThreadFinished.wait(lock);
+			}
+		}
+
+
 		if (thread_video_encoder.joinable()) {
 			thread_video_encoder.join();
+		}
+
+		if (thread_exr_encoder.joinable()) {
+			thread_exr_encoder.join();
 		}
 
 		// Write delayed frames

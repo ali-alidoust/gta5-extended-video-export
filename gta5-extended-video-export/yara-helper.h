@@ -4,6 +4,7 @@
 #include <Psapi.h>
 #include "yara-patterns.h"
 #include <mutex>
+#include <map>
 
 extern "C" {
 #include <yara\libyara.h>
@@ -18,13 +19,29 @@ public:
 
 	void initialize();
 	void performScan();
-	void* getPtr_getRenderTimeBase();
+
+	void addEntry(std::string name, std::string pattern, void** dest);
 
 private:
+
+	struct entry {
+		entry(std::string name, std::string pattern, void** dest):
+			name(name),
+			pattern(pattern),
+			dest(dest)
+		{ }
+
+		entry() { }
+
+		std::string name;
+		std::string pattern;
+		void** dest;
+	};
+
+	std::map<std::string, entry> entries;
+
 	YR_COMPILER* pYrCompiler;
 	YR_RULES* rules;
-
-	void* _ptr_yara_get_render_time_base_function = NULL;
 
 	HMODULE moduleHandle;
 	MODULEINFO moduleInfo;
@@ -32,4 +49,5 @@ private:
 	std::condition_variable cvScan;
 	bool isScanFinished = false;
 	static int callback_function(int message, void* message_data, void* user_data);
+	static std::string build_yara_rule(std::string name, std::string pattern);
 };

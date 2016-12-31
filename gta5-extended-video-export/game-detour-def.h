@@ -14,3 +14,28 @@ typedef float (*tGetRenderTimeBase)(int64_t choice);
 //
 //static float Detour_Unk01(float x0, float x1, float x2, float x3);
 //typedef float (*tUnk01)(float x0, float x1, float x2, float x3);
+
+static void** Detour_CreateTexture(int32_t a, char *name, void *c, uint32_t width, uint32_t height, int32_t format, void *d, bool e, void* f);
+typedef void** (*tCreateTexture)(int32_t a, char *name, void *c, uint32_t width, uint32_t height, int32_t format, void *d, bool e, void* f);
+
+//static void* Detour_GetGlobalVariableIndex(char* name, uint32_t edx);
+//typedef void* (*tGetGlobalVariableIndex)(char* name, uint32_t edx);
+//
+//static void* Detour_GetVariable(char* name, void* unknown);
+//typedef void* (*tGetVariable)(char* name, void* unknown);
+//
+//static void* Detour_GetMatrices(void* ecx, bool edx);
+//typedef void* (*tGetMatrices)(void* ecx, bool edx);
+//
+//static uint32_t Detour_GetVarHash(char* name, uint32_t edx);
+//typedef uint32_t(*tGetVarHash)(char* name, uint32_t edx);
+//
+//static void* Detour_GetVarPtrByHash(void* gUnk01, uint32_t hash);
+//typedef void* (*tGetVarPtrByHash)(void* gUnk01, uint32_t hash);
+//
+//static void* Detour_GetVarPtrByHash2(char* hash);
+//typedef void* (*tGetVarPtrByHash2)(char* hash);
+
+
+//static void* Detour_GetTexture(char* name, uint32_t edx, uint32_t r8d, uint32_t r9d, uint32_t rsp8, uint32_t rsp10, void* rsp18);
+//typedef void* (*tGetTexture)(char* name, uint32_t edx, uint32_t r8d, uint32_t r9d, uint32_t rsp8, uint32_t rsp10, void* rsp18);
