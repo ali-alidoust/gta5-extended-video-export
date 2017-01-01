@@ -709,55 +709,53 @@ static void VSSetConstantBuffers(
 	ID3D11Buffer *const *ppConstantBuffers
 	) {
 
-	StackDump(64, "VSSetConstantBuffers");
+	//if ((StartSlot <= 1) && (StartSlot + NumBuffers >= 1)) {
+	//	ID3D11Buffer* pBuffer = ppConstantBuffers[1 - StartSlot];
+	//	D3D11_BUFFER_DESC bufferDesc;
+	//	pBuffer->GetDesc(&bufferDesc);
+	//	bufferDesc.BindFlags = 0;
+	//	bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
+	//	bufferDesc.MiscFlags = 0;
+	//	bufferDesc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
+	//	ComPtr<ID3D11Buffer> pBufferCopy;
+	//	ComPtr<ID3D11Device> pDevice;
+	//	pThis->GetDevice(pDevice.GetAddressOf());
+	//	pDevice->CreateBuffer(&bufferDesc, NULL, pBufferCopy.GetAddressOf());
+	//	pThis->CopyResource(pBufferCopy.Get(), pBuffer);
 
-	if ((StartSlot <= 1) && (StartSlot + NumBuffers >= 1)) {
-		ID3D11Buffer* pBuffer = ppConstantBuffers[1 - StartSlot];
-		D3D11_BUFFER_DESC bufferDesc;
-		pBuffer->GetDesc(&bufferDesc);
-		bufferDesc.BindFlags = 0;
-		bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
-		bufferDesc.MiscFlags = 0;
-		bufferDesc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
-		ComPtr<ID3D11Buffer> pBufferCopy;
-		ComPtr<ID3D11Device> pDevice;
-		pThis->GetDevice(pDevice.GetAddressOf());
-		pDevice->CreateBuffer(&bufferDesc, NULL, pBufferCopy.GetAddressOf());
-		pThis->CopyResource(pBufferCopy.Get(), pBuffer);
+	//	D3D11_MAPPED_SUBRESOURCE res;
+	//	if (SUCCEEDED(pThis->Map(pBufferCopy.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &res))) {
+	//		/*float t = 1.0;
+	//		for (int j = 0; j <= 16; j++) {
+	//		LOG(LL_DBG, "j: ", j);
+	//		DirectX::XMMATRIX matrix = DirectX::XMMATRIX((float*)res.pData + j);
+	//		DirectX::XMMATRIX inverse = DirectX::XMMatrixInverse(nullptr, matrix);
+	//		DirectX::XMVECTOR vectors[6] = {
+	//		{ t, 0.0f, 0.0f, 1.0f },
+	//		{ -t, 0.0f, 0.0f, 1.0f },
+	//		{ 0.0f, t, 0.0f, 1.0f },
+	//		{ 0.0f, -t, 0.0f, 1.0f },
+	//		{ 0.0f, 0.0f, t, 1.0f },
+	//		{ 0.0f, 0.0f, -t, 1.0f }
+	//		};
 
-		D3D11_MAPPED_SUBRESOURCE res;
-		if (SUCCEEDED(pThis->Map(pBufferCopy.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &res))) {
-			/*float t = 1.0;
-			for (int j = 0; j <= 16; j++) {
-			LOG(LL_DBG, "j: ", j);
-			DirectX::XMMATRIX matrix = DirectX::XMMATRIX((float*)res.pData + j);
-			DirectX::XMMATRIX inverse = DirectX::XMMatrixInverse(nullptr, matrix);
-			DirectX::XMVECTOR vectors[6] = {
-			{ t, 0.0f, 0.0f, 1.0f },
-			{ -t, 0.0f, 0.0f, 1.0f },
-			{ 0.0f, t, 0.0f, 1.0f },
-			{ 0.0f, -t, 0.0f, 1.0f },
-			{ 0.0f, 0.0f, t, 1.0f },
-			{ 0.0f, 0.0f, -t, 1.0f }
-			};
+	//		for (int i = 0; i < 6; i++) {
+	//		DirectX::XMVECTOR product = DirectX::XMVector4Transform(vectors[i], DirectX::XMMatrixTranspose(inverse));
+	//		product /= DirectX::XMVectorGetW(product);
+	//		LOG(LL_DBG, "i:", i, " ", DirectX::XMVectorGetByIndex(DirectX::XMVector4Length(product), 0));
+	//		}
+	//		LOG(LL_DBG, "#############################");
+	//		}*/
 
-			for (int i = 0; i < 6; i++) {
-			DirectX::XMVECTOR product = DirectX::XMVector4Transform(vectors[i], DirectX::XMMatrixTranspose(inverse));
-			product /= DirectX::XMVectorGetW(product);
-			LOG(LL_DBG, "i:", i, " ", DirectX::XMVectorGetByIndex(DirectX::XMVector4Length(product), 0));
-			}
-			LOG(LL_DBG, "#############################");
-			}*/
+	//		//LOG(LL_TRC, hexdump(res.pData, bufferDesc.ByteWidth));
 
-			//LOG(LL_TRC, hexdump(res.pData, bufferDesc.ByteWidth));
-
-			float* items = (float*)res.pData;
-			for (int i = 0; i < bufferDesc.ByteWidth / sizeof(float); i++) {
-				LOG(LL_DBG, i, ": ", items[i]);
-			}
-			pThis->Unmap(pBufferCopy.Get(), 0);
-		}
-	}
+	//		float* items = (float*)res.pData;
+	//		for (int i = 0; i < bufferDesc.ByteWidth / sizeof(float); i++) {
+	//			LOG(LL_DBG, i, ": ", items[i]);
+	//		}
+	//		pThis->Unmap(pBufferCopy.Get(), 0);
+	//	}
+	//}
 
 	oVSSetConstantBuffers(pThis, StartSlot, NumBuffers, ppConstantBuffers);
 }
@@ -788,7 +786,6 @@ static float Detour_GetRenderTimeBase(int64_t choice) {
 //}
 
 static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30) {
-	PRE();
 	void* result = oCreateTexture(rcx, name, r8d, width, height, format, rsp30);
 
 	void** vresult = (void**)result;
@@ -901,8 +898,6 @@ static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t 
 	//	LOG(LL_DBG, 4);
 	//	//LOG(LL_DBG, "BackBuffer: fmt", conv_dxgi_format_to_string(desc.Format));
 	//}
-
-	POST();
 	return result;
 }
 
