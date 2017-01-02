@@ -2,6 +2,8 @@
 
 **NOTE:** For high resolution exports without DSR, use [this](http://steamcommunity.com/sharedfiles/filedetails/?id=787616403) guide by [Kravencedesign](https://www.gta5-mods.com/users/Kravencedesign)
 
+Source code for this mod is available on [github](https://github.com/ali-alidoust/gta5-extended-video-export).
+
 Extended Video Export
 =========================
 Extended Video Export is an enhancement mod for GTA V, aimed at directors who want better export options from Rockstar editor.
@@ -43,6 +45,9 @@ You can now set the frame rate in the config file. Be careful that setting it to
 * **Motion blur (Experimental):**
 Videos can have high quality motion blur effect. Be careful when setting motion_blur_samples config, setting it too high will make the exporting take a very long time.
 
+* **OpenEXR Export (High Dynamic Range):**
+Exporting of floating point R16G16B16 version of the scene is now possible in OpenEXR format. When enabled, the mod will create a new folder beside the exported video that contains one .exr file for each frame. This file also contains the depth and stencil buffers but they aren't implemented the right way. These files are only usable in professional image and video manipulation programs. Enable this feature only if you know what you're doing.
+
 
 Important things to note:
 =========================
@@ -52,38 +57,52 @@ Important things to note:
 * Lossless video files tend to get really large (around 1GB for 20 seconds of 1080p video @60fps in my case). These files are to be used with video editing software. They can also be played using MPC-HC and VLC, but it requires a lot of CPU power. The stuttering you may experience is because of the large size of the file and the complexity of the decoding process, the rendered files themselves have no stutter.
 
 
-
-Planned features:
-=========================
-* Depth buffer export
-
 Changelog
 =========================
 
+**Changes in v0.2.0beta**
+
+* OpenEXR export added
+* Reimplemented frame capturing logic. This solves some crashes and blank videos.
+
+
 **Changes in v0.1.6beta**
+
 * Custom FPS and Motion Blur should now work in more recent versions of the game.
 
+
 **Changes in v0.1.5beta**
+
 * Fixed a parsing error in .ini file that made the mod always export as .mkv
 * Added auto use of custom fps is it is supported by the game version
 
+
 **Changes in v0.1.4beta (Experimental)**
+
 * Added custom frame rate support
 * Added motion blur support
 
+
 **Changes in v0.1.3beta**
+
 * Added option to export mp4 and avi files too.
 * Fixed a number of crashes.
 
+
 **Changes in v0.1.2beta**
+
 * Fixed a bug where game freezed when exporting a video.
 
+
 **Changes in v0.1.1beta**
+
 * ReShade/ENB support added.
 * High resolution export added using Nvidia DSR
 * Fixed some random crashes.
 
+
 **Changes in v0.1.0beta**
+
 * Changed the way the frames are captures, so now full RGB exports are possible.
 * Added configurable video and audio codecs support.
 * Better memory management.
@@ -91,21 +110,31 @@ Changelog
 * Different log levels.
 * Experimental ENB/ReShade support removed since it was not good enough (actually it sucked).
 
+
 **Changes in v0.0.5alpha**
+
 * Added experimental ReShade/ENB support
 
+
 **Changes in v0.0.4alpha**
+
 * Added .ini configuration file support.
 * Fixed a crash due to a race condition in the encoder.
 
+
 **Changes in v0.0.3alpha**
+
 * Added audio to the exported video file (also lossless).
 * Better memory management
 
+
 **Changes in v0.0.2alpha**
+
 * Fixed crash in some resolutions/configurations.
 
+
 **Changes in v0.0.1alpha:**
+
 * Lossless video export
 
 Configuration
@@ -168,6 +197,14 @@ Configuration
 * Warning: Setting this to a high value will make export take a very long time.
 * Example:
   * motion_blur_samples = 10
+
+**export_openexr**
+
+* Description: If enabled, each frame is exported as a floating point HDR OpenEXR file containing "RGBA" channels and "depth.Z" 
+* Values: true, false
+* Warning: Enabling this slows the exporting process significantly
+* Example:
+  * export_openexr = false
 
 **[VIDEO] Section**
 
