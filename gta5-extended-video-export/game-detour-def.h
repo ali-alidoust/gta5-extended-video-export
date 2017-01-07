@@ -21,6 +21,9 @@ typedef float (*tGetRenderTimeBase)(int64_t choice);
 static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30);
 typedef void* (*tCreateTexture)(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30);
 
+static void* Detour_LinearizeTexture(void* rcx, void* rdx);
+typedef void* (*tLinearizeTexture)(void* rcx, void* rdx);
+
 //static void* Detour_GetGlobalVariableIndex(char* name, uint32_t edx);
 //typedef void* (*tGetGlobalVariableIndex)(char* name, uint32_t edx);
 //

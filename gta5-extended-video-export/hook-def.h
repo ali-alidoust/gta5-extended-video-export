@@ -6,6 +6,29 @@
 #include <dxgi.h>
 #include <d3d11.h>
 
+static void Draw(
+	ID3D11DeviceContext *pThis,
+	UINT VertexCount,
+	UINT StartVertexLocation
+	);
+
+static void DispatchIndirect(
+	ID3D11DeviceContext* pThis,
+	ID3D11Buffer *pBufferForArgs,
+	UINT         AlignedByteOffsetForArgs
+	);
+
+static void Dispatch(
+	ID3D11DeviceContext* pThis,
+	UINT ThreadGroupCountX,
+	UINT ThreadGroupCountY,
+	UINT ThreadGroupCountZ
+	);
+
+static void ClearState(
+	ID3D11DeviceContext *pThis
+	);
+
 static void VSSetConstantBuffers(
 	ID3D11DeviceContext *pThis,
 	UINT                StartSlot,
@@ -89,6 +112,29 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
+	);
+
+typedef void (*tDraw)(
+	ID3D11DeviceContext *pThis,
+	UINT VertexCount,
+	UINT StartVertexLocation
+	);
+
+typedef void (*tDispatchIndirect)(
+	ID3D11DeviceContext* pThis,
+	ID3D11Buffer *pBufferForArgs,
+	UINT         AlignedByteOffsetForArgs
+	);
+
+typedef void (*tDispatch)(
+	ID3D11DeviceContext* pThis,
+	UINT ThreadGroupCountX,
+	UINT ThreadGroupCountY,
+	UINT ThreadGroupCountZ
+	);
+
+typedef void (*tClearState)(
+	ID3D11DeviceContext *pThis
 	);
 
 typedef void (*tVSSetConstantBuffers)(

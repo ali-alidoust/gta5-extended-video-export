@@ -28,6 +28,9 @@
     <Filter Include="deploy">
       <UniqueIdentifier>{e9b46500-a24c-4b4c-a059-fd3c6c291bca}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{86ac3c01-cc4c-4e5d-bf1c-1c4c5aa175b8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="AVCodecContextParams.txt" />
@@ -100,6 +103,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="game-detour-def.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PSLinearizeDepth.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VSPassThrough.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -194,5 +203,13 @@
       <Filter>deploy</Filter>
     </None>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="PSLinearizeDepth.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="VSPassThrough.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

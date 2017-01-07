@@ -339,6 +339,7 @@ namespace Encoder {
 	{
 		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEXREncodingThread);
+		Imf::setGlobalThreadCount(8);
 		try {
 			exr_queue_item item = this->exrImageQueue.dequeue();
 			while (!item.isEndOfStream) {
@@ -351,8 +352,8 @@ namespace Encoder {
 
 				struct DepthStencil {
 					float depth;
-					uint8_t stencil;
-					uint8_t unused[3];
+					//uint8_t stencil;
+					//uint8_t unused[3];
 				};
 
 				Imf::Header header(this->width, this->height);
@@ -362,7 +363,7 @@ namespace Encoder {
 					header.channels().insert("R", Imf::Channel(Imf::HALF));
 					header.channels().insert("G", Imf::Channel(Imf::HALF));
 					header.channels().insert("B", Imf::Channel(Imf::HALF));
-					header.channels().insert("A", Imf::Channel(Imf::HALF));
+					header.channels().insert("Alpha", Imf::Channel(Imf::HALF));
 					RGBA* mHDRArray = (RGBA*)item.pHDRData;
 
 					framebuffer.insert("R",
@@ -389,7 +390,7 @@ namespace Encoder {
 							sizeof(RGBA) * this->width
 							));
 
-					framebuffer.insert("A",
+					framebuffer.insert("Alpha",
 						Imf::Slice(
 							Imf::HALF,
 							(char*)&mHDRArray[0].A,
@@ -400,7 +401,7 @@ namespace Encoder {
 				
 				if (item.cDepthStencil != nullptr) {
 					header.channels().insert("depth.Z", Imf::Channel(Imf::FLOAT));
-					header.channels().insert("objectID", Imf::Channel(Imf::UINT));
+					//header.channels().insert("objectID", Imf::Channel(Imf::UINT));
 					DepthStencil* mDSArray = (DepthStencil*)item.pDepthStencilData;
 
 					framebuffer.insert("depth.Z",
@@ -411,13 +412,13 @@ namespace Encoder {
 							sizeof(DepthStencil) * this->width
 							));
 
-					framebuffer.insert("objectID",
+					/*framebuffer.insert("objectID",
 						Imf::Slice(
 							Imf::UINT,
 							(char*)&mDSArray[0].stencil,
 							sizeof(DepthStencil),
 							sizeof(DepthStencil) * this->width
-							));
+							));*/
 				}
 
 				if (CreateDirectoryA(this->exrOutputPath.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError()) {
