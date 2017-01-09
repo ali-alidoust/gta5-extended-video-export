@@ -105,12 +105,6 @@
     <ClInclude Include="game-detour-def.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="PSLinearizeDepth.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VSPassThrough.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -203,13 +197,5 @@
       <Filter>deploy</Filter>
     </None>
     <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="PSLinearizeDepth.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="VSPassThrough.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
   </ItemGroup>
 </Project>

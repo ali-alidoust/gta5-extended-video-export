@@ -8,6 +8,7 @@
 #include <ImfOutputFile.h>
 #include <ImfRgbaFile.h>
 #include <ImfRgba.h>
+#include <fstream>
 
 
 namespace Encoder {
@@ -257,7 +258,7 @@ namespace Encoder {
 		return S_OK;
 	}
 
-	HRESULT Session::enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepthStencil) {
+	HRESULT Session::enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepth, ComPtr<ID3D11Texture2D> cStencil) {
 		PRE();
 
 		if (this->isBeingDeleted) {
@@ -266,17 +267,22 @@ namespace Encoder {
 		}
 
 		D3D11_MAPPED_SUBRESOURCE mHDR = { 0 };
-		D3D11_MAPPED_SUBRESOURCE mDepthStencil = { 0 };
+		D3D11_MAPPED_SUBRESOURCE mDepth = { 0 };
+		D3D11_MAPPED_SUBRESOURCE mStencil = { 0 };
 
 		if (cRGB) {
 			REQUIRE(pDeviceContext->Map(cRGB.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mHDR), "Failed to map HDR texture");
 		}
 
-		if (cDepthStencil) { 
-			REQUIRE(pDeviceContext->Map(cDepthStencil.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mDepthStencil), "Failed to map depth stencil texture");
+		if (cDepth) { 
+			REQUIRE(pDeviceContext->Map(cDepth.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mDepth), "Failed to map depth texture");
 		}
 
-		this->exrImageQueue.enqueue(exr_queue_item(cRGB, mHDR.pData, cDepthStencil, mDepthStencil.pData));
+		if (cStencil) {
+			REQUIRE(pDeviceContext->Map(cStencil.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mStencil), "Failed to map stencil texture");
+		}
+
+		this->exrImageQueue.enqueue(exr_queue_item(cRGB, mHDR.pData, cDepth, mDepth.pData, cStencil, mStencil));
 
 		POST();
 		return S_OK;
@@ -350,67 +356,65 @@ namespace Encoder {
 					half A;
 				};
 
-				struct DepthStencil {
+				struct Depth {
 					float depth;
-					//uint8_t stencil;
-					//uint8_t unused[3];
 				};
 
 				Imf::Header header(this->width, this->height);
 				Imf::FrameBuffer framebuffer;
 
-				if (item.cHDR != nullptr) {
-					header.channels().insert("R", Imf::Channel(Imf::HALF));
-					header.channels().insert("G", Imf::Channel(Imf::HALF));
-					header.channels().insert("B", Imf::Channel(Imf::HALF));
-					header.channels().insert("Alpha", Imf::Channel(Imf::HALF));
-					RGBA* mHDRArray = (RGBA*)item.pHDRData;
+				if (item.cRGB != nullptr) {
+					LOG_CALL(LL_DBG, header.channels().insert("R", Imf::Channel(Imf::HALF)));
+					LOG_CALL(LL_DBG, header.channels().insert("G", Imf::Channel(Imf::HALF)));
+					LOG_CALL(LL_DBG, header.channels().insert("B", Imf::Channel(Imf::HALF)));
+					LOG_CALL(LL_DBG, header.channels().insert("SSS", Imf::Channel(Imf::HALF)));
+					RGBA* mHDRArray = (RGBA*)item.pRGBData;
 
-					framebuffer.insert("R",
+					LOG_CALL(LL_DBG, framebuffer.insert("R",
 						Imf::Slice(
 							Imf::HALF,
 							(char*)&mHDRArray[0].R,
 							sizeof(RGBA),
 							sizeof(RGBA) * this->width
-							));
+							)));
 
-					framebuffer.insert("G",
+					LOG_CALL(LL_DBG, framebuffer.insert("G",
 						Imf::Slice(
 							Imf::HALF,
 							(char*)&mHDRArray[0].G,
 							sizeof(RGBA),
 							sizeof(RGBA) * this->width
-							));
+							)));
 
-					framebuffer.insert("B",
+					LOG_CALL(LL_DBG, framebuffer.insert("B",
 						Imf::Slice(
 							Imf::HALF,
 							(char*)&mHDRArray[0].B,
 							sizeof(RGBA),
 							sizeof(RGBA) * this->width
-							));
+							)));
 
-					framebuffer.insert("Alpha",
+					LOG_CALL(LL_DBG, framebuffer.insert("SSS",
 						Imf::Slice(
 							Imf::HALF,
 							(char*)&mHDRArray[0].A,
 							sizeof(RGBA),
 							sizeof(RGBA) * this->width
-							));
+							)));
 				}
 				
-				if (item.cDepthStencil != nullptr) {
-					header.channels().insert("depth.Z", Imf::Channel(Imf::FLOAT));
+				if (item.cDepth != nullptr) {
+					LOG_CALL(LL_DBG, header.channels().insert("depth.Z", Imf::Channel(Imf::FLOAT)));
 					//header.channels().insert("objectID", Imf::Channel(Imf::UINT));
-					DepthStencil* mDSArray = (DepthStencil*)item.pDepthStencilData;
+					Depth* mDSArray = (Depth*)item.pDepthData;
 
-					framebuffer.insert("depth.Z",
+					LOG_CALL(LL_DBG, framebuffer.insert("depth.Z",
 						Imf::Slice(
 							Imf::FLOAT,
 							(char*)&mDSArray[0].depth,
-							sizeof(DepthStencil),
-							sizeof(DepthStencil) * this->width
-							));
+							sizeof(Depth),
+							sizeof(Depth) * this->width
+							)));
 
 					/*framebuffer.insert("objectID",
 						Imf::Slice(
@@ -421,12 +425,34 @@ namespace Encoder {
 							));*/
 				}
 
+				std::vector<uint32_t> stencilBuffer;
+				if (item.cStencil != nullptr) {
+					stencilBuffer = std::vector<uint32_t>(item.mStencilData.RowPitch * this->height);
+					uint8_t* mSArray = (uint8_t*)item.mStencilData.pData;
+
+					for (int i = 0; i < item.mStencilData.RowPitch * this->height; i++) {
+						stencilBuffer[i] = static_cast<uint32_t>(mSArray[i]);
+					}
+
+					LOG_CALL(LL_DBG, header.channels().insert("objectID", Imf::Channel(Imf::UINT)));
+
+					LOG_CALL(LL_DBG, framebuffer.insert("objectID",
+						Imf::Slice(
+							Imf::UINT,
+							(char*)stencilBuffer.data(),
+							sizeof(uint32_t),
+							item.mStencilData.RowPitch * 4
+							)));
+				}
+
 				if (CreateDirectoryA(this->exrOutputPath.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError()) {
+
+
 					std::stringstream sstream;
 					sstream << std::setw(5) << std::setfill('0') << this->exrPTS++;
 					Imf::OutputFile file((this->exrOutputPath + "\\frame" +  sstream.str() + ".exr").c_str(), header);
-					file.setFrameBuffer(framebuffer);
-					file.writePixels(this->height);
+					LOG_CALL(LL_DBG, file.setFrameBuffer(framebuffer));
+					LOG_CALL(LL_DBG, file.writePixels(this->height));
 				}
 
 
@@ -491,7 +517,6 @@ namespace Encoder {
 	HRESULT Session::writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime)
 	{
 		PRE();
-		LOG(LL_DBG, sampleTime);
 		if (this->isBeingDeleted) {
 			POST();
 			return E_FAIL;

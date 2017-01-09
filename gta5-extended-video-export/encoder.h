@@ -86,26 +86,31 @@ namespace Encoder {
 
 		struct exr_queue_item {
 			exr_queue_item() :
-				cHDR(nullptr),
-				pHDRData(nullptr),
-				cDepthStencil(nullptr),
-				pDepthStencilData(nullptr),
+				cRGB(nullptr),
+				pRGBData(nullptr),
+				cDepth(nullptr),
+				pDepthData(nullptr),
 				isEndOfStream(true)
 			{ }
 
-			exr_queue_item(ComPtr<ID3D11Texture2D> cHDR, void *pHDRData, ComPtr<ID3D11Texture2D> cDepthStencil, void *pDepthStencilData) :
-				cHDR(cHDR),
-				pHDRData(pHDRData),
-				cDepthStencil(cDepthStencil),
-				pDepthStencilData(pDepthStencilData)
+			exr_queue_item(ComPtr<ID3D11Texture2D> cRGB, void *pRGBData, ComPtr<ID3D11Texture2D> cDepth, void *pDepthData, ComPtr<ID3D11Texture2D> cStencil, D3D11_MAPPED_SUBRESOURCE mStencilData) :
+				cRGB(cRGB),
+				pRGBData(pRGBData),
+				cDepth(cDepth),
+				pDepthData(pDepthData),
+				cStencil(cStencil),
+				mStencilData(mStencilData)
 			{ }
 
 			bool isEndOfStream = false;
 
-			ComPtr<ID3D11Texture2D> cHDR;
-			void* pHDRData;
-			ComPtr<ID3D11Texture2D> cDepthStencil;
-			void* pDepthStencilData;
+			ComPtr<ID3D11Texture2D> cRGB;
+			void* pRGBData;
+			ComPtr<ID3D11Texture2D> cDepth;
+			void* pDepthData;
+			ComPtr<ID3D11Texture2D> cStencil;
+			D3D11_MAPPED_SUBRESOURCE mStencilData;
+			//void* pStencilData;
 		};
 
 		SafeQueue<frameQueueItem> videoFrameQueue;
@@ -162,7 +167,7 @@ namespace Encoder {
 		HRESULT createFormatContext(LPCSTR filename, std::string exrOutputPath);
 
 		HRESULT enqueueVideoFrame(BYTE * pData, int length);
-		HRESULT enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepthStencil);
+		HRESULT enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepth, ComPtr<ID3D11Texture2D> cStencil);
 
 		void videoEncodingThread();
 		void exrEncodingThread();
