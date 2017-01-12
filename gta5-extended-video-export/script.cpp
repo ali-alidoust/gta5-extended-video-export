@@ -707,10 +707,8 @@ static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t 
 	if (pTexture) {
 		ComPtr<ID3D11Device> pDevice;
 		pTexture->GetDevice(pDevice.GetAddressOf());
-		if (std::string("DepthBuffer_Resolved").compare(name) == 0) {
+		if ((std::string("DepthBuffer_Resolved").compare(name) == 0) || (std::string("DepthBufferCopy").compare(name) == 0)) {
 			pGameDepthBufferResolved = pTexture;
-
-			
 		} else if (std::string("DepthBuffer").compare(name) == 0) {
 			pGameDepthBuffer = pTexture;
 		} else if (std::string("Depth Quarter").compare(name) == 0) {
@@ -736,7 +734,7 @@ static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t 
 			LOG_CALL(LL_DBG, pDevice->CreateTexture2D(&desc, NULL, pLinearDepthTexture.GetAddressOf()));
 		} else if (std::string("BackBuffer").compare(name) == 0) {
 			pGameBackBuffer = pTexture;
-		} else if (std::string("BackBuffer_Resolved").compare(name) == 0) {
+		} else if ((std::string("BackBuffer_Resolved").compare(name) == 0) || (std::string("BackBufferCopy").compare(name) == 0)) {
 			pGameBackBufferResolved = pTexture;
 		} else if (std::string("VideoEncode").compare(name) == 0) {
 			ComPtr<ID3D11Texture2D> pExportTexture;
