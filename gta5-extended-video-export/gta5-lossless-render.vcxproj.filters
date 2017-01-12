@@ -40,6 +40,9 @@
     <Text Include="readme.txt">
       <Filter>deploy</Filter>
     </Text>
+    <Text Include="preset.ini">
+      <Filter>deploy</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetver.h">

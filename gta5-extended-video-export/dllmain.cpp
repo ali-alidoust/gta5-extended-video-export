@@ -3,6 +3,13 @@
 #include "script.h"
 #include "logger.h"
 
+std::string ExePath() {
+	char buffer[MAX_PATH];
+	GetModuleFileNameA(NULL, buffer, MAX_PATH);
+	std::string::size_type pos = std::string(buffer).find_last_of("\\/");
+	return std::string(buffer).substr(0, pos);
+}
+
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
@@ -11,6 +18,8 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
+		LOG(LL_DBG, "HI!!");
+		SetDllDirectoryA((ExePath() + "\\EVE\\dlls\\").c_str());
 		config::reload();
 		if (!config::is_mod_enabled) {
 			LOG(LL_NON, "Extended Video Export mod is disabled in the config file. Exiting...");

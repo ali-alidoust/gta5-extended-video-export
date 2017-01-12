@@ -1,6 +1,7 @@
 #include "config.h"
 
-std::unique_ptr<INI::Parser>    config::parser;
+std::shared_ptr<INI::Parser>    config::config_parser;
+std::shared_ptr<INI::Parser>    config::preset_parser;
 
 bool                            config::is_mod_enabled;
 bool                            config::auto_reload_config;

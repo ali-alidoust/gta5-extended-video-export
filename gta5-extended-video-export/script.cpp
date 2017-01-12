@@ -724,7 +724,14 @@ static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t 
 			pGameDepthBufferQuarterLinear = pTexture;
 			D3D11_TEXTURE2D_DESC desc, resolvedDesc;
 
+			if (!pGameDepthBufferResolved) {
+				pGameDepthBufferResolved = pGameDepthBuffer;
+			}
+
 			pGameDepthBufferResolved->GetDesc(&resolvedDesc);
+			resolvedDesc.ArraySize = 1;
+			resolvedDesc.SampleDesc.Count = 1;
+			resolvedDesc.SampleDesc.Quality = 0;
 			pGameDepthBufferQuarterLinear->GetDesc(&desc);
 			desc.Width = resolvedDesc.Width;
 			desc.Height = resolvedDesc.Height;
@@ -733,6 +740,14 @@ static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t 
 			desc.CPUAccessFlags = 0;
 			LOG_CALL(LL_DBG, pDevice->CreateTexture2D(&desc, NULL, pLinearDepthTexture.GetAddressOf()));
 		} else if (std::string("BackBuffer").compare(name) == 0) {
+			pGameBackBufferResolved = nullptr;
+			pGameDepthBuffer = nullptr;
+			pGameDepthBufferQuarter = nullptr;
+			pGameDepthBufferQuarterLinear = nullptr;
+			pGameDepthBufferResolved = nullptr;
+			pGameEdgeCopy = nullptr;
+			pGameGBuffer0 = nullptr;
+
 			pGameBackBuffer = pTexture;
 		} else if ((std::string("BackBuffer_Resolved").compare(name) == 0) || (std::string("BackBufferCopy").compare(name) == 0)) {
 			pGameBackBufferResolved = pTexture;

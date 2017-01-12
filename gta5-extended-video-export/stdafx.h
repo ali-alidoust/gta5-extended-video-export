@@ -1,5 +1,7 @@
 #pragma once
 
+#pragma comment(lib, "delayimp")  
+
 #pragma comment(lib, "lib\\ScriptHookV.lib")
 
 #pragma comment(lib, "mfplat.lib")

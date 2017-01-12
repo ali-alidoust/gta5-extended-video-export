@@ -2,7 +2,7 @@
 #include "logger.h"
 
 Logger::Logger() {
-	this->filestream.open(TARGET_NAME ".log");
+	this->filestream.open("EVE\\" TARGET_NAME ".log");
 }
 
 Logger::~Logger() {

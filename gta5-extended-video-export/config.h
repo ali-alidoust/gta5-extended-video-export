@@ -22,6 +22,8 @@
 #define CFG_EXPORT_FORMAT "format"
 #define CFG_EXPORT_OPENEXR "export_openexr"
 
+#define CFG_FORMAT_SECTION "FORMAT"
+
 #define CFG_LOG_LEVEL "log_level"
 #define CFG_VIDEO_SECTION "VIDEO"
 #define CFG_VIDEO_ENC "encoder"
@@ -35,7 +37,8 @@
 #define CFG_AUDIO_CFG "options"
 
 //#define CFG_AUDIO_CODEC "audio_codec"
-#define INI_FILE_NAME TARGET_NAME ".ini"
+#define INI_FILE_NAME "EVE\\" TARGET_NAME ".ini"
+#define PRESET_FILE_NAME "EVE\\preset.ini"
 
 class config {
 public:
@@ -57,7 +60,8 @@ public:
 	static std::string                     container_format;
 
 	static void reload() {
-		parser.reset(new INI::Parser(INI_FILE_NAME));
+		config_parser.reset(new INI::Parser(INI_FILE_NAME));
+		preset_parser.reset(new INI::Parser(PRESET_FILE_NAME));
 
 		is_mod_enabled = parse_lossless_export();
 		auto_reload_config = parse_auto_reload_config();
@@ -77,14 +81,15 @@ public:
 	}
 
 private:
-	static std::unique_ptr<INI::Parser> parser;
+	static std::shared_ptr<INI::Parser> config_parser;
+	static std::shared_ptr<INI::Parser> preset_parser;
 
-	static std::string getTrimmed(std::string config_name) {
+	static std::string getTrimmed(std::shared_ptr<INI::Parser> parser, std::string config_name) {
 		std::string orig_str = parser->top()[config_name];
 		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
 	}
 
-	static std::string getTrimmed(std::string config_name, std::string section) {
+	static std::string getTrimmed(std::shared_ptr<INI::Parser> parser, std::string config_name, std::string section) {
 		std::string orig_str = parser->top()(section)[config_name];
 		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
 	}
@@ -154,7 +159,7 @@ private:
 	}
 
 	static bool parse_lossless_export() {
-		std::string string = parser->top()[CFG_ENABLE_XVX];
+		std::string string = config_parser->top()[CFG_ENABLE_XVX];
 
 		try {
 			return succeeded(CFG_ENABLE_XVX, stringToBoolean(string));
@@ -166,10 +171,10 @@ private:
 	}
 
 	static bool parse_auto_reload_config() {
-		std::string string = parser->top()[CFG_AUTO_RELOAD_CONFIG];
+		std::string string = config_parser->top()[CFG_AUTO_RELOAD_CONFIG];
 
 		try {
-			return succeeded(CFG_AUTO_RELOAD_CONFIG, stringToBoolean(parser->top()[CFG_AUTO_RELOAD_CONFIG]));
+			return succeeded(CFG_AUTO_RELOAD_CONFIG, stringToBoolean(config_parser->top()[CFG_AUTO_RELOAD_CONFIG]));
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}
@@ -178,7 +183,7 @@ private:
 	}
 
 	static bool parse_export_openexr() {
-		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_OPENEXR];
+		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_OPENEXR];
 
 		try {
 			return succeeded(CFG_EXPORT_OPENEXR, stringToBoolean(string));
@@ -191,7 +196,7 @@ private:
 
 	static std::string parse_output_dir() {
 		try {
-			std::string string = parser->top()[CFG_OUTPUT_DIR];
+			std::string string = config_parser->top()[CFG_OUTPUT_DIR];
 			string = std::regex_replace(string, std::regex("(^\\s*)|(\\s*$)"), "");
 
 			if ((!string.empty()) && (string.find_first_not_of(' ') != std::string::npos))
@@ -209,7 +214,8 @@ private:
 	}
 
 	static std::string parse_video_enc() {
-		std::string string = getTrimmed(CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
+		std::string string;
+		string = getTrimmed(preset_parser, CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
 		try {
 			if (!string.empty()) {
 				return succeeded(CFG_VIDEO_ENC, string);
@@ -222,7 +228,7 @@ private:
 	}
 
 	static std::string parse_video_fmt() {
-		std::string string = getTrimmed(CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
+		std::string string = getTrimmed(preset_parser, CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
 		try {
 			if (!string.empty()) {
 				return succeeded(CFG_VIDEO_FMT, string);
@@ -235,7 +241,7 @@ private:
 	}
 
 	static std::string parse_video_cfg() {
-		std::string string = getTrimmed(CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
+		std::string string = getTrimmed(preset_parser, CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
 		try {
 			if (!string.empty()) {
 				return succeeded(CFG_VIDEO_CFG, string);
@@ -248,7 +254,7 @@ private:
 	}
 
 	static std::string parse_audio_enc() {
-		std::string string = getTrimmed(CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
+		std::string string = getTrimmed(preset_parser, CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
 		try {
 			if (!string.empty()) {
 				return succeeded(CFG_AUDIO_ENC, string);
@@ -261,7 +267,7 @@ private:
 	}
 
 	static std::string parse_audio_cfg() {
-		std::string string = getTrimmed(CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
+		std::string string = getTrimmed(preset_parser, CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
 		try {
 			if (!string.empty()) {
 				return succeeded(CFG_AUDIO_CFG, string);
@@ -274,7 +280,7 @@ private:
 	}
 
 	static std::string parse_audio_fmt() {
-		std::string string = getTrimmed(CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
+		std::string string = getTrimmed(preset_parser, CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
 		try {
 			if (!string.empty()) {
 				return succeeded(CFG_AUDIO_FMT, string);
@@ -287,7 +293,7 @@ private:
 	}
 
 	static uint32_t parse_audio_rate() {
-		std::string string = getTrimmed(CFG_AUDIO_RATE, CFG_AUDIO_SECTION);;
+		std::string string = getTrimmed(preset_parser, CFG_AUDIO_RATE, CFG_AUDIO_SECTION);;
 		try {
 			if (!string.empty()) {
 				return succeeded(CFG_AUDIO_RATE, std::stoul(string));
@@ -301,7 +307,7 @@ private:
 	}
 
 	static LogLevel parse_log_level() {
-		std::string string = toLower(getTrimmed(CFG_LOG_LEVEL));
+		std::string string = toLower(getTrimmed(config_parser, CFG_LOG_LEVEL));
 		try {
 			if (string == "error") {
 				return succeeded(CFG_LOG_LEVEL, LL_ERR);
@@ -322,7 +328,7 @@ private:
 	}
 
 	static uint8_t parse_motion_blur_samples() {
-		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_SAMPLES];;
+		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_SAMPLES];;
 		string = std::regex_replace(string, std::regex("\\s+"), "");
 		try {
 			uint64_t value = std::stoul(string);
@@ -342,7 +348,7 @@ private:
 	}
 
 	static std::string parse_container_format() {
-		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FORMAT];
+		std::string string = preset_parser->top()(CFG_FORMAT_SECTION)[CFG_EXPORT_FORMAT];
 		string = std::regex_replace(string, std::regex("\\s+"), "");
 		string = toLower(string);
 		try {
@@ -357,7 +363,7 @@ private:
 	}
 
 	static std::pair<int32_t, int32_t> parse_fps() {
-		std::string string = parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
+		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
 		string = std::regex_replace(string, std::regex("\\s+"), "");
 		try {
 			std::smatch match;
