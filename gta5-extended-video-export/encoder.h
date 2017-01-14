@@ -33,6 +33,7 @@ namespace Encoder {
 	public:
 		AVOutputFormat *oformat;
 		AVFormatContext *fmtContext;
+		AVDictionary *fmtOptions;
 		
 		AVCodec *videoCodec = NULL;
 		AVCodecContext *videoCodecContext = NULL;
@@ -164,7 +165,7 @@ namespace Encoder {
 
 		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, std::string outputPixelFormatString, std::string vcodec, std::string preset);
 		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, uint32_t outputSampleRate, std::string outputSampleFormatString, std::string acodec, std::string preset);
-		HRESULT createFormatContext(LPCSTR filename, std::string exrOutputPath);
+		HRESULT createFormatContext(LPCSTR filename, std::string exrOutputPath, std::string fmtOptions);
 
 		HRESULT enqueueVideoFrame(BYTE * pData, int length);
 		HRESULT enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepth, ComPtr<ID3D11Texture2D> cStencil);

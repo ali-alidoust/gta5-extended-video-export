@@ -7,6 +7,7 @@ bool                            config::is_mod_enabled;
 bool                            config::auto_reload_config;
 std::pair<uint32_t, uint32_t>   config::resolution;
 std::string                     config::output_dir;
+std::string                     config::format_cfg;
 std::string                     config::video_enc;
 std::string                     config::video_fmt;
 std::string                     config::video_cfg;

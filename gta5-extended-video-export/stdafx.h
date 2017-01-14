@@ -42,6 +42,7 @@ extern "C" {
 #include "libavcodec\avcodec.h"
 #include "libswscale\swscale.h"
 #include "libavutil\audio_fifo.h"
+#include "libavutil\opt.h"
 #include <yara\libyara.h>
 #include <yara\rules.h>
 #include <yara\compiler.h>

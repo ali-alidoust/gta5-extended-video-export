@@ -536,9 +536,10 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 
 					LOG(LL_NFO, "Output file: ", filename);
 
-					REQUIRE(session->createFormatContext(filename.c_str(), exrOutputPath), "Failed to create format context");
+					REQUIRE(session->createFormatContext(filename.c_str(), exrOutputPath, config::format_cfg), "Failed to create format context");
 				}
-			} catch (std::exception&) {
+			} catch (std::exception& ex) {
+				LOG(LL_ERR, ex.what());
 				LOG_CALL(LL_DBG, session.reset());
 				LOG_CALL(LL_DBG, ::exportContext.reset());
 			}

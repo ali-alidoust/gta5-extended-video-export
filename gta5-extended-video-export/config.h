@@ -19,10 +19,11 @@
 #define CFG_EXPORT_SECTION "EXPORT"
 #define CFG_EXPORT_MB_SAMPLES "motion_blur_samples"
 #define CFG_EXPORT_FPS "fps"
-#define CFG_EXPORT_FORMAT "format"
 #define CFG_EXPORT_OPENEXR "export_openexr"
 
 #define CFG_FORMAT_SECTION "FORMAT"
+#define CFG_EXPORT_FORMAT "format"
+#define CFG_FORMAT_CFG "options"
 
 #define CFG_LOG_LEVEL "log_level"
 #define CFG_VIDEO_SECTION "VIDEO"
@@ -47,6 +48,7 @@ public:
 	static bool                            export_openexr;
 	static std::pair<uint32_t, uint32_t>   resolution;
 	static std::string                     output_dir;
+	static std::string                     format_cfg;
 	static std::string                     video_enc;
 	static std::string                     video_fmt;
 	static std::string                     video_cfg;
@@ -66,6 +68,7 @@ public:
 		is_mod_enabled = parse_lossless_export();
 		auto_reload_config = parse_auto_reload_config();
 		output_dir = parse_output_dir();
+		format_cfg = parse_format_cfg();
 		video_enc = parse_video_enc();
 		video_fmt = parse_video_fmt();
 		video_cfg = parse_video_cfg();
@@ -211,6 +214,17 @@ private:
 			LOG(LL_ERR, ex.what());
 		}
 		throw std::logic_error("Could not parse output directory");
+	}
+
+	static std::string parse_format_cfg() {
+		std::string string = getTrimmed(preset_parser, CFG_FORMAT_CFG, CFG_FORMAT_SECTION);
+		try {
+			return succeeded(CFG_FORMAT_CFG, string);
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_FORMAT_CFG, string, "");
 	}
 
 	static std::string parse_video_enc() {
