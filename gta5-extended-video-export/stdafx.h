@@ -18,6 +18,7 @@
 #pragma comment(lib, "IlmThread.lib")
 #pragma comment(lib, "Iex.lib")
 #pragma comment(lib, "zlibstatic.lib")
+#pragma comment(lib, "xaudio2.lib")
 
 #include <sstream>
 

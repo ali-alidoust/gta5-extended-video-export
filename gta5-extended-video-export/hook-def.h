@@ -5,6 +5,18 @@
 #include <mfreadwrite.h>
 #include <dxgi.h>
 #include <d3d11.h>
+//#include <xaudio2.h>
+
+//static HRESULT CreateSourceVoice(
+//	      IXAudio2              *pThis,
+//	      IXAudio2SourceVoice   **ppSourceVoice,
+//	const WAVEFORMATEX          *pSourceFormat,
+//	      UINT32                Flags,
+//	      float                 MaxFrequencyRatio,
+//	      IXAudio2VoiceCallback *pCallback,
+//	const XAUDIO2_VOICE_SENDS   *pSendList,
+//	const XAUDIO2_EFFECT_CHAIN  *pEffectChain
+//	);
 
 static void Draw(
 	ID3D11DeviceContext *pThis,
@@ -113,6 +125,17 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
 	);
+
+//typedef HRESULT (*tCreateSourceVoice)(
+//	IXAudio2                    *pThis,
+//	IXAudio2SourceVoice         **ppSourceVoice,
+//	const WAVEFORMATEX          *pSourceFormat,
+//	UINT32                      Flags,
+//	float                       MaxFrequencyRatio,
+//	IXAudio2VoiceCallback       *pCallback,
+//	const XAUDIO2_VOICE_SENDS   *pSendList,
+//	const XAUDIO2_EFFECT_CHAIN  *pEffectChain
+//	);
 
 typedef void (*tDraw)(
 	ID3D11DeviceContext *pThis,

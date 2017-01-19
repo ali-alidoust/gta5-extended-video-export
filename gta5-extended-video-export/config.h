@@ -23,6 +23,7 @@
 
 #define CFG_FORMAT_SECTION "FORMAT"
 #define CFG_EXPORT_FORMAT "format"
+#define CFG_FORMAT_EXT "extension"
 #define CFG_FORMAT_CFG "options"
 
 #define CFG_LOG_LEVEL "log_level"
@@ -49,6 +50,7 @@ public:
 	static std::pair<uint32_t, uint32_t>   resolution;
 	static std::string                     output_dir;
 	static std::string                     format_cfg;
+	static std::string                     format_ext;
 	static std::string                     video_enc;
 	static std::string                     video_fmt;
 	static std::string                     video_cfg;
@@ -69,6 +71,7 @@ public:
 		auto_reload_config = parse_auto_reload_config();
 		output_dir = parse_output_dir();
 		format_cfg = parse_format_cfg();
+		format_ext = parse_format_ext();
 		video_enc = parse_video_enc();
 		video_fmt = parse_video_fmt();
 		video_cfg = parse_video_cfg();
@@ -227,6 +230,17 @@ private:
 		return failed(CFG_FORMAT_CFG, string, "");
 	}
 
+	static std::string parse_format_ext() {
+		std::string string = getTrimmed(preset_parser, CFG_FORMAT_EXT, CFG_FORMAT_SECTION);
+		try {
+			return succeeded(CFG_FORMAT_EXT, string);
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+
+		return failed(CFG_FORMAT_EXT, string, "");
+	}
+
 	static std::string parse_video_enc() {
 		std::string string;
 		string = getTrimmed(preset_parser, CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
@@ -238,7 +252,9 @@ private:
 			LOG(LL_ERR, ex.what());
 		}
 
-		return failed(CFG_VIDEO_ENC, string, "libx264");
+		LOG(LL_NFO, "No video encoder specified. Video encoding will be disabled.");
+		return "";
+		//return failed(CFG_VIDEO_ENC, string, "");
 	}
 
 	static std::string parse_video_fmt() {
@@ -277,7 +293,9 @@ private:
 			LOG(LL_ERR, ex.what());
 		}
 
-		return failed(CFG_AUDIO_ENC, string, "ac3");
+		LOG(LL_NFO, "No audio encoder specified. Audio encoding will be disabled.");
+		return "";
+		//return failed(CFG_AUDIO_ENC, string, "ac3");
 	}
 
 	static std::string parse_audio_cfg() {
@@ -366,9 +384,9 @@ private:
 		string = std::regex_replace(string, std::regex("\\s+"), "");
 		string = toLower(string);
 		try {
-			if (string == "mkv" || string == "avi" || string == "mp4") {
+			//if (string == "mkv" || string == "avi" || string == "mp4") {
 				return succeeded(CFG_EXPORT_FORMAT, string);
-			}
+			//}
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}

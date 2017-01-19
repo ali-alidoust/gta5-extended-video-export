@@ -24,6 +24,9 @@ typedef void* (*tCreateTexture)(void* rcx, char* name, uint32_t r8d, uint32_t wi
 static void* Detour_LinearizeTexture(void* rcx, void* rdx);
 typedef void* (*tLinearizeTexture)(void* rcx, void* rdx);
 
+static uint8_t Detour_AudioUnk01(void* rcx);
+typedef uint8_t (*tAudioUnk01)(void* rcx);
+
 //static void* Detour_GetGlobalVariableIndex(char* name, uint32_t edx);
 //typedef void* (*tGetGlobalVariableIndex)(char* name, uint32_t edx);
 //

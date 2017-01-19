@@ -152,7 +152,7 @@ namespace Encoder {
 		UINT inputAudioChannels;
 		UINT outputAudioSampleRate;
 		UINT outputAudioChannels;
-		char filename[MAX_PATH];
+		std::string filename;
 		std::string exrOutputPath;
 		uint64_t exrPTS=0;
 		//LPWSTR *outputDir;
@@ -164,8 +164,8 @@ namespace Encoder {
 		~Session();
 
 		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, std::string outputPixelFormatString, std::string vcodec, std::string preset);
-		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, uint32_t outputSampleRate, std::string outputSampleFormatString, std::string acodec, std::string preset);
-		HRESULT createFormatContext(LPCSTR filename, std::string exrOutputPath, std::string fmtOptions);
+		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, std::string outputSampleFormatString, std::string acodec, std::string preset);
+		HRESULT createFormatContext(std::string format, std::string filename, std::string exrOutputPath, std::string fmtOptions);
 
 		HRESULT enqueueVideoFrame(BYTE * pData, int length);
 		HRESULT enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepth, ComPtr<ID3D11Texture2D> cStencil);

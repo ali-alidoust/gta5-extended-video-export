@@ -11,6 +11,7 @@
 #include "yara-helper.h"
 #include "game-detour-def.h"
 #include <DirectXMath.h>
+#include <xaudio2.h>
 
 #include "..\DirectXTex\DirectXTex\DirectXTex.h"
 #include "hook-def.h"
@@ -25,6 +26,7 @@ namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkIMFSinkWriter_Finalize(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkOMSetRenderTargets(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkDraw(new PLH::VFuncDetour);
+	std::shared_ptr<PLH::VFuncDetour> hkCreateSourceVoice(new PLH::VFuncDetour);
 	
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);
@@ -37,6 +39,7 @@ namespace {
 	std::shared_ptr<PLH::X64Detour> hkCreateTexture(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkCreateExportTexture(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkLinearizeTexture(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkAudioUnk01(new PLH::X64Detour);
 
 	/*std::shared_ptr<PLH::X64Detour> hkGetGlobalVariableIndex(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetVariable(new PLH::X64Detour);
@@ -117,7 +120,9 @@ tIMFSinkWriter_Finalize oIMFSinkWriter_Finalize;
 tOMSetRenderTargets oOMSetRenderTargets;
 tGetRenderTimeBase oGetRenderTimeBase;
 tCreateTexture oCreateTexture;
+//tCreateSourceVoice oCreateSourceVoice;
 tDraw oDraw;
+tAudioUnk01 oAudioUnk01;
 
 void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	static char msg[8192];
@@ -137,6 +142,21 @@ void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 	}
 	Logger::instance().write(msg);
 }
+
+//static HRESULT CreateSourceVoice(
+//	IXAudio2                    *pThis,
+//	IXAudio2SourceVoice         **ppSourceVoice,
+//	const WAVEFORMATEX          *pSourceFormat,
+//	UINT32                      Flags,
+//	float                       MaxFrequencyRatio,
+//	IXAudio2VoiceCallback       *pCallback,
+//	const XAUDIO2_VOICE_SENDS   *pSendList,
+//	const XAUDIO2_EFFECT_CHAIN  *pEffectChain
+//	) {
+//	PRE();
+//	POST();
+//	return oCreateSourceVoice(pThis, ppSourceVoice, pSourceFormat, Flags, MaxFrequencyRatio, pCallback, pSendList, pEffectChain);
+//}
 
 void onPresent(IDXGISwapChain *swapChain) {
 	mainSwapChain = swapChain;
@@ -179,6 +199,11 @@ void initialize() {
 	try {
 		mainThreadId = std::this_thread::get_id();
 
+		/*ComPtr<IXAudio2> pXAudio;
+		REQUIRE(XAudio2Create(pXAudio.GetAddressOf(), 0, XAUDIO2_DEFAULT_PROCESSOR), "Failed to create XAudio2 object");
+		REQUIRE(hookVirtualFunction(pXAudio.Get(), 5, &CreateSourceVoice, &oCreateSourceVoice, hkCreateSourceVoice), "Failed to hook IXAudio2::CreateSourceVoice");*/
+
+
 		REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
 		REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
 			
@@ -192,7 +217,9 @@ void initialize() {
 		void* pGetRenderTimeBase = NULL;
 		void* pCreateTexture = NULL;
 		void* pLinearizeTexture = NULL;
+		void* pAudioUnk01 = NULL;
 		pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function, &pGetRenderTimeBase);
+		pYaraHelper->addEntry("yara_audio_unk01_function", yara_audio_unk01_function, &pAudioUnk01);
 		//pYaraHelper->addEntry("yara_create_export_texture_function", yara_create_export_texture_function, &pCreateExportTexture);
 		pYaraHelper->addEntry("yara_create_texture_function", yara_create_texture_function, &pCreateTexture);
 		/*pYaraHelper->addEntry("yara_global_unk01_command", yara_global_unk01_command, &pGlobalUnk01Cmd);
@@ -215,6 +242,12 @@ void initialize() {
 			} else {
 				LOG(LL_ERR, "Could not find the address for CreateTexture function.");
 			}
+
+			/*if (pAudioUnk01) {
+				REQUIRE(hookX64Function(pAudioUnk01, &Detour_AudioUnk01, &oAudioUnk01, hkAudioUnk01), "Failed to hook AudioUnk01 function.");
+			} else {
+				LOG(LL_ERR, "Could not find the address for AudioUnk01 function.");
+			}*/
 
 			/*if (pCreateExportTexture) {
 				REQUIRE(hookX64Function(pCreateExportTexture, &Detour_CreateTexture, &oCreateTexture, hkCreateExportTexture), "Failed to hook CreateExportTexture function.");
@@ -488,7 +521,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 						if (((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second) > 60.0f) {
 							LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
 							LOG(LL_NON, "Audio export will be disabled!!!");
-							::exportContext->isAudioExportDisabled = true;
+							//::exportContext->isAudioExportDisabled = true;
 						}
 					}
 
@@ -507,7 +540,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
 
 					if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
-						REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, config::audio_rate, config::audio_fmt, config::audio_enc, config::audio_cfg), "Failed to create audio context.");
+						REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, config::audio_fmt, config::audio_enc, config::audio_cfg), "Failed to create audio context.");
 					} else {
 						char buffer[64];
 						GUIDToString(subType, buffer, 64);
@@ -522,7 +555,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					std::string output_file = config::output_dir;
 					std::string exrOutputPath;
 
-					output_file += "\\XVX-";
+					output_file += "\\EVE-";
 					time_t rawtime;
 					struct tm timeinfo;
 					time(&rawtime);
@@ -530,13 +563,13 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
 					output_file += buffer;
 					exrOutputPath = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
-					output_file += "." + config::container_format;
+					output_file += "." + config::format_ext;
 
 					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
 
 					LOG(LL_NFO, "Output file: ", filename);
 
-					REQUIRE(session->createFormatContext(filename.c_str(), exrOutputPath, config::format_cfg), "Failed to create format context");
+					REQUIRE(session->createFormatContext(config::container_format, filename.c_str(), exrOutputPath, config::format_cfg), "Failed to create format context");
 				}
 			} catch (std::exception& ex) {
 				LOG(LL_ERR, ex.what());
@@ -556,6 +589,7 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 	IMFSample     *pSample
 	) {
 	std::lock_guard<std::mutex> sessionLock(mxSession);
+
 	if ((session != NULL) && (dwStreamIndex == 1) && (!::exportContext->isAudioExportDisabled)) {
 
 		ComPtr<IMFMediaBuffer> pBuffer = NULL;
@@ -580,6 +614,9 @@ static HRESULT Hook_IMFSinkWriter_WriteSample(
 			}
 		}
 	}
+	/*if (!session) { 
+		return E_FAIL;
+	}*/
 	return S_OK;
 }
 
@@ -660,6 +697,10 @@ static float Detour_GetRenderTimeBase(int64_t choice) {
 	float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
 	LOG(LL_NFO, "Time step: ", result);
 	return result;
+}
+
+static uint8_t Detour_AudioUnk01(void* rcx) {
+	return 1;
 }
 
 static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30) {
