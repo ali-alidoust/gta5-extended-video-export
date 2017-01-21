@@ -14,6 +14,7 @@
 #include <valarray>
 #include "SafeQueue.h"
 #include <d3d11.h>
+#include <dxgi.h>
 #include <wrl.h>
 
 using namespace Microsoft::WRL;
@@ -173,8 +174,8 @@ namespace Encoder {
 		void videoEncodingThread();
 		void exrEncodingThread();
 
-		HRESULT writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime);
-		HRESULT writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime);
+		HRESULT writeVideoFrame(BYTE *pData, size_t length, LONGLONG sampleTime);
+		HRESULT writeAudioFrame(BYTE *pData, size_t length, LONGLONG sampleTime);
 
 		HRESULT finishVideo();
 		HRESULT finishAudio();

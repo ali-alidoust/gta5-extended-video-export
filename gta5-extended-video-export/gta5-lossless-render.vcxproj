@@ -76,9 +76,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\Program Files %28x86%29\Windows Kits\8.1\Lib\winv6.3\um\x64;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -86,9 +86,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <LibraryPath>C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -109,9 +109,10 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0601</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <DisableSpecificWarnings>4099;4133;4334;4091;4199</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -122,8 +123,7 @@
       <DelayLoadDLLs>avcodec-57.dll;avdevice-57.dll;avfilter-6.dll;avformat-57.dll;avutil-55.dll;postproc-54.dll;swresample-2.dll;swscale-4.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*
-xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
+      <Command>xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -151,10 +151,11 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0601</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <DisableSpecificWarnings>4099;4133;4334;4091;4199;4373</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -163,17 +164,15 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalOptions>/LTCG /ignore:"4091,4099" %(AdditionalOptions)</AdditionalOptions>
       <IgnoreSpecificDefaultLibraries>libcmt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <DelayLoadDLLs>avcodec-57.dll;avdevice-57.dll;avfilter-6.dll;avformat-57.dll;avutil-55.dll;postproc-54.dll;swresample-2.dll;swscale-4.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <DelayLoadDLLs>avcodec-57.dll;avformat-57.dll;avutil-55.dll;swresample-2.dll;swscale-4.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /y "$(ProjectDir)default.ini" "$(OutDir)$(TargetName).ini"*
-xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
+      <Command>del /F /Q "$(OutDir)EVE"
+xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Text Include="AVCodecContextParams.txt" />
-    <Text Include="preset.ini" />
-    <Text Include="readme.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\DirectXTex\DirectXTex\BC.h" />
@@ -183,7 +182,6 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
     <ClInclude Include="..\DirectXTex\DirectXTex\DirectXTexP.h" />
     <ClInclude Include="..\DirectXTex\DirectXTex\Filters.h" />
     <ClInclude Include="..\DirectXTex\DirectXTex\scoped.h" />
-    <ClInclude Include="..\PolyHook\PolyHook\PolyHook.h" />
     <ClInclude Include="config.h" />
     <ClInclude Include="encoder.h" />
     <ClInclude Include="game-detour-def.h" />
@@ -219,7 +217,6 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexTGA.cpp" />
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexUtil.cpp" />
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexWIC.cpp" />
-    <ClCompile Include="..\PolyHook\PolyHook\PolyHook.cpp" />
     <ClCompile Include="config.cpp" />
     <ClCompile Include="dllmain.cpp">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
@@ -242,10 +239,6 @@ xcopy /y "$(ProjectDir)readme.txt" "$(OutDir)$(TargetName).txt"*</Command>
     <ClCompile Include="yara-helper.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="default.ini">
-      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
-    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

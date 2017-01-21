@@ -25,33 +25,18 @@
     <Filter Include="Submodules\DirectXTex\Source Files">
       <UniqueIdentifier>{67468996-9eef-424f-bede-abf329d92d4f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="deploy">
-      <UniqueIdentifier>{e9b46500-a24c-4b4c-a059-fd3c6c291bca}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Shaders">
       <UniqueIdentifier>{86ac3c01-cc4c-4e5d-bf1c-1c4c5aa175b8}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="AVCodecContextParams.txt" />
-    <Text Include="ReadMe.txt">
-      <Filter>deploy</Filter>
-    </Text>
-    <Text Include="readme.txt">
-      <Filter>deploy</Filter>
-    </Text>
-    <Text Include="preset.ini">
-      <Filter>deploy</Filter>
-    </Text>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="script.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\PolyHook\PolyHook\PolyHook.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="MFUtility.h">
@@ -114,9 +99,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="script.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\PolyHook\PolyHook\PolyHook.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="custom-hooks.h">
@@ -196,9 +178,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="default.ini">
-      <Filter>deploy</Filter>
-    </None>
     <None Include="packages.config" />
   </ItemGroup>
 </Project>

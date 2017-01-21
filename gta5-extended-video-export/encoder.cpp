@@ -81,7 +81,7 @@ namespace Encoder {
 		}
 
 		if (vcodec.empty()) {
-			this->videoCodecContext == nullptr;
+			this->videoCodecContext = nullptr;
 			this->isVideoContextCreated = true;
 			this->cvVideoContext.notify_all();
 			POST();
@@ -154,7 +154,7 @@ namespace Encoder {
 		}
 
 		if (acodec.empty()) {
-			this->audioCodecContext == nullptr;
+			this->audioCodecContext = nullptr;
 			this->isAudioContextCreated = true;
 			this->cvAudioContext.notify_all();
 			POST();
@@ -244,6 +244,8 @@ namespace Encoder {
 		RET_IF_NULL(this->oformat, "Could not create format", E_FAIL);
 		RET_IF_FAILED_AV(avformat_alloc_output_context2(&this->fmtContext, this->oformat, NULL, NULL), "Could not allocate format context", E_FAIL);
 		RET_IF_NULL(this->fmtContext, "Could not allocate format context", E_FAIL);
+
+		this->fmtContext->oformat = this->oformat;
 
 		if (this->fmtContext->oformat->flags & AVFMT_GLOBALHEADER)
 		{
@@ -469,7 +471,7 @@ namespace Encoder {
 					stencilBuffer = std::vector<uint32_t>(item.mStencilData.RowPitch * this->height);
 					uint8_t* mSArray = (uint8_t*)item.mStencilData.pData;
 
-					for (int i = 0; i < item.mStencilData.RowPitch * this->height; i++) {
+					for (uint32_t i = 0; i < item.mStencilData.RowPitch * this->height; i++) {
 						stencilBuffer[i] = static_cast<uint32_t>(mSArray[i]);
 					}
 
@@ -505,7 +507,7 @@ namespace Encoder {
 		POST();
 	}
 
-	HRESULT Session::writeVideoFrame(BYTE *pData, int length, LONGLONG sampleTime) {
+	HRESULT Session::writeVideoFrame(BYTE *pData, size_t length, LONGLONG sampleTime) {
 		PRE();
 		if (this->isBeingDeleted) {
 			POST();
@@ -581,7 +583,7 @@ namespace Encoder {
 		return S_OK;
 	}
 
-	HRESULT Session::writeAudioFrame(BYTE *pData, int length, LONGLONG sampleTime)
+	HRESULT Session::writeAudioFrame(BYTE *pData, size_t length, LONGLONG sampleTime)
 	{
 		PRE();
 
@@ -603,14 +605,14 @@ namespace Encoder {
 			}
 		}
 		
-		int numSamples = length / av_samples_get_buffer_size(NULL, this->inputAudioFrame->channels, 1, (AVSampleFormat)this->inputAudioFrame->format, this->audioBlockAlign);
+		int64_t numSamples = length / av_samples_get_buffer_size(NULL, this->inputAudioFrame->channels, 1, (AVSampleFormat)this->inputAudioFrame->format, this->audioBlockAlign);
 
-		this->inputAudioFrame->nb_samples = numSamples;
+		this->inputAudioFrame->nb_samples = static_cast<int>(numSamples);
 
-		int numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) + numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
-		this->outputAudioFrame->nb_samples = numOutSamples;
+		int64_t numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) + numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
+		this->outputAudioFrame->nb_samples = static_cast<int>(numOutSamples);
 
-		avcodec_fill_audio_frame(this->inputAudioFrame, this->inputAudioFrame->channels, (AVSampleFormat)this->inputAudioFrame->format, pData, length, this->audioBlockAlign);
+		avcodec_fill_audio_frame(this->inputAudioFrame, this->inputAudioFrame->channels, (AVSampleFormat)this->inputAudioFrame->format, pData, static_cast<int>(length), this->audioBlockAlign);
 		RET_IF_FAILED_AV(swr_convert_frame(this->pSwrContext, this->outputAudioFrame, this->inputAudioFrame), "Failed to convert audio frame", E_FAIL);
 		av_audio_fifo_write(this->audioSampleBuffer, (void**)this->outputAudioFrame->data, this->outputAudioFrame->nb_samples);
 

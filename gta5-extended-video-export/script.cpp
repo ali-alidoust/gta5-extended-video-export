@@ -11,7 +11,17 @@
 #include "yara-helper.h"
 #include "game-detour-def.h"
 #include <DirectXMath.h>
-#include <xaudio2.h>
+//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\comdecl.h>
+//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\xaudio2.h>
+//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\XAudio2fx.h>
+//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\XAPOFX.h>
+#pragma warning(push)
+#pragma warning( disable : 4005 )
+//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\x3daudio.h>
+#pragma warning(pop)
+//#pragma comment(lib,"x3daudio.lib")
+//#pragma comment(lib,"xapofx.lib")
+
 
 #include "..\DirectXTex\DirectXTex\DirectXTex.h"
 #include "hook-def.h"
@@ -27,6 +37,7 @@ namespace {
 	std::shared_ptr<PLH::VFuncDetour> hkOMSetRenderTargets(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkDraw(new PLH::VFuncDetour);
 	std::shared_ptr<PLH::VFuncDetour> hkCreateSourceVoice(new PLH::VFuncDetour);
+	std::shared_ptr<PLH::VFuncDetour> hkSubmitSourceBuffer(new PLH::VFuncDetour);
 	
 	std::shared_ptr<PLH::IATHook> hkCoCreateInstance(new PLH::IATHook);
 	std::shared_ptr<PLH::IATHook> hkMFCreateSinkWriterFromURL(new PLH::IATHook);
@@ -121,6 +132,7 @@ tOMSetRenderTargets oOMSetRenderTargets;
 tGetRenderTimeBase oGetRenderTimeBase;
 tCreateTexture oCreateTexture;
 //tCreateSourceVoice oCreateSourceVoice;
+//tSubmitSourceBuffer oSubmitSourceBuffer;
 tDraw oDraw;
 tAudioUnk01 oAudioUnk01;
 
@@ -154,8 +166,24 @@ void avlog_callback(void *ptr, int level, const char* fmt, va_list vargs) {
 //	const XAUDIO2_EFFECT_CHAIN  *pEffectChain
 //	) {
 //	PRE();
+//	HRESULT result = oCreateSourceVoice(pThis, ppSourceVoice, pSourceFormat, Flags, MaxFrequencyRatio, pCallback, pSendList, pEffectChain);
+//	if (SUCCEEDED(result)) {
+//		hookVirtualFunction(*ppSourceVoice, 21, &SubmitSourceBuffer, &oSubmitSourceBuffer, hkSubmitSourceBuffer);
+//	}
+//	//WAVEFORMATEX *pSourceFormatRW = (WAVEFORMATEX *)pSourceFormat;
+//	//pSourceFormatRW->nSamplesPerSec = pSourceFormat->nSamplesPerSec;
 //	POST();
-//	return oCreateSourceVoice(pThis, ppSourceVoice, pSourceFormat, Flags, MaxFrequencyRatio, pCallback, pSendList, pEffectChain);
+//	return result;
+//}
+
+//static HRESULT SubmitSourceBuffer(
+//	IXAudio2SourceVoice      *pThis,
+//	const XAUDIO2_BUFFER     *pBuffer,
+//	const XAUDIO2_BUFFER_WMA *pBufferWMA
+//	) {
+//	//StackDump(128, __func__);
+//	return oSubmitSourceBuffer(pThis, pBuffer, pBufferWMA);
+//	//return S_OK;
 //}
 
 void onPresent(IDXGISwapChain *swapChain) {
@@ -199,9 +227,33 @@ void initialize() {
 	try {
 		mainThreadId = std::this_thread::get_id();
 
-		/*ComPtr<IXAudio2> pXAudio;
-		REQUIRE(XAudio2Create(pXAudio.GetAddressOf(), 0, XAUDIO2_DEFAULT_PROCESSOR), "Failed to create XAudio2 object");
-		REQUIRE(hookVirtualFunction(pXAudio.Get(), 5, &CreateSourceVoice, &oCreateSourceVoice, hkCreateSourceVoice), "Failed to hook IXAudio2::CreateSourceVoice");*/
+		/*REQUIRE(CoInitializeEx(NULL, COINIT_MULTITHREADED), "Failed to initialize COM");
+
+		ComPtr<IXAudio2> pXAudio;
+		REQUIRE(XAudio2Create(pXAudio.GetAddressOf(), 0, XAUDIO2_DEFAULT_PROCESSOR), "Failed to create XAudio2 object");*/
+		//REQUIRE(hookVirtualFunction(pXAudio.Get(), 11, &CreateSourceVoice, &oCreateSourceVoice, hkCreateSourceVoice), "Failed to hook IXAudio2::CreateSourceVoice");
+		//IXAudio2MasteringVoice *pMasterVoice;
+		//WAVEFORMATEX waveFormat;
+
+		//UINT32 deviceCount; // Number of devices
+		//pXAudio->GetDeviceCount(&deviceCount);
+
+		//XAUDIO2_DEVICE_DETAILS deviceDetails;	// Structure to hold details about audio device
+		//int preferredDevice = 0;				// Device to be used
+
+		//										// Loop through devices 
+		//for (unsigned int i = 0; i < deviceCount; i++)
+		//{
+		//	// Get device details
+		//	pXAudio->GetDeviceDetails(i, &deviceDetails);
+		//	// Check conditions ( default device )
+		//	if (deviceDetails.Role == DefaultCommunicationsDevice)
+		//	{
+		//		preferredDevice = i;
+		//		break;
+		//	}
+
+		//}
 
 
 		REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
@@ -323,6 +375,12 @@ static HRESULT Hook_CoCreateInstance(
 	) {
 	PRE();
 	HRESULT result = oCoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+
+	/*if (IsEqualGUID(riid, _uuidof(IXAudio2))) {
+		IXAudio2* pXAudio = (IXAudio2*)(*ppv);
+		REQUIRE(hookVirtualFunction(pXAudio, 8, &CreateSourceVoice, &oCreateSourceVoice, hkCreateSourceVoice), "Failed to hook IXAudio2::CreateSourceVoice");
+	}*/
+
 	char buffer[64];
 	GUIDToString(rclsid, buffer, 64);
 	LOG(LL_NFO, "CoCreateInstance: ", buffer);
@@ -338,7 +396,7 @@ static void Hook_OMSetRenderTargets(
 	) {
 
 	if (::exportContext) {
-		for (int i = 0; i < NumViews; i++) {
+		for (uint32_t i = 0; i < NumViews; i++) {
 			if (ppRenderTargetViews[i]) {
 				ComPtr<ID3D11Resource> pResource;
 				ComPtr<ID3D11Texture2D> pTexture2D;
@@ -521,7 +579,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 						if (((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second) > 60.0f) {
 							LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
 							LOG(LL_NON, "Audio export will be disabled!!!");
-							//::exportContext->isAudioExportDisabled = true;
+							::exportContext->isAudioExportDisabled = true;
 						}
 					}
 

@@ -35,7 +35,6 @@
 #define CFG_AUDIO_SECTION "AUDIO"
 #define CFG_AUDIO_ENC "encoder"
 #define CFG_AUDIO_FMT "sample_format"
-#define CFG_AUDIO_RATE "sample_rate"
 #define CFG_AUDIO_CFG "options"
 
 //#define CFG_AUDIO_CODEC "audio_codec"
@@ -57,7 +56,6 @@ public:
 	static std::string                     audio_enc;
 	static std::string                     audio_cfg;
 	static std::string                     audio_fmt;
-	static uint32_t                        audio_rate;
 	static LogLevel                        log_level;
 	static std::pair<uint32_t, uint32_t>   fps;
 	static uint8_t                         motion_blur_samples;
@@ -78,7 +76,6 @@ public:
 		audio_enc = parse_audio_enc();
 		audio_cfg = parse_audio_cfg();
 		audio_fmt = parse_audio_fmt();
-		audio_rate = parse_audio_rate();
 		container_format = parse_container_format();
 		log_level = parse_log_level();
 		fps = parse_fps();
@@ -322,20 +319,6 @@ private:
 		}
 
 		return failed(CFG_AUDIO_FMT, string, "fltp");
-	}
-
-	static uint32_t parse_audio_rate() {
-		std::string string = getTrimmed(preset_parser, CFG_AUDIO_RATE, CFG_AUDIO_SECTION);;
-		try {
-			if (!string.empty()) {
-				return succeeded(CFG_AUDIO_RATE, std::stoul(string));
-			} else {
-				LOG(LL_NON, "Audio sample format not supplied in .ini file, using default: 48000");
-			}
-		} catch (std::exception& ex) {
-			LOG(LL_ERR, ex.what());
-		}
-		return failed(CFG_AUDIO_RATE, string, 48000);
 	}
 
 	static LogLevel parse_log_level() {

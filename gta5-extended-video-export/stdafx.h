@@ -18,7 +18,9 @@
 #pragma comment(lib, "IlmThread.lib")
 #pragma comment(lib, "Iex.lib")
 #pragma comment(lib, "zlibstatic.lib")
-#pragma comment(lib, "xaudio2.lib")
+#pragma comment(lib, "PolyHook.lib")
+//#pragma comment(lib, "x3daudio.lib")
+//#pragma comment(lib, "xapofx.lib")
 
 #include <sstream>
 

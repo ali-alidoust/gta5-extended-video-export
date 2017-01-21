@@ -7,6 +7,12 @@
 #include <d3d11.h>
 //#include <xaudio2.h>
 
+//static HRESULT SubmitSourceBuffer(
+//	IXAudio2SourceVoice      *pThis,
+//	const XAUDIO2_BUFFER     *pBuffer,
+//	const XAUDIO2_BUFFER_WMA *pBufferWMA
+//	);
+//
 //static HRESULT CreateSourceVoice(
 //	      IXAudio2              *pThis,
 //	      IXAudio2SourceVoice   **ppSourceVoice,
@@ -126,6 +132,12 @@ static HRESULT Hook_IMFSinkWriter_Finalize(
 	IMFSinkWriter *pThis
 	);
 
+//typedef HRESULT (*tSubmitSourceBuffer)(
+//	IXAudio2SourceVoice      *pThis,
+//	const XAUDIO2_BUFFER     *pBuffer,
+//	const XAUDIO2_BUFFER_WMA *pBufferWMA
+//	);
+//
 //typedef HRESULT (*tCreateSourceVoice)(
 //	IXAudio2                    *pThis,
 //	IXAudio2SourceVoice         **ppSourceVoice,
