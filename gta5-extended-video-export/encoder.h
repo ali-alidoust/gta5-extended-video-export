@@ -143,6 +143,7 @@ namespace Encoder {
 		UINT width;
 		UINT height;
 		UINT framerate;
+		float audioSampleRateMultiplier;
 		uint32_t motionBlurSamples;
 		UINT audioBlockAlign;
 		AVPixelFormat outputPixelFormat;

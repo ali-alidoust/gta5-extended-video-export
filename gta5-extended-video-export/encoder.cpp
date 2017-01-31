@@ -114,6 +114,8 @@ namespace Encoder {
 		this->motionBlurTempBuffer = std::valarray<uint16_t>(width * height * 4);
 		this->motionBlurDestBuffer = std::valarray<uint8_t>(width * height * 4);
 
+		this->audioSampleRateMultiplier = ((float)fps_num * ((float)motionBlurSamples + 1)) / ((float)fps_den * 60.0f);
+
 
 		this->videoCodec = avcodec_find_encoder_by_name(vcodec.c_str());
 		RET_IF_NULL(this->videoCodec, "Could not find video codec:" + vcodec, E_FAIL);
@@ -167,7 +169,8 @@ namespace Encoder {
 		LOG(LL_NFO, "  options: ", preset);
 		//AVCodecID audioCodecId = AV_CODEC_ID_PCM_S16LE;
 
-		this->inputAudioSampleRate = inputSampleRate;
+		this->inputAudioSampleRate = static_cast<uint32_t>(inputSampleRate * this->audioSampleRateMultiplier);
+		//this->inputAudioSampleRate = inputSampleRate;
 		this->inputAudioChannels = inputChannels;
 		this->outputAudioChannels = inputChannels; // FIXME
 
@@ -195,7 +198,7 @@ namespace Encoder {
 
 		this->outputAudioSampleRate = this->audioCodecContext->sample_rate;
 		
-		RET_IF_FAILED(this->createAudioFrames(inputChannels, inputSampleFormat, inputSampleRate, inputChannels, outputSampleFormat, this->outputAudioSampleRate), "Could not create audio frames", E_FAIL);
+		RET_IF_FAILED(this->createAudioFrames(inputChannels, inputSampleFormat, this->inputAudioSampleRate, inputChannels, outputSampleFormat, this->outputAudioSampleRate), "Could not create audio frames", E_FAIL);
 
 		av_dict_parse_string(&this->audioOptions, preset.c_str(), "=", "/", 0);
 		
@@ -609,33 +612,51 @@ namespace Encoder {
 
 		this->inputAudioFrame->nb_samples = static_cast<int>(numSamples);
 
-		int64_t numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) + numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
-		this->outputAudioFrame->nb_samples = static_cast<int>(numOutSamples);
+		//int64_t numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) + numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
+		int numOutSamples = swr_get_out_samples(this->pSwrContext, this->inputAudioFrame->nb_samples);
+		if (numOutSamples < 0) {
+			RET_IF_FAILED_AV(numOutSamples, "Failed to calculate number of output samples.", E_FAIL);
+		}
 
-		avcodec_fill_audio_frame(this->inputAudioFrame, this->inputAudioFrame->channels, (AVSampleFormat)this->inputAudioFrame->format, pData, static_cast<int>(length), this->audioBlockAlign);
-		RET_IF_FAILED_AV(swr_convert_frame(this->pSwrContext, this->outputAudioFrame, this->inputAudioFrame), "Failed to convert audio frame", E_FAIL);
-		av_audio_fifo_write(this->audioSampleBuffer, (void**)this->outputAudioFrame->data, this->outputAudioFrame->nb_samples);
+		if (!numOutSamples) {
+			LOG(LL_DBG, "FUCK!!!");
+		}
 
 		int frameSize = this->audioCodecContext->frame_size ? this->audioCodecContext->frame_size : 256;
+		this->outputAudioFrame->nb_samples = frameSize;//static_cast<int>(numOutSamples);
+		
+		avcodec_fill_audio_frame(this->inputAudioFrame, this->inputAudioFrame->channels, (AVSampleFormat)this->inputAudioFrame->format, pData, static_cast<int>(length), this->audioBlockAlign);
+		RET_IF_FAILED_AV(swr_convert_frame(this->pSwrContext, this->outputAudioFrame, this->inputAudioFrame), "Failed to convert audio frame", E_FAIL);
+		
+		//swr_convert()
 
-		if (av_audio_fifo_size(this->audioSampleBuffer) < frameSize) {
+		if (!this->outputAudioFrame->nb_samples) {
 			POST();
 			return S_OK;
 		}
+
+		//av_audio_fifo_write(this->audioSampleBuffer, (void**)this->outputAudioFrame->data, this->outputAudioFrame->nb_samples);
+
+
+		/*if (av_audio_fifo_size(this->audioSampleBuffer) < frameSize) {
+			POST();
+			return S_OK;
+		}*/
 		
 
-		int bufferSize = av_samples_get_buffer_size(NULL, this->outputAudioChannels, frameSize, this->outputAudioSampleFormat, 0);
-		uint8_t* localBuffer = new uint8_t[bufferSize];
-		AVFrame* localFrame = av_frame_alloc();
+		//int bufferSize = av_samples_get_buffer_size(NULL, this->outputAudioChannels, frameSize, this->outputAudioSampleFormat, 0);
+		//uint8_t* localBuffer = new uint8_t[bufferSize];
+		/*AVFrame* localFrame = av_frame_alloc();
 		localFrame->channel_layout = AV_CH_LAYOUT_STEREO;
 		localFrame->format = this->outputAudioSampleFormat;
-		localFrame->nb_samples = frameSize;
-		avcodec_fill_audio_frame(localFrame, this->outputAudioChannels, this->outputAudioSampleFormat, localBuffer, bufferSize, 0);
-		av_audio_fifo_read(this->audioSampleBuffer, (void**)localFrame->data, frameSize);
+		localFrame->nb_samples = frameSize;*/
+		//avcodec_fill_audio_frame(localFrame, this->outputAudioChannels, this->outputAudioSampleFormat, localBuffer, bufferSize, 0);
+		//av_audio_fifo_read(this->audioSampleBuffer, (void**)localFrame->data, frameSize);
 
 
-		localFrame->pts = this->audioPTS;
-		this->audioPTS += localFrame->nb_samples;
+		//localFrame->pts = this->audioPTS;
+		//this->audioPTS += localFrame->nb_samples;
+		this->audioPTS += frameSize;
 
 		std::shared_ptr<AVPacket> pPkt(new AVPacket(), av_packet_unref);
 
@@ -643,9 +664,9 @@ namespace Encoder {
 		pPkt->data = NULL;
 		pPkt->size = 0;
 
-		avcodec_send_frame(this->audioCodecContext, localFrame);
-		delete[] localBuffer;
-		av_frame_free(&localFrame);
+		avcodec_send_frame(this->audioCodecContext, this->outputAudioFrame);
+		//delete[] localBuffer;
+		//av_frame_free(&localFrame);
 		if (SUCCEEDED(avcodec_receive_packet(this->audioCodecContext, pPkt.get()))) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
 			av_packet_rescale_ts(pPkt.get(), this->audioCodecContext->time_base, this->audioStream->time_base);
@@ -860,6 +881,15 @@ namespace Encoder {
 			inputSampleFmt,
 			inputSampleRate,
 			AV_LOG_TRACE, NULL);
+
+		std::stringstream cutoff;
+		cutoff << std::fixed << std::setprecision(5) << 4.0f * 48000.0f / inputSampleRate;
+
+		LOG(LL_DBG, cutoff.str());
+		//av_opt_set(this->pSwrContext, "cutoff", cutoff.str().c_str(), 0);
+		av_opt_set(this->pSwrContext, "filter_type", "kaiser", 0);
+		av_opt_set(this->pSwrContext, "dither_method", "high_shibata", 0);
+		//av_opt_set(this->pSwrContext, "filter_size", "128", 0);
 
 		RET_IF_NULL(this->pSwrContext, "Could not allocate audio resampling context", E_FAIL);
 		RET_IF_FAILED_AV(swr_init(pSwrContext), "Could not initialize audio resampling context", E_FAIL);

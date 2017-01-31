@@ -2,6 +2,18 @@
 
 static float Detour_GetRenderTimeBase(int64_t choice);
 typedef float (*tGetRenderTimeBase)(int64_t choice);
+//
+//static float Detour_GetGameSpeedMultiplier(void* rcx);
+//typedef float (*tGetGameSpeedMultiplier)(void* rcx);
+//
+//static void Detour_StepAudio(void* rcx);
+//typedef void (*tStepAudio)(void* rcx);
+//
+static HANDLE Detour_CreateThread(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20, int32_t rsp28, char* name);
+typedef HANDLE (*tCreateThread)(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20, int32_t rsp28, char* name);
+
+//static void Detour_WaitForSingleObject(void* rcx, int32_t edx);
+//typedef void (*tWaitForSingleObject)(void* rcx, int32_t edx);
 
 //static float Detour_GetFrameRate(int32_t choice);
 //typedef float (*tGetFrameRate)(int32_t choice);

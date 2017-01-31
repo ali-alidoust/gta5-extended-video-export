@@ -44,6 +44,9 @@ namespace {
 
 	std::shared_ptr<PLH::X64Detour> hkGetFrameRateFraction(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetRenderTimeBase(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkStepAudio(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkGetGameSpeedMultiplier(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkCreateThread(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetFrameRate(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetAudioSamples(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkUnk01(new PLH::X64Detour);
@@ -51,6 +54,7 @@ namespace {
 	std::shared_ptr<PLH::X64Detour> hkCreateExportTexture(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkLinearizeTexture(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkAudioUnk01(new PLH::X64Detour);
+	std::shared_ptr<PLH::X64Detour> hkWaitForSingleObject(new PLH::X64Detour);
 
 	/*std::shared_ptr<PLH::X64Detour> hkGetGlobalVariableIndex(new PLH::X64Detour);
 	std::shared_ptr<PLH::X64Detour> hkGetVariable(new PLH::X64Detour);
@@ -67,6 +71,9 @@ namespace {
 	ComPtr<ID3D11Texture2D> pGameEdgeCopy;
 	ComPtr<ID3D11Texture2D> pLinearDepthTexture;
 	ComPtr<ID3D11Texture2D> pStencilTexture;
+
+	DWORD threadIdRageAudioMixThread = 0;
+
 
 	void* pCtxLinearizeBuffer = NULL;
 	//std::shared_ptr<PLH::X64Detour> hkGetTexture(new PLH::X64Detour);
@@ -94,6 +101,9 @@ namespace {
 			PRE();
 			POST();
 		}
+
+		float audioSkipCounter = 0;
+		float audioSkip = 0;
 
 		bool isAudioExportDisabled = false;
 
@@ -130,6 +140,10 @@ tIMFSinkWriter_WriteSample oIMFSinkWriter_WriteSample;
 tIMFSinkWriter_Finalize oIMFSinkWriter_Finalize;
 tOMSetRenderTargets oOMSetRenderTargets;
 tGetRenderTimeBase oGetRenderTimeBase;
+//tGetGameSpeedMultiplier oGetGameSpeedMultiplier;
+tCreateThread oCreateThread;
+//tWaitForSingleObject oWaitForSingleObject;
+//tStepAudio oStepAudio;
 tCreateTexture oCreateTexture;
 //tCreateSourceVoice oCreateSourceVoice;
 //tSubmitSourceBuffer oSubmitSourceBuffer;
@@ -266,14 +280,22 @@ void initialize() {
 		GetModuleInformation(GetCurrentProcess(), GetModuleHandle(NULL), &info, sizeof(info));
 		LOG(LL_NFO, "Image base:", ((void*)info.lpBaseOfDll));
 
-		void* pGetRenderTimeBase = NULL;
-		void* pCreateTexture = NULL;
-		void* pLinearizeTexture = NULL;
-		void* pAudioUnk01 = NULL;
+		void *pGetRenderTimeBase = NULL;
+		void *pCreateTexture = NULL;
+		void *pLinearizeTexture = NULL;
+		void *pAudioUnk01 = NULL;
+		void *pGetGameSpeedMultiplier = NULL;
+		void *pStepAudio = nullptr;
+		void *pCreateThread = nullptr;
+		void *pWaitForSingleObject = nullptr;
 		pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function, &pGetRenderTimeBase);
+		pYaraHelper->addEntry("yara_get_game_speed_multiplier_function", yara_get_game_speed_multiplier_function, &pGetGameSpeedMultiplier);
+		pYaraHelper->addEntry("yara_step_audio_function", yara_step_audio_function, &pStepAudio);
 		pYaraHelper->addEntry("yara_audio_unk01_function", yara_audio_unk01_function, &pAudioUnk01);
+		pYaraHelper->addEntry("yara_create_thread_function", yara_create_thread_function, &pCreateThread);
 		//pYaraHelper->addEntry("yara_create_export_texture_function", yara_create_export_texture_function, &pCreateExportTexture);
 		pYaraHelper->addEntry("yara_create_texture_function", yara_create_texture_function, &pCreateTexture);
+		pYaraHelper->addEntry("yara_wait_for_single_object", yara_wait_for_single_object, &pWaitForSingleObject);
 		/*pYaraHelper->addEntry("yara_global_unk01_command", yara_global_unk01_command, &pGlobalUnk01Cmd);
 		pYaraHelper->addEntry("yara_get_var_ptr_by_hash_2", yara_get_var_ptr_by_hash_2, &pGetVarPtrByHash);*/
 		pYaraHelper->performScan();
@@ -294,6 +316,30 @@ void initialize() {
 			} else {
 				LOG(LL_ERR, "Could not find the address for CreateTexture function.");
 			}
+
+			if (pCreateThread) {
+				REQUIRE(hookX64Function(pCreateThread, &Detour_CreateThread, &oCreateThread, hkCreateThread), "Failed to hook CreateThread function.");
+			} else {
+				LOG(LL_ERR, "Could not find the address for CreateThread function.");
+			}
+
+			/*if (pWaitForSingleObject) {
+				REQUIRE(hookX64Function(pWaitForSingleObject, &Detour_WaitForSingleObject, &oWaitForSingleObject, hkWaitForSingleObject), "Failed to hook WaitForSingleObject function.");
+			} else {
+				LOG(LL_ERR, "Could not find the address for WaitForSingleObject function.");
+			}*/
+
+			/*if (pStepAudio) {
+				REQUIRE(hookX64Function(pStepAudio, &Detour_StepAudio, &oStepAudio, hkStepAudio), "Failed to hook StepAudio function.");
+			} else {
+				LOG(LL_ERR, "Could not find the address for StepAudio.");
+			}
+*/
+			/*if (pGetGameSpeedMultiplier) {
+				REQUIRE(hookX64Function(pGetGameSpeedMultiplier, &Detour_GetGameSpeedMultiplier, &oGetGameSpeedMultiplier, hkGetGameSpeedMultiplier), "Failed to hook GetGameSpeedMultiplier function.");
+			} else {
+				LOG(LL_ERR, "Could not find the address for GetGameSpeedMultiplier function.");
+			}*/
 
 			/*if (pAudioUnk01) {
 				REQUIRE(hookX64Function(pAudioUnk01, &Detour_AudioUnk01, &oAudioUnk01, hkAudioUnk01), "Failed to hook AudioUnk01 function.");
@@ -429,7 +475,6 @@ static void Hook_OMSetRenderTargets(
 
 			// Time to capture rendered frame
 			try {
-
 				ComPtr<ID3D11Device> pDevice;
 				pThis->GetDevice(pDevice.GetAddressOf());
 
@@ -576,9 +621,13 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 						fps_den = fps.second;
 
 
-						if (((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second) > 60.0f) {
+						float gameFrameRate = ((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second);
+						if ( gameFrameRate > 60.0f) {
 							LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
 							LOG(LL_NON, "Audio export will be disabled!!!");
+
+							//::exportContext->audioSkip = gameFrameRate / 60;
+							//::exportContext->audioSkipCounter = ::exportContext->audioSkip;
 							::exportContext->isAudioExportDisabled = true;
 						}
 					}
@@ -750,16 +799,79 @@ static void Draw(
 	}
 }
 
+//static void Detour_StepAudio(void* rcx) {
+//	if (::exportContext) {
+//		::exportContext->audioSkipCounter += 1.0f;
+//		if (::exportContext->audioSkipCounter >= ::exportContext->audioSkip) {
+//			oStepAudio(rcx);
+//		}
+//		while (::exportContext->audioSkipCounter >= ::exportContext->audioSkip) {
+//			::exportContext->audioSkipCounter -= ::exportContext->audioSkip;
+//		}
+//	} else {
+//		oStepAudio(rcx);
+//	}
+//	static int x = 0;
+//	if (x == 0) {
+//	}
+//	x = ++x % 2;
+//}
+
+static HANDLE Detour_CreateThread(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20, int32_t rsp28, char* name) {
+	void* result = oCreateThread(pFunc, pParams, r8d, r9d, rsp20, rsp28, name);
+	LOG(LL_TRC, "CreateThread:",
+		" pFunc:", pFunc,
+		" pParams:", pParams,
+		" r8d:", Logger::hex(r8d, 4),
+		" r9d:", Logger::hex(r9d, 4),
+		" rsp20:", rsp20,
+		" rsp28:", rsp28,
+		" name:", name ? name : "<NULL>");
+
+	if (name) {
+		if (std::string("RageAudioMixThread").compare(name) == 0) {
+			threadIdRageAudioMixThread = ::GetThreadId(result);
+		}
+	}
+
+	return result;
+}
+
+//static float Detour_GetGameSpeedMultiplier(void* rcx) {
+//	float result = oGetGameSpeedMultiplier(rcx);
+//	//if (exportContext) {
+//		std::pair<int32_t, int32_t> fps = config::fps;
+//		result = 60.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
+//	//}
+//	return result;
+//}
+
 static float Detour_GetRenderTimeBase(int64_t choice) {
 	std::pair<int32_t, int32_t> fps = config::fps;
-	float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
+	//float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
+	float result = 1000.0f / 60.0f;
 	LOG(LL_NFO, "Time step: ", result);
 	return result;
 }
 
-static uint8_t Detour_AudioUnk01(void* rcx) {
-	return 1;
-}
+//static void Detour_WaitForSingleObject(void* rcx, int32_t edx) {
+//	oWaitForSingleObject(rcx, edx);
+//	while (threadIdRageAudioMixThread && (threadIdRageAudioMixThread == ::GetCurrentThreadId())) {
+//		static int x = 3;
+//		x++;
+//		x %= 4;
+//		ReleaseSemaphore(rcx, 1, NULL);
+//		oWaitForSingleObject(rcx, edx);
+//		if (x == 0) {
+//			break;
+//		}
+//		Sleep(0);
+//	}
+//}
+
+//static uint8_t Detour_AudioUnk01(void* rcx) {
+//	return 1;
+//}
 
 static void* Detour_CreateTexture(void* rcx, char* name, uint32_t r8d, uint32_t width, uint32_t height, uint32_t format, void* rsp30) {
 	void* result = oCreateTexture(rcx, name, r8d, width, height, format, rsp30);
