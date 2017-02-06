@@ -20,10 +20,12 @@
 using namespace Microsoft::WRL;
 
 extern "C" {
+#include <libavutil\audio_fifo.h>
 #include <libavcodec\avcodec.h>
 #include <libavformat\avformat.h>
 #include <libavutil\imgutils.h>
 #include <libswresample\swresample.h>
+#include <libswscale\swscale.h>
 }
 
 //template<typename T>
@@ -32,9 +34,9 @@ extern "C" {
 namespace Encoder {
 	class Session {
 	public:
-		AVOutputFormat *oformat;
-		AVFormatContext *fmtContext;
-		AVDictionary *fmtOptions;
+		AVOutputFormat *oformat = NULL;
+		AVFormatContext *fmtContext = NULL;
+		AVDictionary *fmtOptions = NULL;
 		
 		AVCodec *videoCodec = NULL;
 		AVCodecContext *videoCodecContext = NULL;
@@ -63,11 +65,7 @@ namespace Encoder {
 		bool isCapturing = false;
 		bool isBeingDeleted = false;
 
-		std::mutex mxVideoContext;
-		std::mutex mxAudioContext;
 		std::mutex mxFormatContext;
-		std::condition_variable cvVideoContext;
-		std::condition_variable cvAudioContext;
 		std::condition_variable cvFormatContext;
 
 		std::mutex mxEndSession;
@@ -143,7 +141,7 @@ namespace Encoder {
 		UINT width;
 		UINT height;
 		UINT framerate;
-		float audioSampleRateMultiplier;
+		//float audioSampleRateMultiplier;
 		uint32_t motionBlurSamples;
 		UINT audioBlockAlign;
 		AVPixelFormat outputPixelFormat;
@@ -157,6 +155,7 @@ namespace Encoder {
 		std::string filename;
 		std::string exrOutputPath;
 		uint64_t exrPTS=0;
+		float shutterPosition;
 		//LPWSTR *outputDir;
 		//LPWSTR *outputFile;
 		//FILE *file;
@@ -165,9 +164,30 @@ namespace Encoder {
 
 		~Session();
 
-		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, std::string outputPixelFormatString, std::string vcodec, std::string preset);
-		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, std::string outputSampleFormatString, std::string acodec, std::string preset);
-		HRESULT createFormatContext(std::string format, std::string filename, std::string exrOutputPath, std::string fmtOptions);
+		HRESULT createContext(
+			std::string format,
+			std::string filename,
+			std::string exrOutputPath,
+			std::string fmtOptions,
+			uint64_t width,
+			uint64_t height,
+			std::string inputPixelFmt,
+			uint32_t fps_num,
+			uint32_t fps_den,
+			uint8_t motionBlurSamples,
+			float shutterPosition,
+			std::string outputPixelFmt,
+			std::string vcodec,
+			std::string voptions,
+			uint32_t inputChannels,
+			uint32_t inputSampleRate,
+			uint32_t inputBitsPerSample,
+			std::string inputSampleFmt,
+			uint32_t inputAlign,
+			std::string outputSampleFmt,
+			std::string acodec,
+			std::string aoptions
+			);
 
 		HRESULT enqueueVideoFrame(BYTE * pData, int length);
 		HRESULT enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepth, ComPtr<ID3D11Texture2D> cStencil);
@@ -184,6 +204,9 @@ namespace Encoder {
 		HRESULT endSession();
 
 	private:
+		HRESULT createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, float shutterPosition, std::string outputPixelFormatString, std::string vcodec, std::string preset);
+		HRESULT createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, std::string inputSampleFormat, uint32_t inputAlignment, std::string outputSampleFormatString, std::string acodec, std::string preset);
+		HRESULT createFormatContext(std::string format, std::string filename, std::string exrOutputPath, std::string fmtOptions);
 		HRESULT createVideoFrames(uint32_t srcWidth, uint32_t srcHeight, AVPixelFormat srcFmt, uint32_t dstWidth, uint32_t dstHeight, AVPixelFormat dstFmt);
 		HRESULT createAudioFrames(uint32_t inputChannels, AVSampleFormat inputSampleFmt, uint32_t inputSampleRate, uint32_t outputChannels, AVSampleFormat outputSampleFmt, uint32_t outputSampleRate);
 	};

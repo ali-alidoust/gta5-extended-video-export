@@ -19,35 +19,33 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{12CCEE33-46E0-40E7-9F53-3699F5D5A761}</ProjectGuid>
+    <ProjectGuid>{707353D5-3F57-4309-9FDD-E8FFF47A0A77}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>gta5losslessrender</RootNamespace>
+    <RootNamespace>gta5extendedvideoexporttest</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
-    <ProjectName>gta5-extended-video-export</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
-    <CLRSupport>false</CLRSupport>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -76,20 +74,15 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
-    <TargetExt>.asi</TargetExt>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
-    <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
-    <TargetExt>.asi</TargetExt>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
-    <TargetName>ExtendedVideoExport</TargetName>
+    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\zlib\include;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export\inc;C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\Program Files\openexr\lib;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;$(LibraryPath)</LibraryPath>
+    <SourcePath>C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export;$(SourcePath)</SourcePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -97,34 +90,27 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0601</PreprocessorDefinitions>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <DebugInformationFormat>OldStyle</DebugInformationFormat>
-      <DisableSpecificWarnings>4099;4133;4334;4091;4199</DisableSpecificWarnings>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalOptions>/LTCG /ignore:"4091,4099" %(AdditionalOptions)</AdditionalOptions>
-      <IgnoreSpecificDefaultLibraries>libcmt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <DelayLoadDLLs>avcodec-57.dll;avdevice-57.dll;avfilter-6.dll;avformat-57.dll;avutil-55.dll;postproc-54.dll;swresample-2.dll;swscale-4.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
-    <PostBuildEvent>
-      <Command>xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -134,11 +120,11 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
@@ -147,32 +133,23 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <Optimization>Full</Optimization>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WIN32_WINNT=0x0601</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;TARGET_NAME="$(TargetName)";_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <DebugInformationFormat>OldStyle</DebugInformationFormat>
-      <DisableSpecificWarnings>4099;4133;4334;4091;4199;4373</DisableSpecificWarnings>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalOptions>/LTCG /ignore:"4091,4099" %(AdditionalOptions)</AdditionalOptions>
-      <IgnoreSpecificDefaultLibraries>libcmt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <DelayLoadDLLs>avcodec-57.dll;avformat-57.dll;avutil-55.dll;swresample-2.dll;swscale-4.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
-    <PostBuildEvent>
-      <Command>del /F /Q "$(OutDir)EVE"
-xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="AVCodecContextParams.txt" />
+    <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\DirectXTex\DirectXTex\BC.h" />
@@ -182,19 +159,8 @@ xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     <ClInclude Include="..\DirectXTex\DirectXTex\DirectXTexP.h" />
     <ClInclude Include="..\DirectXTex\DirectXTex\Filters.h" />
     <ClInclude Include="..\DirectXTex\DirectXTex\scoped.h" />
-    <ClInclude Include="config.h" />
-    <ClInclude Include="encoder.h" />
-    <ClInclude Include="game-detour-def.h" />
-    <ClInclude Include="hook-def.h" />
-    <ClInclude Include="logger.h" />
-    <ClInclude Include="MFUtility.h" />
-    <ClInclude Include="SafeQueue.h" />
-    <ClInclude Include="script.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
-    <ClInclude Include="util.h" />
-    <ClInclude Include="yara-helper.h" />
-    <ClInclude Include="yara-patterns.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\DirectXTex\DirectXTex\BC.cpp" />
@@ -217,37 +183,23 @@ xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexTGA.cpp" />
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexUtil.cpp" />
     <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexWIC.cpp" />
-    <ClCompile Include="config.cpp" />
-    <ClCompile Include="dllmain.cpp">
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-      </PrecompiledHeader>
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</CompileAsManaged>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-      </PrecompiledHeader>
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</CompileAsManaged>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-      </PrecompiledHeader>
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</CompileAsManaged>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-      </PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="custom-hooks.h" />
-    <ClCompile Include="encoder.cpp" />
-    <ClCompile Include="logger.cpp" />
-    <ClCompile Include="script.cpp" />
-    <ClCompile Include="yara-helper.cpp" />
+    <ClCompile Include="..\gta5-extended-video-export\config.cpp" />
+    <ClCompile Include="..\gta5-extended-video-export\dllmain.cpp" />
+    <ClCompile Include="..\gta5-extended-video-export\encoder.cpp" />
+    <ClCompile Include="..\gta5-extended-video-export\logger.cpp" />
+    <ClCompile Include="..\gta5-extended-video-export\script.cpp" />
+    <ClCompile Include="..\gta5-extended-video-export\yara-helper.cpp" />
+    <ClCompile Include="gta5-extended-video-export-test.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\yara\windows\vs2015\libyara\libyara.vcxproj">
-      <Project>{e236ce39-d8f3-4db6-985c-f2794ff17746}</Project>
+    <ProjectReference Include="..\gta5-extended-video-export\gta5-lossless-render.vcxproj">
+      <Project>{12ccee33-46e0-40e7-9f53-3699f5d5a761}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\DirectXTex\DirectXTex\DirectXTex.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\yara-vs2015-binary-dependencies.0.0.1\build\native\yara-vs2015-binary-dependencies.targets" Condition="Exists('..\packages\yara-vs2015-binary-dependencies.0.0.1\build\native\yara-vs2015-binary-dependencies.targets')" />
   </ImportGroup>
 </Project>

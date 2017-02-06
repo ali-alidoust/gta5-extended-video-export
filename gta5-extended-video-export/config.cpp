@@ -1,5 +1,6 @@
 #include "config.h"
 
+
 std::shared_ptr<INI::Parser>    config::config_parser;
 std::shared_ptr<INI::Parser>    config::preset_parser;
 
@@ -18,5 +19,6 @@ std::string                     config::audio_fmt;
 LogLevel                        config::log_level;
 std::pair<uint32_t, uint32_t>   config::fps;
 uint8_t                         config::motion_blur_samples;
+float							config::shutter_position;
 std::string                     config::container_format;
 bool                            config::export_openexr;

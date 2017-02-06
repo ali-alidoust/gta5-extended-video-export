@@ -271,7 +271,7 @@ void initialize() {
 
 
 		REQUIRE(hookNamedFunction("mfreadwrite.dll", "MFCreateSinkWriterFromURL", &Hook_MFCreateSinkWriterFromURL, &oMFCreateSinkWriterFromURL, hkMFCreateSinkWriterFromURL), "Failed to hook MFCreateSinkWriterFromURL in mfreadwrite.dll");
-		REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
+		//REQUIRE(hookNamedFunction("ole32.dll", "CoCreateInstance", &Hook_CoCreateInstance, &oCoCreateInstance, hkCoCreateInstance), "Failed to hook CoCreateInstance in ole32.dll");
 			
 		pYaraHelper.reset(new YaraHelper());
 		pYaraHelper->initialize();
@@ -600,84 +600,95 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 		} else if (IsEqualGUID(majorType, MFMediaType_Audio)) {
 			try {
 				std::lock_guard<std::mutex> sessionLock(mxSession);
+				UINT width, height, fps_num, fps_den;
+				MFGetAttribute2UINT32asUINT64(::exportContext->videoMediaType.Get(), MF_MT_FRAME_SIZE, &width, &height);
+				MFGetAttributeRatio(::exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
 
-				// Create Video Context
-				{
-					UINT width, height, fps_num, fps_den;
-					MFGetAttribute2UINT32asUINT64(::exportContext->videoMediaType.Get(), MF_MT_FRAME_SIZE, &width, &height);
-					MFGetAttributeRatio(::exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
+				GUID pixelFormat;
+				::exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
-					GUID pixelFormat;
-					::exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
-
-					DXGI_SWAP_CHAIN_DESC desc;
-					::exportContext->pSwapChain->GetDesc(&desc);
+				DXGI_SWAP_CHAIN_DESC desc;
+				::exportContext->pSwapChain->GetDesc(&desc);
 
 
 					
-					if (isCustomFrameRateSupported) {
-						auto fps = config::fps;
-						fps_num = fps.first;
-						fps_den = fps.second;
+				if (isCustomFrameRateSupported) {
+					auto fps = config::fps;
+					fps_num = fps.first;
+					fps_den = fps.second;
 
 
-						float gameFrameRate = ((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second);
-						if ( gameFrameRate > 60.0f) {
-							LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
-							LOG(LL_NON, "Audio export will be disabled!!!");
+					float gameFrameRate = ((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second);
+					if ( gameFrameRate > 60.0f) {
+						LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
+						LOG(LL_NON, "Audio export will be disabled!!!");
 
-							//::exportContext->audioSkip = gameFrameRate / 60;
-							//::exportContext->audioSkipCounter = ::exportContext->audioSkip;
-							::exportContext->isAudioExportDisabled = true;
-						}
-					}
-
-					REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den, config::motion_blur_samples,  config::video_fmt, config::video_enc, config::video_cfg), "Failed to create video context");
-				}
-				
-				// Create Audio Context
-				{
-					UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
-					GUID subType;
-
-					pInputMediaType->GetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, &blockAlignment);
-					pInputMediaType->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &numChannels);
-					pInputMediaType->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sampleRate);
-					pInputMediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bitsPerSample);
-					pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
-
-					if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
-						REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, AV_SAMPLE_FMT_S16, blockAlignment, config::audio_fmt, config::audio_enc, config::audio_cfg), "Failed to create audio context.");
-					} else {
-						char buffer[64];
-						GUIDToString(subType, buffer, 64);
-						LOG(LL_ERR, "Unsupported input audio format: ", buffer);
-						throw std::runtime_error("Unsupported input audio format");
+						//::exportContext->audioSkip = gameFrameRate / 60;
+						//::exportContext->audioSkipCounter = ::exportContext->audioSkip;
+						::exportContext->isAudioExportDisabled = true;
 					}
 				}
 
-				// Create Format Context
-				{
-					char buffer[128];
-					std::string output_file = config::output_dir;
-					std::string exrOutputPath;
+				//REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den, config::motion_blur_samples,  config::video_fmt, config::video_enc, config::video_cfg), "Failed to create video context");
 
-					output_file += "\\EVE-";
-					time_t rawtime;
-					struct tm timeinfo;
-					time(&rawtime);
-					localtime_s(&timeinfo, &rawtime);
-					strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
-					output_file += buffer;
-					exrOutputPath = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
-					output_file += "." + config::format_ext;
+				UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
+				GUID subType;
 
-					std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
+				pInputMediaType->GetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, &blockAlignment);
+				pInputMediaType->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &numChannels);
+				pInputMediaType->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sampleRate);
+				pInputMediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bitsPerSample);
+				pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
 
-					LOG(LL_NFO, "Output file: ", filename);
+				/*if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
+					REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, "s16", blockAlignment, config::audio_fmt, config::audio_enc, config::audio_cfg), "Failed to create audio context.");
+				} else {
+					char buffer[64];
+					GUIDToString(subType, buffer, 64);
+					LOG(LL_ERR, "Unsupported input audio format: ", buffer);
+					throw std::runtime_error("Unsupported input audio format");
+				}*/
 
-					REQUIRE(session->createFormatContext(config::container_format, filename.c_str(), exrOutputPath, config::format_cfg), "Failed to create format context");
-				}
+				char buffer[128];
+				std::string output_file = config::output_dir;
+				std::string exrOutputPath;
+
+				output_file += "\\EVE-";
+				time_t rawtime;
+				struct tm timeinfo;
+				time(&rawtime);
+				localtime_s(&timeinfo, &rawtime);
+				strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
+				output_file += buffer;
+				exrOutputPath = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
+				output_file += "." + config::format_ext;
+
+				std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
+
+				LOG(LL_NFO, "Output file: ", filename);
+
+				REQUIRE(session->createContext(config::container_format,
+					filename.c_str(),
+					exrOutputPath,
+					config::format_cfg,
+					desc.BufferDesc.Width,
+					desc.BufferDesc.Height,
+					"bgra",
+					fps_num,
+					fps_den,
+					config::motion_blur_samples,
+					config::shutter_position,
+					config::video_fmt,
+					config::video_enc,
+					config::video_cfg, 
+					numChannels, 
+					sampleRate, 
+					bitsPerSample,
+					"s16", 
+					blockAlignment, 
+					config::audio_fmt, 
+					config::audio_enc, 
+					config::audio_cfg), "Failed to create encoding context.");
 			} catch (std::exception& ex) {
 				LOG(LL_ERR, ex.what());
 				LOG_CALL(LL_DBG, session.reset());
@@ -828,11 +839,11 @@ static HANDLE Detour_CreateThread(void* pFunc, void* pParams, int32_t r8d, int32
 		" rsp28:", rsp28,
 		" name:", name ? name : "<NULL>");
 
-	if (name) {
-		if (std::string("RageAudioMixThread").compare(name) == 0) {
-			threadIdRageAudioMixThread = ::GetThreadId(result);
-		}
-	}
+	//if (name) {
+	//	if (std::string("RageAudioMixThread").compare(name) == 0) {
+	//		threadIdRageAudioMixThread = ::GetThreadId(result);
+	//	}
+	//}
 
 	return result;
 }
@@ -848,8 +859,8 @@ static HANDLE Detour_CreateThread(void* pFunc, void* pParams, int32_t r8d, int32
 
 static float Detour_GetRenderTimeBase(int64_t choice) {
 	std::pair<int32_t, int32_t> fps = config::fps;
-	//float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
-	float result = 1000.0f / 60.0f;
+	float result = 1000.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
+	//float result = 1000.0f / 60.0f;
 	LOG(LL_NFO, "Time step: ", result);
 	return result;
 }

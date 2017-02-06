@@ -28,7 +28,6 @@ namespace Encoder {
 	Session::~Session() {
 		PRE();
 		LOG(LL_NFO, "Closing session: ", (uint64_t)this);
-		this->isBeingDeleted = true;
 		this->isCapturing = false;
 		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr)));
 
@@ -45,6 +44,7 @@ namespace Encoder {
 		LOG_CALL(LL_DBG, this->finishVideo());
 		LOG_CALL(LL_DBG, this->finishAudio());
 		LOG_CALL(LL_DBG, this->endSession());
+		this->isBeingDeleted = true;
 
 
 		LOG_CALL(LL_DBG, av_free(this->oformat));
@@ -72,7 +72,18 @@ namespace Encoder {
 		POST();
 	}
 
-	HRESULT Session::createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, std::string outputPixelFormatString, std::string vcodec, std::string preset)
+	HRESULT Session::createContext(std::string format, std::string filename, std::string exrOutputPath, std::string fmtOptions, uint64_t width, uint64_t height, std::string inputPixelFmt, uint32_t fps_num, uint32_t fps_den, uint8_t motionBlurSamples, float shutterPosition, std::string outputPixelFmt, std::string vcodec_str, std::string voptions, uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, std::string inputSampleFmt, uint32_t inputAlign, std::string outputSampleFmt, std::string acodec_str, std::string aoptions)
+	{
+		this->oformat = av_guess_format(format.c_str(), NULL, NULL);
+		RET_IF_NULL(this->oformat, "Could find format: " + format, E_FAIL);
+
+		REQUIRE(this->createVideoContext(width, height, inputPixelFmt, fps_num, fps_den, motionBlurSamples, shutterPosition, outputPixelFmt, vcodec_str, voptions), "Failed to create video codec context.");
+		REQUIRE(this->createAudioContext(inputChannels, inputSampleRate, inputBitsPerSample, inputSampleFmt, inputAlign, outputSampleFmt, acodec_str, aoptions), "Failed to create audio codec context.");
+		REQUIRE(this->createFormatContext(format, filename, exrOutputPath, fmtOptions), "Failed to create format context.");
+		return S_OK;
+	}
+
+	HRESULT Session::createVideoContext(UINT width, UINT height, std::string inputPixelFormatString, UINT fps_num, UINT fps_den, uint8_t motionBlurSamples, float shutterPosition, std::string outputPixelFormatString, std::string vcodec, std::string preset)
 	{
 		PRE();
 		if (this->isBeingDeleted) {
@@ -83,12 +94,10 @@ namespace Encoder {
 		if (vcodec.empty()) {
 			this->videoCodecContext = nullptr;
 			this->isVideoContextCreated = true;
-			this->cvVideoContext.notify_all();
 			POST();
 			return S_OK;
 		}
 
-		std::lock_guard<std::mutex> guard(this->mxVideoContext);
 		LOG(LL_NFO, "Creating video context:");
 		LOG(LL_NFO, "  encoder: ", vcodec);
 		LOG(LL_NFO, "  options: ", preset);
@@ -113,8 +122,9 @@ namespace Encoder {
 		this->motionBlurAccBuffer = std::valarray<uint16_t>(width * height * 4);
 		this->motionBlurTempBuffer = std::valarray<uint16_t>(width * height * 4);
 		this->motionBlurDestBuffer = std::valarray<uint8_t>(width * height * 4);
+		this->shutterPosition = shutterPosition;
 
-		this->audioSampleRateMultiplier = ((float)fps_num * ((float)motionBlurSamples + 1)) / ((float)fps_den * 60.0f);
+		//this->audioSampleRateMultiplier = ((float)fps_num * ((float)motionBlurSamples + 1)) / ((float)fps_den * 60.0f);
 
 
 		this->videoCodec = avcodec_find_encoder_by_name(vcodec.c_str());
@@ -124,7 +134,7 @@ namespace Encoder {
 		RET_IF_NULL(this->videoCodecContext, "Could not allocate context for the video codec", E_FAIL);
 
 		av_dict_parse_string(&this->videoOptions, preset.c_str(), "=", "/", 0);
-		av_set_options_string(this->videoCodecContext, preset.c_str(), "=", "/");
+		//av_set_options_string(this->videoCodecContext, preset.c_str(), "=", "/");
 		
 		RET_IF_FAILED(this->createVideoFrames(width, height, this->inputPixelFormat, width, height, this->outputPixelFormat), "Could not create video frames", E_FAIL);
 
@@ -136,6 +146,11 @@ namespace Encoder {
 		this->videoCodecContext->framerate = av_make_q(fps_num, fps_den);
 		this->videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
 
+		if (this->oformat->flags & AVFMT_GLOBALHEADER)
+		{
+			this->videoCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+		}
+		
 		RET_IF_FAILED_AV(avcodec_open2(this->videoCodecContext, this->videoCodec, &this->videoOptions), "Could not open video codec", E_FAIL);
 		
 		this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
@@ -143,12 +158,11 @@ namespace Encoder {
 
 		LOG(LL_NFO, "Video context was created successfully.");
 		this->isVideoContextCreated = true;
-		this->cvVideoContext.notify_all();
 		POST();
 		return S_OK;
 	}
 
-	HRESULT Session::createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, AVSampleFormat inputSampleFormat, uint32_t inputAlignment, std::string outputSampleFormatString, std::string acodec, std::string preset) {
+	HRESULT Session::createAudioContext(uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample, std::string inputSampleFormat, uint32_t inputAlignment, std::string outputSampleFormatString, std::string acodec, std::string preset) {
 		PRE();
 		if (this->isBeingDeleted) {
 			POST();
@@ -158,55 +172,66 @@ namespace Encoder {
 		if (acodec.empty()) {
 			this->audioCodecContext = nullptr;
 			this->isAudioContextCreated = true;
-			this->cvAudioContext.notify_all();
 			POST();
 			return S_OK;
 		}
 
-		std::lock_guard<std::mutex> guard(this->mxAudioContext);
 		LOG(LL_NFO, "Creating audio context:");
 		LOG(LL_NFO, "  encoder: ", acodec);
 		LOG(LL_NFO, "  options: ", preset);
 		//AVCodecID audioCodecId = AV_CODEC_ID_PCM_S16LE;
 
-		this->inputAudioSampleRate = static_cast<uint32_t>(inputSampleRate * this->audioSampleRateMultiplier);
-		//this->inputAudioSampleRate = inputSampleRate;
+		//this->inputAudioSampleRate = static_cast<uint32_t>(inputSampleRate * this->audioSampleRateMultiplier);
+		this->inputAudioSampleRate = inputSampleRate;
 		this->inputAudioChannels = inputChannels;
 		this->outputAudioChannels = inputChannels; // FIXME
 
-		AVSampleFormat outputSampleFormat = av_get_sample_fmt(outputSampleFormatString.c_str());
-		if (outputSampleFormat == AV_SAMPLE_FMT_NONE) {
+		this->inputAudioSampleFormat = av_get_sample_fmt(inputSampleFormat.c_str());
+		if (this->inputAudioSampleFormat == AV_SAMPLE_FMT_NONE) {
+			LOG(LL_ERR, "Unknown audio sample format specified: ", inputSampleFormat);
+			POST();
+			return E_FAIL;
+		}
+
+		this->outputAudioSampleFormat = av_get_sample_fmt(outputSampleFormatString.c_str());
+		if (this->outputAudioSampleFormat == AV_SAMPLE_FMT_NONE) {
 			LOG(LL_ERR, "Unknown audio sample format specified: ", outputSampleFormatString);
 			POST();
 			return E_FAIL;
 		}
-		this->outputAudioSampleFormat = outputSampleFormat;
 
 		this->audioCodec = avcodec_find_encoder_by_name(acodec.c_str());
 		RET_IF_NULL(this->audioCodec, "Could not find audio codec:" + acodec, E_FAIL);
 		this->audioCodecContext = avcodec_alloc_context3(this->audioCodec);
 		RET_IF_NULL(this->audioCodecContext, "Could not allocate context for the audio codec", E_FAIL);
 		
-		av_set_options_string(this->audioCodecContext, preset.c_str(), "=", "/");
+		//av_set_options_string(this->audioCodecContext, preset.c_str(), "=", "/");
 
+		this->audioCodecContext->codec_id = this->audioCodec->id;
+		this->audioCodecContext->codec_type = AVMEDIA_TYPE_AUDIO;
 		this->audioCodecContext->channels = inputChannels;
-		this->audioCodecContext->sample_fmt = outputSampleFormat;
+		this->audioCodecContext->sample_fmt = this->outputAudioSampleFormat;
 		this->audioCodecContext->time_base = { 1, (int)inputSampleRate };
-		this->audioCodecContext->frame_size = 256;
+		//this->audioCodecContext->frame_size = 256;
 		this->audioCodecContext->channel_layout = AV_CH_LAYOUT_STEREO;
+		
+		if (this->oformat->flags & AVFMT_GLOBALHEADER)
+		{
+			this->audioCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+		}
+		av_dict_parse_string(&this->audioOptions, preset.c_str(), "=", "/", 0);
 		this->audioBlockAlign = inputAlignment;
 
-		this->outputAudioSampleRate = this->audioCodecContext->sample_rate;
-		
-		RET_IF_FAILED(this->createAudioFrames(inputChannels, inputSampleFormat, this->inputAudioSampleRate, inputChannels, outputSampleFormat, this->outputAudioSampleRate), "Could not create audio frames", E_FAIL);
-
-		av_dict_parse_string(&this->audioOptions, preset.c_str(), "=", "/", 0);
-		
 		RET_IF_FAILED_AV(avcodec_open2(this->audioCodecContext, this->audioCodec, &this->audioOptions), "Could not open audio codec", E_FAIL);
+
+		this->outputAudioSampleRate = this->audioCodecContext->sample_rate;
+		LOG(LL_TRC, this->outputAudioSampleRate);
+		RET_IF_FAILED(this->createAudioFrames(inputChannels, this->inputAudioSampleFormat, this->inputAudioSampleRate, inputChannels, this->outputAudioSampleFormat, this->outputAudioSampleRate), "Could not create audio frames", E_FAIL); 
+
+		
 
 		LOG(LL_NFO, "Audio context was created successfully.");
 		this->isAudioContextCreated = true;
-		this->cvAudioContext.notify_all();
 
 		POST();
 		return S_OK;
@@ -220,47 +245,45 @@ namespace Encoder {
 			return E_FAIL;
 		}
 
-		// Wait until video context is created
-		LOG(LL_NFO, "Waiting for video context to be created...")
-		{
-			std::unique_lock<std::mutex> lk(this->mxVideoContext);
-			while(!isVideoContextCreated) {
-				this->cvVideoContext.wait_for(lk, std::chrono::milliseconds(100));
-			}
-		}
-		
-		// Wait until audio context is created
-		LOG(LL_NFO, "Waiting for audio context to be created...")
-		{
-			std::unique_lock<std::mutex> lk(this->mxAudioContext);
-			while(!isAudioContextCreated) {
-				this->cvAudioContext.wait_for(lk, std::chrono::milliseconds(100));
-			}
-		}
+		std::lock_guard<std::mutex> guard(this->mxFormatContext);
 
 		this->exrOutputPath = exrOutputPath;
 
 		this->filename = filename;
 		LOG(LL_NFO, "Exporting to file: ", this->filename);
 
-		this->oformat = av_guess_format(format.c_str(), NULL, NULL);
-		RET_IF_NULL(this->oformat, "Could not create format", E_FAIL);
+		/*this->oformat = av_guess_format(format.c_str(), NULL, NULL);
+		RET_IF_NULL(this->oformat, "Could not create format", E_FAIL);*/
 		RET_IF_FAILED_AV(avformat_alloc_output_context2(&this->fmtContext, this->oformat, NULL, NULL), "Could not allocate format context", E_FAIL);
 		RET_IF_NULL(this->fmtContext, "Could not allocate format context", E_FAIL);
+		//this->fmtContext = avformat_alloc_context();
 
 		this->fmtContext->oformat = this->oformat;
-
-		if (this->fmtContext->oformat->flags & AVFMT_GLOBALHEADER)
-		{
-			this->videoCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
-			this->audioCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+		/*if (this->videoCodec) {
+			this->fmtContext->video_codec_id = this->videoCodec->id;
 		}
+		if (this->audioCodec) {
+			this->fmtContext->audio_codec_id = this->audioCodec->id;
+		}*/
 
-		av_set_options_string(this->fmtContext, fmtPreset.c_str(), "=", "/");
+		//this->fmtContext->oformat = this->oformat;
+
+		/*if (this->fmtContext->oformat->flags & AVFMT_GLOBALHEADER)
+		{
+			if (this->videoCodecContext) {
+				this->videoCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+			}
+			if (this->audioCodecContext) {
+				this->audioCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+			}
+		}*/
+
+		//av_set_options_string(this->fmtContext, fmtPreset.c_str(), "=", "/");
 		av_dict_parse_string(&this->fmtOptions, fmtPreset.c_str(), "=", "/", 0);
 
 		//av_opt_set(this->fmtContext->priv_data, "path", filename, 0);
 		strcpy_s(this->fmtContext->filename, this->filename.c_str());
+		//av_opt_set(this->fmtContext, "filename", this->filename.c_str(), 0);
 
 		bool hasVideo = false;
 		bool hasAudio = false;
@@ -269,8 +292,9 @@ namespace Encoder {
 			this->videoStream = avformat_new_stream(this->fmtContext, this->videoCodec);
 			RET_IF_NULL(this->videoStream, "Could not create video stream", E_FAIL);
 			avcodec_parameters_from_context(this->videoStream->codecpar, this->videoCodecContext);
+			//avcodec_copy_context(this->videoStream->codec, this->videoCodecContext);
 			this->videoStream->time_base = this->videoCodecContext->time_base;
-			this->videoStream->index = this->fmtContext->nb_streams - 1;
+			//this->videoStream->index = this->fmtContext->nb_streams - 1;
 			hasVideo = true;
 		}
 
@@ -278,8 +302,9 @@ namespace Encoder {
 			this->audioStream = avformat_new_stream(this->fmtContext, this->audioCodec);
 			RET_IF_NULL(this->audioStream, "Could not create audio stream", E_FAIL);
 			avcodec_parameters_from_context(this->audioStream->codecpar, this->audioCodecContext);
+			//avcodec_copy_context(this->audioStream->codec, this->audioCodecContext);
 			this->audioStream->time_base = this->audioCodecContext->time_base;
-			this->audioStream->index = this->fmtContext->nb_streams - 1;
+			//this->audioStream->index = this->fmtContext->nb_streams - 1;
 			hasAudio = true;
 		}
 
@@ -359,6 +384,8 @@ namespace Encoder {
 	void Session::videoEncodingThread() {
 		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEncodingThread);
+		int k=0;
+		bool firstFrame;
 		try {
 			frameQueueItem item = this->videoFrameQueue.dequeue();
 			while (item.data != nullptr) {
@@ -368,19 +395,25 @@ namespace Encoder {
 					REQUIRE(this->writeVideoFrame(std::begin(data), item.data->size(), this->videoPTS++), "Failed to write video frame.");
 				} else {
 					int frameRemainder = this->motionBlurPTS++ % (this->motionBlurSamples + 1);
+					float currentShutterPosition = (float)frameRemainder / ((float)this->motionBlurSamples + 1);
 					std::copy(std::begin(data), std::end(data), std::begin(this->motionBlurTempBuffer));
 					if (frameRemainder == this->motionBlurSamples) {
 						// Flush motion blur buffer
 						this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-						this->motionBlurAccBuffer /= (motionBlurSamples + 1);
+						this->motionBlurAccBuffer /= ++k;
 						std::copy(std::begin(this->motionBlurAccBuffer), std::end(this->motionBlurAccBuffer), std::begin(this->motionBlurDestBuffer));
 						REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer), this->motionBlurDestBuffer.size(), this->videoPTS++), "Failed to write video frame");
-					} else if (frameRemainder == 0) {
-						// Reset accumulation buffer
-						this->motionBlurAccBuffer = this->motionBlurTempBuffer;
-					} else {
-						// Accumulate motion blur buffer
-						this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+						k = 0;
+						firstFrame = true;
+					} else if (currentShutterPosition >= this->shutterPosition) {
+						if (firstFrame) {
+							// Reset accumulation buffer
+							this->motionBlurAccBuffer = this->motionBlurTempBuffer;
+							firstFrame = false;
+						} else {
+							this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+						}
+						k++;
 					}
 				}
 				item = this->videoFrameQueue.dequeue();
@@ -521,7 +554,7 @@ namespace Encoder {
 		{
 			std::unique_lock<std::mutex> lk(this->mxFormatContext);
 			while (!isFormatContextCreated) {
-				this->cvFormatContext.wait_for(lk, std::chrono::milliseconds(100));
+				this->cvFormatContext.wait_for(lk, std::chrono::milliseconds(1));
 			}
 		}
 
@@ -604,7 +637,7 @@ namespace Encoder {
 		{
 			std::unique_lock<std::mutex> lk(this->mxFormatContext);
 			while (!isFormatContextCreated) {
-				this->cvFormatContext.wait_for(lk, std::chrono::milliseconds(100));
+				this->cvFormatContext.wait_for(lk, std::chrono::milliseconds(1));
 			}
 		}
 		
@@ -613,14 +646,14 @@ namespace Encoder {
 		this->inputAudioFrame->nb_samples = static_cast<int>(numSamples);
 
 		//int64_t numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) + numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
-		int numOutSamples = swr_get_out_samples(this->pSwrContext, this->inputAudioFrame->nb_samples);
+		/*int numOutSamples = swr_get_out_samples(this->pSwrContext, this->inputAudioFrame->nb_samples);
 		if (numOutSamples < 0) {
 			RET_IF_FAILED_AV(numOutSamples, "Failed to calculate number of output samples.", E_FAIL);
 		}
 
 		if (!numOutSamples) {
-			LOG(LL_DBG, "FUCK!!!");
-		}
+			return S_OK;
+		}*/
 
 		int frameSize = this->audioCodecContext->frame_size ? this->audioCodecContext->frame_size : 256;
 		this->outputAudioFrame->nb_samples = frameSize;//static_cast<int>(numOutSamples);
@@ -635,27 +668,28 @@ namespace Encoder {
 			return S_OK;
 		}
 
-		//av_audio_fifo_write(this->audioSampleBuffer, (void**)this->outputAudioFrame->data, this->outputAudioFrame->nb_samples);
+		av_audio_fifo_write(this->audioSampleBuffer, (void**)this->outputAudioFrame->data, this->outputAudioFrame->nb_samples);
 
 
-		/*if (av_audio_fifo_size(this->audioSampleBuffer) < frameSize) {
+		if (av_audio_fifo_size(this->audioSampleBuffer) < frameSize) {
 			POST();
 			return S_OK;
-		}*/
+		}
 		
 
-		//int bufferSize = av_samples_get_buffer_size(NULL, this->outputAudioChannels, frameSize, this->outputAudioSampleFormat, 0);
-		//uint8_t* localBuffer = new uint8_t[bufferSize];
-		/*AVFrame* localFrame = av_frame_alloc();
+		int bufferSize = av_samples_get_buffer_size(NULL, this->outputAudioChannels, frameSize, this->outputAudioSampleFormat, 0);
+		uint8_t* localBuffer = new uint8_t[bufferSize];
+		AVFrame* localFrame = av_frame_alloc();
 		localFrame->channel_layout = AV_CH_LAYOUT_STEREO;
 		localFrame->format = this->outputAudioSampleFormat;
-		localFrame->nb_samples = frameSize;*/
-		//avcodec_fill_audio_frame(localFrame, this->outputAudioChannels, this->outputAudioSampleFormat, localBuffer, bufferSize, 0);
-		//av_audio_fifo_read(this->audioSampleBuffer, (void**)localFrame->data, frameSize);
+		localFrame->nb_samples = frameSize;
+		avcodec_fill_audio_frame(localFrame, this->outputAudioChannels, this->outputAudioSampleFormat, localBuffer, bufferSize, 0);
+		av_audio_fifo_read(this->audioSampleBuffer, (void**)localFrame->data, frameSize);
 
 
-		//localFrame->pts = this->audioPTS;
+		localFrame->pts = this->audioPTS;
 		//this->audioPTS += localFrame->nb_samples;
+		//this->outputAudioFrame->pts = this->audioPTS;
 		this->audioPTS += frameSize;
 
 		std::shared_ptr<AVPacket> pPkt(new AVPacket(), av_packet_unref);
@@ -664,9 +698,9 @@ namespace Encoder {
 		pPkt->data = NULL;
 		pPkt->size = 0;
 
-		avcodec_send_frame(this->audioCodecContext, this->outputAudioFrame);
-		//delete[] localBuffer;
-		//av_frame_free(&localFrame);
+		avcodec_send_frame(this->audioCodecContext, localFrame);
+		delete[] localBuffer;
+		av_frame_free(&localFrame);
 		if (SUCCEEDED(avcodec_receive_packet(this->audioCodecContext, pPkt.get()))) {
 			std::lock_guard<std::mutex> guard(this->mxWriteFrame);
 			av_packet_rescale_ts(pPkt.get(), this->audioCodecContext->time_base, this->audioStream->time_base);
@@ -809,9 +843,9 @@ namespace Encoder {
 
 		LOG(LL_NFO, "Closing files...");
 		LOG_IF_FAILED_AV(av_write_trailer(this->fmtContext), "Could not finalize the output file.");
-		LOG_IF_FAILED_AV(avio_close(this->fmtContext->pb), "Could not close the output file.");
 		LOG_IF_FAILED_AV(avcodec_close(this->videoCodecContext), "Could not close the video codec.");
 		LOG_IF_FAILED_AV(avcodec_close(this->audioCodecContext), "Could not close the audio codec.");
+		LOG_IF_FAILED_AV(avio_close(this->fmtContext->pb), "Could not close the output file.");
 		/*av_free(this->videoCodecContext.get());
 		av_free(this->audioCodecContext.get());*/
 		
@@ -870,7 +904,7 @@ namespace Encoder {
 		outputAudioFrame->channels = outputChannels;
 		outputAudioFrame->channel_layout = AV_CH_LAYOUT_STEREO;
 
-		this->audioSampleBuffer = av_audio_fifo_alloc(outputSampleFmt, outputChannels, this->audioCodecContext->frame_size);
+		this->audioSampleBuffer = av_audio_fifo_alloc(outputSampleFmt, outputChannels, (this->audioCodecContext->frame_size ? this->audioCodecContext->frame_size : 256) * 4);
 
 
 		this->pSwrContext = swr_alloc_set_opts(NULL,
@@ -882,13 +916,13 @@ namespace Encoder {
 			inputSampleRate,
 			AV_LOG_TRACE, NULL);
 
-		std::stringstream cutoff;
-		cutoff << std::fixed << std::setprecision(5) << 4.0f * 48000.0f / inputSampleRate;
+		//std::stringstream cutoff;
+		//cutoff << std::fixed << std::setprecision(5) << 4.0f * 48000.0f / inputSampleRate;
 
-		LOG(LL_DBG, cutoff.str());
+		//LOG(LL_DBG, cutoff.str());
 		//av_opt_set(this->pSwrContext, "cutoff", cutoff.str().c_str(), 0);
-		av_opt_set(this->pSwrContext, "filter_type", "kaiser", 0);
-		av_opt_set(this->pSwrContext, "dither_method", "high_shibata", 0);
+		/*av_opt_set(this->pSwrContext, "filter_type", "kaiser", 0);
+		av_opt_set(this->pSwrContext, "dither_method", "high_shibata", 0);*/
 		//av_opt_set(this->pSwrContext, "filter_size", "128", 0);
 
 		RET_IF_NULL(this->pSwrContext, "Could not allocate audio resampling context", E_FAIL);

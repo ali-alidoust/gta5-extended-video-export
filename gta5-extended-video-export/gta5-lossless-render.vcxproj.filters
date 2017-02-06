@@ -28,6 +28,9 @@
     <Filter Include="Shaders">
       <UniqueIdentifier>{86ac3c01-cc4c-4e5d-bf1c-1c4c5aa175b8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="test">
+      <UniqueIdentifier>{da6a7b8e-05b6-42ad-b380-f69929ef916e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="AVCodecContextParams.txt" />

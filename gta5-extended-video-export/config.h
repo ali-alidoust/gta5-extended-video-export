@@ -3,7 +3,7 @@
 #ifndef _MY_CONFIG_H_
 #define _MY_CONFIG_H_
 
-#include <ini.hpp>
+#include "ini.hpp"
 #include <string>
 #include <algorithm>
 #include <sstream>
@@ -18,6 +18,7 @@
 
 #define CFG_EXPORT_SECTION "EXPORT"
 #define CFG_EXPORT_MB_SAMPLES "motion_blur_samples"
+#define CFG_EXPORT_MB_POSITION "motion_blur_shutter_position"
 #define CFG_EXPORT_FPS "fps"
 #define CFG_EXPORT_OPENEXR "export_openexr"
 
@@ -59,6 +60,7 @@ public:
 	static LogLevel                        log_level;
 	static std::pair<uint32_t, uint32_t>   fps;
 	static uint8_t                         motion_blur_samples;
+	static float                           shutter_position;
 	static std::string                     container_format;
 
 	static void reload() {
@@ -398,6 +400,17 @@ private:
 		}
 
 		return failed(CFG_EXPORT_FPS, string, std::make_pair(30000, 1001));
+	}
+
+	static float parse_shutter_position() {
+		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_POSITION];
+		try {
+			float value = std::stof(string);
+			return succeeded(CFG_EXPORT_MB_POSITION, value);
+		} catch (std::exception& ex) {
+			LOG(LL_ERR, ex.what());
+		}
+		return failed(CFG_EXPORT_MB_POSITION, string, 0.5);
 	}
 };
 

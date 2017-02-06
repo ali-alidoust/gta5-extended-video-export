@@ -13,7 +13,7 @@ namespace {
 	HRESULT hookVirtualFunction(CLASS_TYPE *pInstance, int vFuncIndex, LPVOID hookFunc, FUNC_TYPE *originalFunc, std::shared_ptr<PLH::VFuncDetour> VFuncDetour_Ex) {
 		if (VFuncDetour_Ex->GetOriginal<FUNC_TYPE>() != NULL) {
 			*originalFunc = VFuncDetour_Ex->GetOriginal<FUNC_TYPE>();
-			return E_ABORT;
+			return S_OK;
 		}
 		VFuncDetour_Ex->SetupHook(*(BYTE***)pInstance, vFuncIndex, (BYTE*)hookFunc);
 		if (!VFuncDetour_Ex->Hook()) {
@@ -28,7 +28,7 @@ namespace {
 	HRESULT hookNamedFunction(LPCSTR dllname, LPCSTR funcName, LPVOID hookFunc, FUNC_TYPE *originalFunc, std::shared_ptr<PLH::IATHook> IATHook_ex) {
 		if (IATHook_ex->GetOriginal<FUNC_TYPE>() != NULL) {
 			*originalFunc = IATHook_ex->GetOriginal<FUNC_TYPE>();
-			return E_ABORT;
+			return S_OK;
 		}
 		IATHook_ex->SetupHook(dllname, funcName, (BYTE*)hookFunc);
 		if (!IATHook_ex->Hook()) {
