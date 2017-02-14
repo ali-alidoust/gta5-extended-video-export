@@ -12,9 +12,6 @@
 
 
 namespace Encoder {
-	
-	const AVRational MF_TIME_BASE = { 1, 10000000 };
-
 	Session::Session() :
 		thread_video_encoder(),
 		videoFrameQueue(16),
@@ -29,7 +26,7 @@ namespace Encoder {
 		PRE();
 		LOG(LL_NFO, "Closing session: ", (uint64_t)this);
 		this->isCapturing = false;
-		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr)));
+		LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, nullptr)));
 
 		if (thread_video_encoder.joinable()) {
 			thread_video_encoder.join();
@@ -119,9 +116,9 @@ namespace Encoder {
 		this->width = width;
 		this->height = height;
 		this->motionBlurSamples = motionBlurSamples;
-		this->motionBlurAccBuffer = std::valarray<uint16_t>(width * height * 4);
+		/*this->motionBlurAccBuffer = std::valarray<uint16_t>(width * height * 4);
 		this->motionBlurTempBuffer = std::valarray<uint16_t>(width * height * 4);
-		this->motionBlurDestBuffer = std::valarray<uint8_t>(width * height * 4);
+		this->motionBlurDestBuffer = std::valarray<uint8_t>(width * height * 4);*/
 		this->shutterPosition = shutterPosition;
 
 		//this->audioSampleRateMultiplier = ((float)fps_num * ((float)motionBlurSamples + 1)) / ((float)fps_den * 60.0f);
@@ -359,7 +356,7 @@ namespace Encoder {
 		return S_OK;
 	}
 
-	HRESULT Session::enqueueVideoFrame(BYTE *pData, int length) {
+	HRESULT Session::enqueueVideoFrame(ComPtr<ID3D11DeviceContext> p_ctx, ComPtr<ID3D11Texture2D> pImage) {
 		PRE();
 
 		if (!this->videoCodecContext) {
@@ -371,11 +368,13 @@ namespace Encoder {
 			POST();
 			return E_FAIL;
 		}
-		auto pVector = std::shared_ptr<std::valarray<uint8_t>>(new std::valarray<uint8_t>(length));
+		//auto pVector = std::shared_ptr<std::valarray<uint8_t>>(new std::valarray<uint8_t>(length));
 
-		std::copy(pData, pData + length, std::begin(*pVector));
+		//std::copy(pData, pData + length, std::begin(*pVector));
+		D3D11_MAPPED_SUBRESOURCE mapped;
+		REQUIRE(p_ctx->Map(pImage.Get(), 0, D3D11_MAP_READ, 0, &mapped), "Failed to map video frame texture");
 
-		frameQueueItem item(pVector);
+		frameQueueItem item(pImage, &mapped);
 		this->videoFrameQueue.enqueue(item);
 		POST();
 		return S_OK;
@@ -384,38 +383,13 @@ namespace Encoder {
 	void Session::videoEncodingThread() {
 		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEncodingThread);
-		int k=0;
-		bool firstFrame;
+		int k = 0;
+		bool firstFrame = true;
 		try {
 			frameQueueItem item = this->videoFrameQueue.dequeue();
-			while (item.data != nullptr) {
-				auto& data = *(item.data);
-				if (this->motionBlurSamples == 0) {
-					LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
-					REQUIRE(this->writeVideoFrame(std::begin(data), item.data->size(), this->videoPTS++), "Failed to write video frame.");
-				} else {
-					int frameRemainder = this->motionBlurPTS++ % (this->motionBlurSamples + 1);
-					float currentShutterPosition = (float)frameRemainder / ((float)this->motionBlurSamples + 1);
-					std::copy(std::begin(data), std::end(data), std::begin(this->motionBlurTempBuffer));
-					if (frameRemainder == this->motionBlurSamples) {
-						// Flush motion blur buffer
-						this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-						this->motionBlurAccBuffer /= ++k;
-						std::copy(std::begin(this->motionBlurAccBuffer), std::end(this->motionBlurAccBuffer), std::begin(this->motionBlurDestBuffer));
-						REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer), this->motionBlurDestBuffer.size(), this->videoPTS++), "Failed to write video frame");
-						k = 0;
-						firstFrame = true;
-					} else if (currentShutterPosition >= this->shutterPosition) {
-						if (firstFrame) {
-							// Reset accumulation buffer
-							this->motionBlurAccBuffer = this->motionBlurTempBuffer;
-							firstFrame = false;
-						} else {
-							this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-						}
-						k++;
-					}
-				}
+			while (item.frame != nullptr) {
+				LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
+				REQUIRE(this->writeVideoFrame((BYTE*)item.frame_mapping.pData, this->width * this->height * 4, this->videoPTS++), "Failed to write video frame.");
 				item = this->videoFrameQueue.dequeue();
 			}
 		} catch (...) {
@@ -725,7 +699,7 @@ namespace Encoder {
 		// Wait until the video encoding thread is finished.
 		{
 			// Write end of the stream object with a nullptr
-			this->videoFrameQueue.enqueue(frameQueueItem(nullptr));
+			this->videoFrameQueue.enqueue(frameQueueItem(nullptr, nullptr));
 			std::unique_lock<std::mutex> lock(this->mxEncodingThread);
 			while (!this->isEncodingThreadFinished) {
 				this->cvEncodingThreadFinished.wait(lock);

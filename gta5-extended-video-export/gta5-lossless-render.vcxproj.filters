@@ -96,6 +96,15 @@
     <ClInclude Include="game-detour-def.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="PSAccumulate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PSDivide.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VSFullScreen.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -182,5 +191,16 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="VSFullScreen.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PSAccumulate.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PSDivide.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

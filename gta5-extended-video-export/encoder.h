@@ -28,9 +28,6 @@ extern "C" {
 #include <libswscale\swscale.h>
 }
 
-//template<typename T>
-//using std::shared_ptr = std::shared_ptr<T, std::function<void(T*)>>;
-
 namespace Encoder {
 	class Session {
 	public:
@@ -73,15 +70,23 @@ namespace Encoder {
 
 		struct frameQueueItem {
 			frameQueueItem():
-				data(nullptr)
+				frame_mapping({ 0 }),
+				frame(nullptr)
 			{
 				
 			}
-			frameQueueItem(std::shared_ptr<std::valarray<uint8_t>> bytes) :
-				data(bytes)
-			{}
 
-			std::shared_ptr<std::valarray<uint8_t>> data;
+			frameQueueItem(ComPtr<ID3D11Texture2D> frame, D3D11_MAPPED_SUBRESOURCE *frame_mapping) :
+				frame(frame)
+			{
+				if (frame_mapping) {
+					this->frame_mapping = *frame_mapping;
+				}
+			}
+
+			//std::shared_ptr<std::valarray<uint8_t>> data;
+			D3D11_MAPPED_SUBRESOURCE frame_mapping;
+			ComPtr<ID3D11Texture2D> frame;
 		};
 
 		struct exr_queue_item {
@@ -110,7 +115,6 @@ namespace Encoder {
 			void* pDepthData;
 			ComPtr<ID3D11Texture2D> cStencil;
 			D3D11_MAPPED_SUBRESOURCE mStencilData;
-			//void* pStencilData;
 		};
 
 		SafeQueue<frameQueueItem> videoFrameQueue;
@@ -123,17 +127,11 @@ namespace Encoder {
 		std::condition_variable cvEncodingThreadFinished;
 		std::mutex mxEncodingThread;
 		std::thread thread_video_encoder;
-		std::valarray<uint16_t> motionBlurAccBuffer;
-		std::valarray<uint16_t> motionBlurTempBuffer;
-		std::valarray<uint8_t> motionBlurDestBuffer;
 
 		bool isEXREncodingThreadFinished = false;
 		std::condition_variable cvEXREncodingThreadFinished;
 		std::mutex mxEXREncodingThread;
 		std::thread thread_exr_encoder;
-
-
-		//std::condition_variable cvFormatContext;
 
 		std::mutex mxFinish;
 		std::mutex mxWriteFrame;
@@ -189,7 +187,7 @@ namespace Encoder {
 			std::string aoptions
 			);
 
-		HRESULT enqueueVideoFrame(BYTE * pData, int length);
+		HRESULT enqueueVideoFrame(ComPtr<ID3D11DeviceContext> p_ctx, ComPtr<ID3D11Texture2D> p_frame);
 		HRESULT enqueueEXRImage(ComPtr<ID3D11DeviceContext> pDeviceContext, ComPtr<ID3D11Texture2D> cRGB, ComPtr<ID3D11Texture2D> cDepth, ComPtr<ID3D11Texture2D> cStencil);
 
 		void videoEncodingThread();
