@@ -1,0 +1,5 @@
+version: 1.0.{build}
+build:
+  project: gta5-extended-video-export/gta5-lossless-render.vcxproj
+  verbosity: minimal
+test: off
