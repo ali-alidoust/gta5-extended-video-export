@@ -76,7 +76,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);..\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;..\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);..\PolyHook\PolyHook\x64\Release;..\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);..\PolyHook\PolyHook;..\ini-parser;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
