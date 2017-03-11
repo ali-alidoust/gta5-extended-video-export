@@ -1,25 +1,7 @@
 #pragma once
 
-#pragma comment(lib, "delayimp")  
-
 #pragma comment(lib, "lib\\ScriptHookV.lib")
-
-#pragma comment(lib, "mfplat.lib")
-#pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
-#pragma comment(lib, "wmcodecdspuuid.lib")
-#pragma comment(lib, "avcodec.lib")
-#pragma comment(lib, "swscale.lib")
-#pragma comment(lib, "swresample.lib")
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "IlmImf-2_2.lib")
-#pragma comment(lib, "Half.lib")
-#pragma comment(lib, "IlmThread-2_2.lib")
-#pragma comment(lib, "Iex-2_2.lib")
-#pragma comment(lib, "PolyHook.lib")
-//#pragma comment(lib, "x3daudio.lib")
-//#pragma comment(lib, "xapofx.lib")
 
 #include <sstream>
 
