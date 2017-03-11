@@ -109,7 +109,7 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0601</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;GTA5LOSSLESSRENDER_EXPORTS;TARGET_NAME="$(TargetName)";%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0601</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <DisableSpecificWarnings>4099;4133;4334;4091;4199</DisableSpecificWarnings>
