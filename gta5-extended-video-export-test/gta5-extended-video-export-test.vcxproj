@@ -80,9 +80,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\zlib\include;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export\inc;C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\Program Files\openexr\lib;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;$(LibraryPath)</LibraryPath>
-    <SourcePath>C:\root\Personal\Projects\gta5-extended-video-export\gta5-extended-video-export;$(SourcePath)</SourcePath>
+    <IncludePath>..\ini-parser;..\ffmpeg\include;C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\zlib\include;C:\Program Files\openexr\include\OpenEXR;..\yara\libyara\include;..\gta5-extended-video-export\inc;..\gta5-extended-video-export;$(IncludePath)</IncludePath>
+    <LibraryPath>..\PolyHook\Capstone\msvc\x64\Release;..\PolyHook\PolyHook\x64\Release;..\gta5-extended-video-export;..\ffmpeg\lib;..\yara\windows\lib;C:\Program Files\openexr\lib;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;$(LibraryPath)</LibraryPath>
+    <SourcePath>..\gta5-extended-video-export;$(SourcePath)</SourcePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

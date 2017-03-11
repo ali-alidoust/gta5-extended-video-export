@@ -76,9 +76,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);..\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;..\yara\windows\lib;..\ffmpeg\lib;..\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;..\PolyHook\PolyHook;..\yara\libyara\include;..\yara\windows\include;..\ini-parser;..\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -86,9 +86,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\lib;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\lib;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);..\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;..\yara\windows\lib;..\ffmpeg\lib;..\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;C:\root\Personal\Projects\gta5-extended-video-export\PolyHook\PolyHook;C:\root\Personal\Projects\gta5-extended-video-export\yara\libyara\include;C:\root\Personal\Projects\gta5-extended-video-export\yara\windows\include;C:\root\Personal\Projects\gta5-extended-video-export\ini-parser;C:\root\Personal\Projects\gta5-extended-video-export\ffmpeg\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;..\PolyHook\PolyHook;..\yara\libyara\include;..\yara\windows\include;..\ini-parser;..\ffmpeg\include;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
