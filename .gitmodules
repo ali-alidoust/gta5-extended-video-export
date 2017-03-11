@@ -7,12 +7,3 @@
 [submodule "DirectXTex"]
 	path = DirectXTex
 	url = https://github.com/Microsoft/DirectXTex
-[submodule "yara"]
-	path = yara
-	url = https://github.com/VirusTotal/yara
-[submodule "openexr"]
-	path = openexr
-	url = https://github.com/openexr/openexr
-[submodule "zlib"]
-	path = zlib
-	url = https://github.com/madler/zlib
