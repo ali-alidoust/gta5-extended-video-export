@@ -247,6 +247,8 @@ xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     <Import Project="..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets" Condition="Exists('..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets')" />
     <Import Project="..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets" Condition="Exists('..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets')" />
     <Import Project="..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets" Condition="Exists('..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets')" />
+    <Import Project="..\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets" Condition="Exists('..\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets')" />
+    <Import Project="..\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets" Condition="Exists('..\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -256,5 +258,7 @@ xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     <Error Condition="!Exists('..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets'))" />
     <Error Condition="!Exists('..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets'))" />
     <Error Condition="!Exists('..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets'))" />
+    <Error Condition="!Exists('..\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets'))" />
+    <Error Condition="!Exists('..\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets'))" />
   </Target>
 </Project>
