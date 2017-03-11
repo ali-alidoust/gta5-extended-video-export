@@ -75,7 +75,7 @@
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LibraryPath>..\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
+    <LibraryPath>..\PolyHook\Capstone\msvc\x64\Debug;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
     <IncludePath>..\ini-parser;..\PolyHook\PolyHook;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
@@ -111,7 +111,6 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalOptions>/LTCG /ignore:"4091,4099" %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
