@@ -2,11 +2,8 @@
 
 #include <Windows.h>
 
-#include "..\PolyHook\PolyHook\PolyHook.h"
-#include "..\PolyHook\Capstone\include\x86.h"
+#include "..\PolyHook\PolyHook\PolyHook.hpp"
 #include "logger.h"
-
-#pragma comment(lib, "..\\PolyHook\\Capstone\\msvc\\x64\\Release\\capstone.lib")
 
 namespace {
 	template <class CLASS_TYPE, class FUNC_TYPE>
