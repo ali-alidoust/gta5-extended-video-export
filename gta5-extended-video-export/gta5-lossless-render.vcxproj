@@ -76,9 +76,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);..\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;C:\Program Files\ilmbase\lib;C:\Program Files\openexr\lib;..\PolyHook\Capstone\msvc\x64\Release;..\packages\FFmpeg.Win10.3.1.3\build\native\x64;..\packages\libyara_vs2015.3.5.1\build\native;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);..\PolyHook\PolyHook\x64\Release;C:\Program Files\zlib\lib;..\PolyHook\Capstone\msvc\x64\Release;$(LibraryPath)</LibraryPath>
     <TargetExt>.asi</TargetExt>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Program Files\ilmbase\include\OpenEXR;C:\Program Files\openexr\include\OpenEXR;..\PolyHook\PolyHook;..\ini-parser;..\packages\FFmpeg.Win10.3.1.3\include;..\packages\libyara_vs2015.3.5.1\lib\native\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);..\PolyHook\PolyHook;..\ini-parser;$(IncludePath)</IncludePath>
     <TargetName>ExtendedVideoExport</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -246,6 +246,7 @@ xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     <Import Project="..\packages\yara-vs2015-binary-dependencies.0.0.1\build\native\yara-vs2015-binary-dependencies.targets" Condition="Exists('..\packages\yara-vs2015-binary-dependencies.0.0.1\build\native\yara-vs2015-binary-dependencies.targets')" />
     <Import Project="..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets" Condition="Exists('..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets')" />
     <Import Project="..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets" Condition="Exists('..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets')" />
+    <Import Project="..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets" Condition="Exists('..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -254,5 +255,6 @@ xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
     <Error Condition="!Exists('..\packages\yara-vs2015-binary-dependencies.0.0.1\build\native\yara-vs2015-binary-dependencies.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\yara-vs2015-binary-dependencies.0.0.1\build\native\yara-vs2015-binary-dependencies.targets'))" />
     <Error Condition="!Exists('..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\libyara_vs2015.3.5.1\build\native\libyara_vs2015.targets'))" />
     <Error Condition="!Exists('..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\FFmpeg.Win10.3.1.3\build\native\FFmpeg.Win10.targets'))" />
+    <Error Condition="!Exists('..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\openexr-msvc14-x64.2.2.0.7782\build\native\OpenEXR-msvc14-x64.targets'))" />
   </Target>
 </Project>
