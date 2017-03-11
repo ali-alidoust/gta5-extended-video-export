@@ -24,7 +24,6 @@ void YaraHelper::initialize()
 
 	LOG_CALL(LL_DBG, yr_initialize());
 	REQUIRE(yr_compiler_create(&this->pYrCompiler), "Failed to create yara compiler.");
-	REQUIRE(yr_compiler_add_string(this->pYrCompiler, yara_get_render_time_base_function.c_str(), NULL), "Failed to compile yara rule");
 	POST();
 }
 
