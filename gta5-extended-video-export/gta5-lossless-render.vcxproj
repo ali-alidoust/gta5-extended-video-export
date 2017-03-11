@@ -231,7 +231,7 @@ xcopy /y /E "$(ProjectDir)deploy\*" "$(OutDir)"*</Command>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="custom-hooks.h" />
+    <ClInclude Include="custom-hooks.h" />
     <ClCompile Include="encoder.cpp" />
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="script.cpp" />

@@ -96,6 +96,9 @@
     <ClInclude Include="game-detour-def.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="custom-hooks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -103,9 +106,6 @@
     </ClCompile>
     <ClCompile Include="script.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="custom-hooks.h">
-      <Filter>Header Files</Filter>
     </ClCompile>
     <ClCompile Include="encoder.cpp">
       <Filter>Source Files</Filter>
