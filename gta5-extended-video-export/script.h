@@ -2,8 +2,6 @@
 
 #include <dxgi.h>
 #include <d3d11.h>
-#include <wrl.h>
-using namespace Microsoft::WRL;
 
 template <class T> void SafeRelease(T **ppT)
 {
@@ -26,6 +24,3 @@ void initialize();
 void ScriptMain();
 void onPresent(IDXGISwapChain *swapChain);
 void finalize();
-static void prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext);
-static ComPtr<ID3D11Texture2D> divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext, uint32_t k);
-static void drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext, ComPtr<ID3D11Texture2D> pSource);

@@ -18,7 +18,7 @@
 
 #define CFG_EXPORT_SECTION "EXPORT"
 #define CFG_EXPORT_MB_SAMPLES "motion_blur_samples"
-#define CFG_EXPORT_MB_POSITION "motion_blur_strength"
+#define CFG_EXPORT_MB_POSITION "motion_blur_shutter_position"
 #define CFG_EXPORT_FPS "fps"
 #define CFG_EXPORT_OPENEXR "export_openexr"
 
@@ -60,7 +60,7 @@ public:
 	static LogLevel                        log_level;
 	static std::pair<uint32_t, uint32_t>   fps;
 	static uint8_t                         motion_blur_samples;
-	static float                           motion_blur_strength;
+	static float                           shutter_position;
 	static std::string                     container_format;
 
 	static void reload() {
@@ -82,7 +82,6 @@ public:
 		log_level = parse_log_level();
 		fps = parse_fps();
 		motion_blur_samples = parse_motion_blur_samples();
-		motion_blur_strength = parse_motion_blur_strength();
 		export_openexr = parse_export_openexr();
 	}
 
@@ -403,15 +402,10 @@ private:
 		return failed(CFG_EXPORT_FPS, string, std::make_pair(30000, 1001));
 	}
 
-	static float parse_motion_blur_strength() {
+	static float parse_shutter_position() {
 		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_POSITION];
 		try {
 			float value = std::stof(string);
-			if (value < 0) {
-				value = 0;
-			} else if (value > 1) {
-				value = 1;
-			}
 			return succeeded(CFG_EXPORT_MB_POSITION, value);
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());

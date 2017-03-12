@@ -19,6 +19,6 @@ std::string                     config::audio_fmt;
 LogLevel                        config::log_level;
 std::pair<uint32_t, uint32_t>   config::fps;
 uint8_t                         config::motion_blur_samples;
-float							config::motion_blur_strength;
+float							config::shutter_position;
 std::string                     config::container_format;
 bool                            config::export_openexr;
