@@ -13,9 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="DirectXTex">
-      <UniqueIdentifier>{e33768ca-cb37-40a4-b1d4-c5ed4e2f1708}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -27,36 +24,15 @@
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\DirectXTex\DirectXTex\BC.h">
-      <Filter>DirectXTex</Filter>
+    <ClInclude Include="..\gta5-extended-video-export\encoder.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\DirectXTex\DirectXTex\BCDirectCompute.h">
-      <Filter>DirectXTex</Filter>
-    </ClInclude>
-    <ClInclude Include="..\DirectXTex\DirectXTex\DDS.h">
-      <Filter>DirectXTex</Filter>
-    </ClInclude>
-    <ClInclude Include="..\DirectXTex\DirectXTex\DirectXTex.h">
-      <Filter>DirectXTex</Filter>
-    </ClInclude>
-    <ClInclude Include="..\DirectXTex\DirectXTex\DirectXTexP.h">
-      <Filter>DirectXTex</Filter>
-    </ClInclude>
-    <ClInclude Include="..\DirectXTex\DirectXTex\Filters.h">
-      <Filter>DirectXTex</Filter>
-    </ClInclude>
-    <ClInclude Include="..\DirectXTex\DirectXTex\scoped.h">
-      <Filter>DirectXTex</Filter>
+    <ClInclude Include="..\gta5-extended-video-export\logger.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gta5-extended-video-export-test.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\gta5-extended-video-export\config.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\gta5-extended-video-export\dllmain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\gta5-extended-video-export\encoder.cpp">
@@ -65,76 +41,8 @@
     <ClCompile Include="..\gta5-extended-video-export\logger.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\gta5-extended-video-export\script.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\gta5-extended-video-export\yara-helper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\BC.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\BC4BC5.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\BC6HBC7.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\BCDirectCompute.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexCompress.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexCompressGPU.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexConvert.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexD3D11.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexDDS.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexFlipRotate.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexHDR.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexImage.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexMipmaps.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexMisc.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexNormalMaps.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexPMAlpha.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexResize.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexTGA.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexUtil.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DirectXTex\DirectXTex\DirectXTexWIC.cpp">
-      <Filter>DirectXTex</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\DirectXTex\DirectXTex\DirectXTex.inl">
-      <Filter>DirectXTex</Filter>
-    </None>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

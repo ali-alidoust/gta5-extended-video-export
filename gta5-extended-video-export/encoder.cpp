@@ -1,4 +1,3 @@
-#include "stdafx.h"
 #include "encoder.h"
 #include "logger.h"
 #include <ImfHeader.h>
