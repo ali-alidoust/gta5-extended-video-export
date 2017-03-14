@@ -3,8 +3,8 @@ install:
   - git submodule update --init --recursive
 before_build:
   - nuget restore
-  - appveyor DownloadFile http://www.dev-c.com/files/ScriptHookV_SDK_1.0.617.1a.zip
-  - 7z x ScriptHookV_SDK_1.0.617.1a.zip
+  - appveyor DownloadFile http://reshade.me/downloads/ScriptHookV_SDK_1.0.617.1a.zip -FileName sdk.zip
+  - 7z x sdk.zip
   - move lib\*.lib gta5-extended-video-export
 build:
   project: gta5-extended-video-export/gta5-lossless-render.vcxproj
