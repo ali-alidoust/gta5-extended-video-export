@@ -6,7 +6,6 @@ before_build:
   - cd gta5-extended-video-export
   - appveyor DownloadFile http://reshade.me/downloads/ScriptHookV_SDK_1.0.617.1a.zip -FileName sdk.zip
   - 7z x sdk.zip
-  - move lib\*.lib .
 build:
   project: gta5-lossless-render.vcxproj
   verbosity: detailed
