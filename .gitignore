@@ -30,6 +30,8 @@
 # VC++ Specific
 *.opensdf
 *.sdf
+*.VC.db
+*.VC.VC.opendb
 
 x64/
 Debug/
