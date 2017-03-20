@@ -9,7 +9,7 @@ build:
   project: gta5-extended-video-export.sln
   verbosity: detailed
 after_build:
-  - pushd x64\Debug
+  - pushd x64\Release
   - mkdir EVE\dlls
   - ps: Move-Item -Path ".\*.dll" -Destination .\EVE\dlls
   - dir /s /b *.asi EVE
