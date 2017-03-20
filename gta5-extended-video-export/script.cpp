@@ -677,7 +677,7 @@ static HRESULT IMFSinkWriter_SetInputMediaType(
 					fps_num,
 					fps_den,
 					config::motion_blur_samples,
-					config::shutter_position,
+					1 - config::motion_blur_strength,
 					config::video_fmt,
 					config::video_enc,
 					config::video_cfg, 
