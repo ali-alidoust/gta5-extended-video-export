@@ -4,7 +4,7 @@ install:
   - nuget restore
   - pushd gta5-extended-video-export && appveyor DownloadFile http://reshade.me/downloads/ScriptHookV_SDK_1.0.617.1a.zip -FileName sdk.zip && 7z x sdk.zip & popd
 platform: x64
-configuration: Debug
+configuration: Release
 build:
   project: gta5-extended-video-export.sln
   verbosity: detailed
