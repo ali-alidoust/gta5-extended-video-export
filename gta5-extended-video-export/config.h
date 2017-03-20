@@ -18,7 +18,7 @@
 
 #define CFG_EXPORT_SECTION "EXPORT"
 #define CFG_EXPORT_MB_SAMPLES "motion_blur_samples"
-#define CFG_EXPORT_MB_POSITION "motion_blur_strength"
+#define CFG_EXPORT_MB_STRENGTH "motion_blur_strength"
 #define CFG_EXPORT_FPS "fps"
 #define CFG_EXPORT_OPENEXR "export_openexr"
 
@@ -404,7 +404,7 @@ private:
 	}
 
 	static float parse_motion_blur_strength() {
-		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_POSITION];
+		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_STRENGTH];
 		try {
 			float value = std::stof(string);
 			if (value < 0) {
@@ -412,11 +412,11 @@ private:
 			} else if (value > 1) {
 				value = 1;
 			}
-			return succeeded(CFG_EXPORT_MB_POSITION, value);
+			return succeeded(CFG_EXPORT_MB_STRENGTH, value);
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}
-		return failed(CFG_EXPORT_MB_POSITION, string, 0.5);
+		return failed(CFG_EXPORT_MB_STRENGTH, string, 0.5);
 	}
 };
 
