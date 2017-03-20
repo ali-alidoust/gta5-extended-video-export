@@ -35,6 +35,8 @@
 
 x64/
 Debug/
+gta5-extended-video-export/lib/
+gta5-extended-video-export/inc/
 gta5-extended-video-export/Debug/
 gta5-extended-video-export/x64/
 .vs/
