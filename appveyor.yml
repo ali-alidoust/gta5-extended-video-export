@@ -1,14 +1,19 @@
 version: 1.0.{build}
 install:
   - git submodule update --init --recursive
-before_build:
   - nuget restore
-  - cd gta5-extended-video-export
-  - appveyor DownloadFile http://reshade.me/downloads/ScriptHookV_SDK_1.0.617.1a.zip -FileName sdk.zip
-  - 7z x sdk.zip
+  - pushd gta5-extended-video-export && appveyor DownloadFile http://reshade.me/downloads/ScriptHookV_SDK_1.0.617.1a.zip -FileName sdk.zip && 7z x sdk.zip & popd
 platform: x64
 configuration: Debug
 build:
   project: gta5-extended-video-export.sln
   verbosity: detailed
+after_build:
+  - pushd x64\Debug
+  - mkdir EVE\dlls
+  - ps: Move-Item -Path ".\*.dll" -Destination .\EVE\dlls
+  - dir /s /b *.asi EVE
+  - 7z a -r ..\..\ExtendedVideoExport.zip *.asi EVE
 test: off
+artifacts:
+  - path: ExtendedVideoExport.zip
