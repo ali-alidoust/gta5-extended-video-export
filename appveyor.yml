@@ -13,7 +13,7 @@ after_build:
   - mkdir EVE\dlls
   - ps: Move-Item -Path ".\*.dll" -Destination .\EVE\dlls
   - dir /s /b *.asi EVE
-  - 7z a -r ..\..\ExtendedVideoExport.zip *.asi EVE
+  - 7z a -r ..\..\ExtendedVideoExport-git-%APPVEYOR_BUILD_VERSION%.zip *.asi EVE
 test: off
 artifacts:
-  - path: ExtendedVideoExport.zip
+  - path: ExtendedVideoExport-git-$(APPVEYOR_BUILD_VERSION).zip
