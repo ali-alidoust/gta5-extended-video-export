@@ -1,12 +1,12 @@
 #include "encoder.h"
 #include "logger.h"
-#include <ImfHeader.h>
-#include <ImfFloatAttribute.h>
-#include <ImfChannelList.h>
-#include <ImfIO.h>
-#include <ImfOutputFile.h>
-#include <ImfRgbaFile.h>
-#include <ImfRgba.h>
+#include <OpenExr/ImfHeader.h>
+#include <OpenExr/ImfFloatAttribute.h>
+#include <OpenExr/ImfChannelList.h>
+#include <OpenExr/ImfIO.h>
+#include <OpenExr/ImfOutputFile.h>
+#include <OpenExr/ImfRgbaFile.h>
+#include <OpenExr/ImfRgba.h>
 #include <fstream>
 
 
@@ -147,7 +147,7 @@ namespace Encoder {
 
 		if (this->oformat->flags & AVFMT_GLOBALHEADER)
 		{
-			this->videoCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+			this->videoCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 		}
 		
 		RET_IF_FAILED_AV(avcodec_open2(this->videoCodecContext, this->videoCodec, &this->videoOptions), "Could not open video codec", E_FAIL);
@@ -216,7 +216,7 @@ namespace Encoder {
 		
 		if (this->oformat->flags & AVFMT_GLOBALHEADER)
 		{
-			this->audioCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+			this->audioCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 		}
 		av_dict_parse_string(&this->audioOptions, preset.c_str(), "=", "/", 0);
 		this->audioBlockAlign = inputAlignment;
@@ -384,7 +384,7 @@ namespace Encoder {
 		PRE();
 		std::lock_guard<std::mutex> lock(this->mxEncodingThread);
 		int k=0;
-		bool firstFrame;
+		bool firstFrame = true;
 		try {
 			frameQueueItem item = this->videoFrameQueue.dequeue();
 			while (item.data != nullptr) {

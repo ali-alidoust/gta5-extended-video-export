@@ -1,9 +1,10 @@
 #pragma once
 
-#ifndef _MY_CONFIG_H_
-#define _MY_CONFIG_H_
+#ifndef _EVE_CONFIG_H_
+#define _EVE_CONFIG_H_
 
-#include "ini.hpp"
+#include <INIReader.h>
+#include <memory>
 #include <string>
 #include <algorithm>
 #include <sstream>
@@ -11,7 +12,6 @@
 #include <regex>
 #include "logger.h"
 
-#define CFG_XVX_SECTION "XVX"
 #define CFG_AUTO_RELOAD_CONFIG "auto_reload_config"
 #define CFG_ENABLE_XVX "enable_mod"
 #define CFG_OUTPUT_DIR "output_folder"
@@ -38,7 +38,6 @@
 #define CFG_AUDIO_FMT "sample_format"
 #define CFG_AUDIO_CFG "options"
 
-//#define CFG_AUDIO_CODEC "audio_codec"
 #define INI_FILE_NAME "EVE\\" TARGET_NAME ".ini"
 #define PRESET_FILE_NAME "EVE\\preset.ini"
 
@@ -47,7 +46,7 @@ public:
 	static bool                            is_mod_enabled;
 	static bool							   auto_reload_config;
 	static bool                            export_openexr;
-	static std::pair<uint32_t, uint32_t>   resolution;
+//	static std::pair<uint32_t, uint32_t>   resolution;
 	static std::string                     output_dir;
 	static std::string                     format_cfg;
 	static std::string                     format_ext;
@@ -64,8 +63,8 @@ public:
 	static std::string                     container_format;
 
 	static void reload() {
-		config_parser.reset(new INI::Parser(INI_FILE_NAME));
-		preset_parser.reset(new INI::Parser(PRESET_FILE_NAME));
+		config_parser = std::make_shared<INIReader>(INI_FILE_NAME);
+		preset_parser = std::make_shared<INIReader>(PRESET_FILE_NAME);
 
 		is_mod_enabled = parse_lossless_export();
 		auto_reload_config = parse_auto_reload_config();
@@ -87,35 +86,34 @@ public:
 	}
 
 private:
-	static std::shared_ptr<INI::Parser> config_parser;
-	static std::shared_ptr<INI::Parser> preset_parser;
+	static std::shared_ptr<INIReader> config_parser;
+	static std::shared_ptr<INIReader> preset_parser;
 
-	static std::string getTrimmed(std::shared_ptr<INI::Parser> parser, std::string config_name) {
-		std::string orig_str = parser->top()[config_name];
+	static std::string getTrimmed(const std::shared_ptr<INIReader>& parser, const std::string& config_name) {
+		std::string orig_str = parser->GetString("", config_name, "");
 		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
 	}
 
-	static std::string getTrimmed(std::shared_ptr<INI::Parser> parser, std::string config_name, std::string section) {
-		std::string orig_str = parser->top()(section)[config_name];
+	static std::string getTrimmed(const std::shared_ptr<INIReader>& parser, const std::string& config_name, const std::string& section) {
+		std::string orig_str = parser->GetString(section, config_name, "");
 		return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
 	}
-
 
 	static HRESULT GetVideosDirectory(LPSTR output)
 	{
-		PWSTR vidPath = NULL;
+		PWSTR vidPath = nullptr;
 
-		RET_IF_FAILED((SHGetKnownFolderPath(FOLDERID_Videos, 0, NULL, &vidPath) != S_OK), "Failed to get Videos directory for the current user.", E_FAIL);
+		RET_IF_FAILED((SHGetKnownFolderPath(FOLDERID_Videos, 0, nullptr, &vidPath) != S_OK), "Failed to get Videos directory for the current user.", E_FAIL);
 
 		int pathlen = lstrlenW(vidPath);
 
-		int buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, NULL, 0, NULL, NULL);
+		int buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, nullptr, 0, nullptr, nullptr);
 		if (buflen <= 0)
 		{
 			return E_FAIL;
 		}
 
-		buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, output, buflen, NULL, NULL);
+		buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, output, buflen, nullptr, nullptr);
 
 		output[buflen] = 0;
 
@@ -124,7 +122,7 @@ private:
 		return S_OK;
 	}
 
-	static std::string toLower(std::string input) {
+	static std::string toLower(const std::string& input) {
 		std::string result = input;
 		std::transform(result.begin(), result.end(), result.begin(), ::tolower);
 		return result;
@@ -139,33 +137,33 @@ private:
 	}
 
 	template <typename T>
-	static T failed(std::string key, std::string value, T def) {
+	static T failed(const std::string& key, const std::string& value, T def) {
 		LOG(LL_NON, "Failed to parse value for \"", key, "\": ", value);
 		LOG(LL_NON, "Using default value of \"", def, "\" for \"", key, "\"");
 		return def;
 	}
 
 	template <typename T1, typename T2>
-	static std::pair<T1, T2> failed(std::string key, std::string value, std::pair<T1, T2> def) {
+	static std::pair<T1, T2> failed(const std::string& key, const std::string& value, std::pair<T1, T2> def) {
 		LOG(LL_NON, "Failed to parse value for \"", key, "\": ", value);
 		LOG(LL_NON, "Using default value of <", def.first, ", ", def.second, "> for \"", key, "\"");
 		return def;
 	}
 
 	template <typename T>
-	static T succeeded(std::string key, T value) {
+	static T succeeded(const std::string& key, T value) {
 		LOG(LL_NON, "Loaded value for \"", key, "\": ", value);
 		return value;
 	}
 
 	template <typename T1, typename T2>
-	static std::pair<T1, T2> succeeded(std::string key, std::pair<T1, T2> value) {
+	static std::pair<T1, T2> succeeded(const std::string& key, std::pair<T1, T2> value) {
 		LOG(LL_NON, "Loaded value for \"", key, "\": <", value.first, ", ", value.second, ">");
 		return value;
 	}
 
 	static bool parse_lossless_export() {
-		std::string string = config_parser->top()[CFG_ENABLE_XVX];
+		std::string string = config_parser->GetString("", CFG_ENABLE_XVX, "");
 
 		try {
 			return succeeded(CFG_ENABLE_XVX, stringToBoolean(string));
@@ -177,10 +175,10 @@ private:
 	}
 
 	static bool parse_auto_reload_config() {
-		std::string string = config_parser->top()[CFG_AUTO_RELOAD_CONFIG];
+		std::string string = config_parser->GetString("", CFG_AUTO_RELOAD_CONFIG, "");
 
 		try {
-			return succeeded(CFG_AUTO_RELOAD_CONFIG, stringToBoolean(config_parser->top()[CFG_AUTO_RELOAD_CONFIG]));
+			return succeeded(CFG_AUTO_RELOAD_CONFIG, stringToBoolean(config_parser->GetString("", CFG_AUTO_RELOAD_CONFIG, "")));
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}
@@ -189,7 +187,7 @@ private:
 	}
 
 	static bool parse_export_openexr() {
-		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_OPENEXR];
+		std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_OPENEXR, "");
 
 		try {
 			return succeeded(CFG_EXPORT_OPENEXR, stringToBoolean(string));
@@ -202,7 +200,7 @@ private:
 
 	static std::string parse_output_dir() {
 		try {
-			std::string string = config_parser->top()[CFG_OUTPUT_DIR];
+			std::string string = config_parser->GetString("", CFG_OUTPUT_DIR, "");
 			string = std::regex_replace(string, std::regex("(^\\s*)|(\\s*$)"), "");
 
 			if ((!string.empty()) && (string.find_first_not_of(' ') != std::string::npos))
@@ -346,7 +344,7 @@ private:
 	}
 
 	static uint8_t parse_motion_blur_samples() {
-		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_SAMPLES];;
+		std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_MB_SAMPLES, "");;
 		string = std::regex_replace(string, std::regex("\\s+"), "");
 		try {
 			uint64_t value = std::stoul(string);
@@ -366,7 +364,7 @@ private:
 	}
 
 	static std::string parse_container_format() {
-		std::string string = preset_parser->top()(CFG_FORMAT_SECTION)[CFG_EXPORT_FORMAT];
+		std::string string = preset_parser->GetString(CFG_FORMAT_SECTION, CFG_EXPORT_FORMAT, "");
 		string = std::regex_replace(string, std::regex("\\s+"), "");
 		string = toLower(string);
 		try {
@@ -381,18 +379,18 @@ private:
 	}
 
 	static std::pair<int32_t, int32_t> parse_fps() {
-		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_FPS];
+		std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_FPS, "");
 		string = std::regex_replace(string, std::regex("\\s+"), "");
 		try {
 			std::smatch match;
-			if (std::regex_match(string, match, std::regex("^(\\d+)/(\\d+)$"))) {
+			if (std::regex_match(string, match, std::regex(R"(^(\d+)/(\d+)$)"))) {
 				return succeeded(CFG_EXPORT_FPS, std::make_pair(std::stoi(match[1]), std::stoi(match[2])));
 			}
 
 			match = std::smatch();
-			if (std::regex_match(string, match, std::regex("^\\d+(\\.\\d+)?$"))) {
+			if (std::regex_match(string, match, std::regex(R"(^\d+(\.\d+)?$)"))) {
 				float value = std::stof(string);
-				int32_t num = (int32_t)(value * 1000);
+				auto num = (int32_t)(value * 1000);
 				int32_t den = 1000;
 				return succeeded(CFG_EXPORT_FPS, std::make_pair(num, den));
 			}
@@ -404,7 +402,7 @@ private:
 	}
 
 	static float parse_motion_blur_strength() {
-		std::string string = config_parser->top()(CFG_EXPORT_SECTION)[CFG_EXPORT_MB_STRENGTH];
+		std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_MB_STRENGTH, "");
 		try {
 			float value = std::stof(string);
 			if (value < 0) {
@@ -416,8 +414,8 @@ private:
 		} catch (std::exception& ex) {
 			LOG(LL_ERR, ex.what());
 		}
-		return failed(CFG_EXPORT_MB_STRENGTH, string, 0.5);
+		return failed(CFG_EXPORT_MB_STRENGTH, string, 0.5f);
 	}
 };
 
-#endif _MY_CONFIG_H_
+#endif

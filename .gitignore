@@ -42,3 +42,11 @@ gta5-extended-video-export/x64/
 .vs/
 ipch/
 packages/
+/.idea
+
+# ScriptHookV
+/ScriptHookV
+!/ScriptHookV/HOWTO.TXT
+
+# cmake
+/out

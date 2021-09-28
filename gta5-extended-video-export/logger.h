@@ -1,4 +1,5 @@
 #pragma once
+
 #include <Windows.h>
 #include <fstream>
 #include <mutex>
@@ -6,7 +7,7 @@
 #include <exception>
 #include <sstream>
 extern "C" {
-	#include <libavutil\error.h>
+	#include <libavutil/error.h>
 }
 
 #define __FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)

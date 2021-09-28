@@ -1,0 +1,11 @@
+{
+  "name": "gta5-extended-video-export",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "inih",
+    "ffmpeg",
+    "directxtex",
+    "openexr",
+    "polyhook2"
+  ]
+}

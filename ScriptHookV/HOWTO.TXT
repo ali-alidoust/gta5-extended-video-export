@@ -1,0 +1,2 @@
+﻿Copy contents of ScriptHookV SDK in this directory.
+You can download the latest SDK from http://www.dev-c.com/gtav/scripthookv/

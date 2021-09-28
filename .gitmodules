@@ -1,9 +1,3 @@
-[submodule "PolyHook"]
-	path = PolyHook
-	url = https://github.com/stevemk14ebr/PolyHook
-[submodule "ini-parser"]
-	path = ini-parser
-	url = https://github.com/Poordeveloper/ini-parser
-[submodule "DirectXTex"]
-	path = DirectXTex
-	url = https://github.com/Microsoft/DirectXTex
+[submodule "vcpkg"]
+	path = vcpkg
+	url = https://github.com/microsoft/vcpkg

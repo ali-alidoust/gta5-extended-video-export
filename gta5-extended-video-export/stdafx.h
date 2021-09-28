@@ -1,13 +1,13 @@
 #pragma once
 
-#pragma comment(lib, "lib\\ScriptHookV.lib")
+//#pragma comment(lib, "../ScriptHookV/lib/ScriptHookV.lib")
 #pragma comment(lib, "mfuuid.lib")
 
 #include <sstream>
 
-#include "inc\main.h"
-#include "inc\nativeCaller.h"
-#include "inc\natives.h"
+#include "../ScriptHookV/inc/main.h"
+#include "../ScriptHookV/inc/nativeCaller.h"
+#include "../ScriptHookV/inc/natives.h"
 
 #include <mfapi.h>
 #include <mfidl.h>
@@ -23,11 +23,8 @@
 #include <ImfImage.h>
 
 extern "C" {
-#include "libavcodec\avcodec.h"
-#include "libswscale\swscale.h"
-#include "libavutil\audio_fifo.h"
-#include "libavutil\opt.h"
-#include <yara\libyara.h>
-#include <yara\rules.h>
-#include <yara\compiler.h>
+#include "libavcodec/avcodec.h"
+#include "libswscale/swscale.h"
+#include "libavutil/audio_fifo.h"
+#include "libavutil/opt.h"
 }
