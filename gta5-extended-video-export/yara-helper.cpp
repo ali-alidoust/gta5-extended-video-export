@@ -33,9 +33,9 @@ void YaraHelper::performScan() {
                                               item.second.pattern.c_str());
         *item.second.dest = address;
         if (address) {
-            LOG(LL_NFO, "Matching address not found: ", item.first);
-        } else {
             LOG(LL_NFO, "Found matching address: ", item.first);
+        } else {
+            LOG(LL_NFO, "Matching address not found: ", item.first);
         }
     }
 

@@ -1,3 +1,5 @@
+#pragma once
+
 /// Filename: MFUtility.h
 ///
 /// Description:
@@ -9,16 +11,13 @@
 ///
 /// License: Public
 
-#include <stdio.h>
-#include <tchar.h>
+#include <codecapi.h>
+#include <cstdio>
 #include <mfapi.h>
 #include <mfplay.h>
 #include <mfreadwrite.h>
-#include <mferror.h>
 #include <wmcodecdsp.h>
-#include <wmsdkidl.h>
 #include <sstream>
-#include <stdlib.h>
 
 #define DEBUGOUT( s )            \
 {                             \

@@ -8,8 +8,6 @@ source_group("" FILES ${no_group_source_files})
 set(Header_Files
         "config.h"
         "encoder.h"
-        "game-detour-def.h"
-        "hook-def.h"
         "logger.h"
         "MFUtility.h"
         "SafeQueue.h"
@@ -57,6 +55,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
         TARGET_NAME_MINSIZEREL "ExtendedVideoExport"
         TARGET_NAME_RELEASE "ExtendedVideoExport"
         TARGET_NAME_RELWITHDEBINFO "ExtendedVideoExport"
+        SUFFIX ".asi"
         )
 ################################################################################
 # Compile definitions
@@ -90,6 +89,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 # Compile and link options
 ################################################################################
 if (MSVC)
+    target_link_libraries(${PROJECT_NAME} PRIVATE delayimp)
     target_compile_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:MinSizeRel>:
             /Y-
@@ -102,27 +102,50 @@ if (MSVC)
             )
     target_link_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
-            /DELAYLOAD:zlibd.dll;
+            /DELAYLOAD:zlibd1.dll;
+            /DELAYLOAD:Half-2_5_d.dll;
+            /DELAYLOAD:Iex-2_5_d.dll;
+            /DELAYLOAD:IlmImf-2_5_d.dll;
+            /DELAYLOAD:IlmThread-2_5_d.dll;
+            /DELAYLOAD:Imath-2_5_d.dll;
             /DEBUG:FULL
             >
             $<$<CONFIG:MinSizeRel>:
-            /DELAYLOAD:zlib.dll
+            /DELAYLOAD:zlib1.dll
+            /DELAYLOAD:Half-2_5_d.dll;
+            /DELAYLOAD:Iex-2_5_d.dll;
+            /DELAYLOAD:IlmImf-2_5_d.dll;
+            /DELAYLOAD:IlmThread-2_5_d.dll;
+            /DELAYLOAD:Imath-2_5_d.dll;
             >
             $<$<CONFIG:Release>:
-            /DELAYLOAD:zlib.dll
+            /DELAYLOAD:zlib1.dll
+            /DELAYLOAD:Half-2_5.dll;
+            /DELAYLOAD:Iex-2_5.dll;
+            /DELAYLOAD:IlmImf-2_5.dll;
+            /DELAYLOAD:IlmThread-2_5.dll;
+            /DELAYLOAD:Imath-2_5.dll;
             >
             $<$<CONFIG:RelWithDebInfo>:
-            /DELAYLOAD:zlibd.dll;
+            /DELAYLOAD:zlibd1.dll;
+            /DELAYLOAD:Half-2_5_d.dll;
+            /DELAYLOAD:Iex-2_5_d.dll;
+            /DELAYLOAD:IlmImf-2_5_d.dll;
+            /DELAYLOAD:IlmThread-2_5_d.dll;
+            /DELAYLOAD:Imath-2_5_d.dll;
             /DEBUG:FULL
             >
-            /DELAYLOAD:avcodec-57.dll;
-            /DELAYLOAD:avdevice-57.dll;
-            /DELAYLOAD:avfilter-6.dll;
-            /DELAYLOAD:avformat-57.dll;
-            /DELAYLOAD:avutil-55.dll;
-            /DELAYLOAD:postproc-54.dll;
-            /DELAYLOAD:swresample-2.dll;
-            /DELAYLOAD:swscale-4.dll;
+            /DELAYLOAD:PolyHook_2.dll;
+            /DELAYLOAD:avcodec-58.dll;
+            /DELAYLOAD:avdevice-58.dll;
+            /DELAYLOAD:avfilter-7.dll;
+            /DELAYLOAD:avformat-58.dll;
+            /DELAYLOAD:avutil-56.dll;
+            /DELAYLOAD:swresample-3.dll;
+            /DELAYLOAD:swscale-5.dll;
+            /DELAYLOAD:capstone.dll;
+            /DELAYLOAD:Zydis.dll;
+            /DELAYLOAD:asmjit.dll;
             /NODEFAULTLIB:libcmt.lib;
             /SUBSYSTEM:WINDOWS
             )
@@ -144,6 +167,7 @@ add_custom_command_if(
         POST_BUILD
         COMMANDS
         COMMAND $<CONFIG:Debug> xcopy /y /E "$<SHELL_PATH:${CMAKE_CURRENT_SOURCE_DIR}/>deploy\\*" "$<SHELL_PATH:${OUTPUT_DIRECTORY}>"
+        COMMAND $<CONFIG:Debug> move /Y "$<SHELL_PATH:${OUTPUT_DIRECTORY}>\\*.dll" "$<SHELL_PATH:${OUTPUT_DIRECTORY}/>EVE\\dlls"
         COMMAND $<CONFIG:MinSizeRel> del /F /Q "$<SHELL_PATH:${OUTPUT_DIRECTORY}>EVE"
         COMMAND $<CONFIG:MinSizeRel> xcopy /y /E "$<SHELL_PATH:${CMAKE_CURRENT_SOURCE_DIR}/>deploy\\*" "$<SHELL_PATH:${OUTPUT_DIRECTORY}>"
         COMMAND $<CONFIG:Release> del /F /Q "$<SHELL_PATH:${OUTPUT_DIRECTORY}>EVE"

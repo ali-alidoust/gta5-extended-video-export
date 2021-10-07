@@ -7,7 +7,7 @@ set(VCPKG_TARGET_TRIPLET "x64-windows" CACHE STRING "vcpkg triplet")
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         CACHE STRING "vcpkg toolchain file")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 project(gta5-extended-video-export C CXX)
 
