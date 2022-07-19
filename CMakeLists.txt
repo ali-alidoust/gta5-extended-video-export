@@ -106,5 +106,5 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # Sub-projects
 ################################################################################
 add_subdirectory(gta5-extended-video-export)
-add_subdirectory(gta5-extended-video-export-test)
+# add_subdirectory(gta5-extended-video-export-test)
 

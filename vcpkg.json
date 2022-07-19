@@ -5,11 +5,6 @@
         "inih",
         "directxtex",
         "openexr",
-        "polyhook2",
-        {
-            "name": "ffmpeg",
-            "features": [ "nonfree" ]
-
-        }
+        "polyhook2"
     ]
 }

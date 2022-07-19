@@ -18,7 +18,6 @@ set(Header_Files
         "yara-helper.h"
         "yara-patterns.h"
         "hooks.h")
-source_group("Header Files" FILES ${Header_Files})
 
 set(Source_Files
         "config.cpp"
@@ -28,12 +27,18 @@ set(Source_Files
         "script.cpp"
         "yara-helper.cpp"
         )
-source_group("Source Files" FILES ${Source_Files})
+
+set(VK_Source_Files
+        "../voukoder/VoukoderTypeLib_i.c")
+
+source_group("Header Files" FILES ${Header_Files})
+source_group("Source Files" FILES ${Source_Files} ${VK_Source_Files})
 
 set(ALL_FILES
         ${no_group_source_files}
         ${Header_Files}
         ${Source_Files}
+        ${VK_Source_Files}
         )
 
 ################################################################################
@@ -167,6 +172,7 @@ add_custom_command_if(
         POST_BUILD
         COMMANDS
         COMMAND $<CONFIG:Debug> xcopy /y /E "$<SHELL_PATH:${CMAKE_CURRENT_SOURCE_DIR}/>deploy\\*" "$<SHELL_PATH:${OUTPUT_DIRECTORY}>"
+        COMMAND $<CONFIG:Debug> if not exist "$<SHELL_PATH:${OUTPUT_DIRECTORY}/>EVE\\dlls" mkdir "$<SHELL_PATH:${OUTPUT_DIRECTORY}/>EVE\\dlls"
         COMMAND $<CONFIG:Debug> move /Y "$<SHELL_PATH:${OUTPUT_DIRECTORY}>\\*.dll" "$<SHELL_PATH:${OUTPUT_DIRECTORY}/>EVE\\dlls"
         COMMAND $<CONFIG:MinSizeRel> del /F /Q "$<SHELL_PATH:${OUTPUT_DIRECTORY}>EVE"
         COMMAND $<CONFIG:MinSizeRel> xcopy /y /E "$<SHELL_PATH:${CMAKE_CURRENT_SOURCE_DIR}/>deploy\\*" "$<SHELL_PATH:${OUTPUT_DIRECTORY}>"
@@ -182,7 +188,6 @@ add_custom_command_if(
 find_library(SCRIPT_HOOK_V_LIBRARY ScriptHookV REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../ScriptHookV/lib")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${SCRIPT_HOOK_V_LIBRARY})
 
-
 # inih
 find_path(INIH_INCLUDE_DIR ini.h REQUIRED)
 find_library(INIH_LIBRARY inih REQUIRED)
@@ -194,10 +199,10 @@ find_package(PolyHook_2 CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE PolyHook_2::PolyHook_2)
 
 # FFMPEG (libavcodec)
-find_package(FFMPEG REQUIRED)
-target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
-target_link_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARY_DIRS})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
+# find_package(FFMPEG REQUIRED)
+# target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
+# target_link_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARY_DIRS})
+# target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
 
 # OpenEXR
 find_package(IlmBase CONFIG REQUIRED)
@@ -216,3 +221,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectXMath)
 # DirectXTex
 find_package(directxtex CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectXTex)
+
+# Voukoder
+find_path(VOUKODER_INCLUDE_DIR VoukoderTypeLib_h.h REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../voukoder")
+target_include_directories(${PROJECT_NAME} PRIVATE ${VOUKODER_INCLUDE_DIR})
+
+# RPC
+find_library(RPC_LIBRARY RpcRT4 REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${RPC_LIBRARY})

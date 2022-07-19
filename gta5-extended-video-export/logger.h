@@ -8,9 +8,7 @@
 #include <iomanip>
 #include <mutex>
 #include <sstream>
-extern "C" {
-#include <libavutil/error.h>
-}
+
 
 #define __CUSTOM_FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
 
@@ -97,11 +95,11 @@ class Logger {
 #endif // ! LOG // Logger::instance().write(__LINE__); Logger::instance().writeLine(x);
 
 #define PRE()                                                                                                          \
-    { LOG(LL_DBG, "Entering: ", __FUNCSIG__); }                                                                        \
+    { LOG(LL_TRC, "Entering: ", __FUNCSIG__); }                                                                        \
     REQUIRE_SEMICOLON
 
 #define POST()                                                                                                         \
-    { LOG(LL_DBG, "Leaving: ", __FUNCSIG__); }                                                                         \
+    { LOG(LL_TRC, "Leaving: ", __FUNCSIG__); }                                                                         \
     REQUIRE_SEMICOLON
 
 #define LOG_CALL(ll, o)                                                                                                \
@@ -194,6 +192,15 @@ class Logger {
 #define NOT_NULL(o, m)                                                                                                 \
     {                                                                                                                  \
         if ((o) == NULL) {                                                                                             \
+            LOG(LL_ERR, m);                                                                                            \
+            throw std::runtime_error(m);                                                                               \
+        }                                                                                                              \
+    }                                                                                                                  \
+    REQUIRE_SEMICOLON
+
+#define ASSERT_RUNTIME(c, m)                                                                                           \
+    {                                                                                                                  \
+        if (!(c)) {                                                                                                    \
             LOG(LL_ERR, m);                                                                                            \
             throw std::runtime_error(m);                                                                               \
         }                                                                                                              \

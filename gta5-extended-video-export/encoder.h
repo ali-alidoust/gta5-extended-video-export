@@ -11,16 +11,19 @@
 #include <valarray>
 #include <vector>
 #include <wrl.h>
-
-extern "C" {
 #pragma warning(push, 0)
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/audio_fifo.h>
-#include <libswresample/swresample.h>
-#include <libswscale/swscale.h>
+#include <VoukoderTypeLib_h.h>
 #pragma warning(pop)
-}
+
+// extern "C" {
+//#pragma warning(push, 0)
+//#include <libavcodec/avcodec.h>
+//#include <libavformat/avformat.h>
+//#include <libavutil/audio_fifo.h>
+//#include <libswresample/swresample.h>
+//#include <libswscale/swscale.h>
+//#pragma warning(pop)
+//}
 
 // template<typename T>
 // using std::shared_ptr = std::shared_ptr<T, std::function<void(T*)>>;
@@ -28,28 +31,31 @@ extern "C" {
 namespace Encoder {
 class Session {
   public:
-    AVOutputFormat* oformat = nullptr;
-    AVFormatContext* fmtContext = nullptr;
-    AVDictionary* fmtOptions = nullptr;
+    Microsoft::WRL::ComPtr<IVoukoder> pVoukoder = nullptr;
+    VKVIDEOFRAME videoFrame{};
+    VKAUDIOCHUNK audioChunk{};
+    // AVOutputFormat* oformat = nullptr;
+    // AVFormatContext* fmtContext = nullptr;
+    // AVDictionary* fmtOptions = nullptr;
 
-    AVCodec* videoCodec = nullptr;
-    AVCodecContext* videoCodecContext = nullptr;
-    // AVFrame* inputFrame = nullptr;
-    // AVFrame* outputFrame = nullptr;
-    AVStream* videoStream = nullptr;
-    SwsContext* pSwsContext = nullptr;
-    AVDictionary* videoOptions = nullptr;
+    // AVCodec* videoCodec = nullptr;
+    // AVCodecContext* videoCodecContext = nullptr;
+    //// AVFrame* inputFrame = nullptr;
+    //// AVFrame* outputFrame = nullptr;
+    // AVStream* videoStream = nullptr;
+    // SwsContext* pSwsContext = nullptr;
+    // AVDictionary* videoOptions = nullptr;
     int64_t videoPTS = 0;
     int64_t motionBlurPTS = 0;
 
-    AVCodec* audioCodec = nullptr;
-    AVCodecContext* audioCodecContext = nullptr;
-    AVFrame* inputAudioFrame = nullptr;
-    AVFrame* outputAudioFrame = nullptr;
-    AVStream* audioStream = nullptr;
-    SwrContext* pSwrContext = nullptr;
-    AVDictionary* audioOptions = nullptr;
-    AVAudioFifo* audioSampleBuffer = nullptr;
+    // AVCodec* audioCodec = nullptr;
+    // AVCodecContext* audioCodecContext = nullptr;
+    // AVFrame* inputAudioFrame = nullptr;
+    // AVFrame* outputAudioFrame = nullptr;
+    // AVStream* audioStream = nullptr;
+    // SwrContext* pSwrContext = nullptr;
+    // AVDictionary* audioOptions = nullptr;
+    // AVAudioFifo* audioSampleBuffer = nullptr;
     int64_t audioPTS = 0;
 
     bool isVideoFinished = false;
@@ -58,17 +64,23 @@ class Session {
     bool isCapturing = false;
     bool isBeingDeleted = false;
 
-    std::mutex mxFormatContext;
-    std::condition_variable cvFormatContext;
+    std::mutex mxVoukoderContext;
+    std::condition_variable cvVoukoderContext;
+    // bool isVoukoderContextCreated = false;
+
+    // std::mutex mxFormatContext;
+    // std::condition_variable cvFormatContext;
 
     std::mutex mxEndSession;
     std::condition_variable cvEndSession;
 
     struct frameQueueItem {
         frameQueueItem() : data(nullptr) {}
-        explicit frameQueueItem(std::shared_ptr<std::valarray<uint8_t>> bytes) : data(std::move(bytes)) {}
+        explicit frameQueueItem(std::shared_ptr<std::valarray<uint8_t>> bytes, int rowPitch)
+            : data(std::move(bytes)), rowPitch(rowPitch) {}
 
         std::shared_ptr<std::valarray<uint8_t>> data;
+        int rowPitch;
     };
 
     struct exr_queue_item {
@@ -94,9 +106,9 @@ class Session {
     SafeQueue<frameQueueItem> videoFrameQueue;
     SafeQueue<exr_queue_item> exrImageQueue;
 
-    bool isVideoContextCreated = false;
-    bool isAudioContextCreated = false;
-    bool isFormatContextCreated = false;
+    // bool isVideoContextCreated = false;
+    // bool isAudioContextCreated = false;
+    // bool isFormatContextCreated = false;
     bool isEncodingThreadFinished = false;
     std::condition_variable cvEncodingThreadFinished;
     std::mutex mxEncodingThread;
@@ -121,10 +133,10 @@ class Session {
     // float audioSampleRateMultiplier;
     uint8_t motionBlurSamples{};
     int32_t audioBlockAlign{};
-    AVPixelFormat outputPixelFormat;
-    AVPixelFormat inputPixelFormat;
-    AVSampleFormat inputAudioSampleFormat;
-    AVSampleFormat outputAudioSampleFormat;
+    // AVPixelFormat outputPixelFormat;
+    // AVPixelFormat inputPixelFormat;
+    // AVSampleFormat inputAudioSampleFormat;
+    // AVSampleFormat outputAudioSampleFormat;
     int32_t inputAudioSampleRate{};
     int32_t inputAudioChannels{};
     int32_t outputAudioSampleRate{};
@@ -141,15 +153,20 @@ class Session {
 
     ~Session();
 
-    HRESULT createContext(const std::string& format, std::string filename, std::string exrOutputPath,
+    /*HRESULT createContext(const std::string& format, std::string filename, std::string exrOutputPath,
                           std::string fmtOptions, uint64_t width, uint64_t height, const std::string& inputPixelFmt,
                           uint32_t fps_num, uint32_t fps_den, uint8_t motionBlurSamples, float shutterPosition,
                           const std::string& outputPixelFmt, const std::string& vcodec, const std::string& voptions,
                           uint32_t inputChannels, uint32_t inputSampleRate, uint32_t inputBitsPerSample,
                           std::string inputSampleFmt, uint32_t inputAlign, std::string outputSampleFmt,
-                          std::string acodec, std::string aoptions);
+                          std::string acodec, std::string aoptions);*/
 
-    HRESULT enqueueVideoFrame(BYTE* pData, int length);
+    HRESULT createContext(const VKENCODERCONFIG& config, const std::wstring& filename, uint32_t width, uint32_t height,
+                          const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den, uint32_t inputChannels,
+                          uint32_t inputSampleRate, const std::string& inputSampleFormat, uint32_t inputAlign);
+
+    // HRESULT enqueueVideoFrame(BYTE* pData, int length);
+    HRESULT enqueueVideoFrame(BYTE* pData, int rowPitch, int size);
     HRESULT enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContext>& pDeviceContext,
                             const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cRGB,
                             const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cDepth,
@@ -158,8 +175,8 @@ class Session {
     void videoEncodingThread();
     void exrEncodingThread();
 
-    HRESULT writeVideoFrame(const BYTE* pData, int32_t length, LONGLONG sampleTime);
-    HRESULT writeAudioFrame(const BYTE* pData, int32_t length, LONGLONG sampleTime);
+    HRESULT writeVideoFrame(BYTE* pData, const int32_t length, const int rowPitch, const LONGLONG sampleTime);
+    HRESULT writeAudioFrame(BYTE* pData, int32_t length, LONGLONG sampleTime);
 
     HRESULT finishVideo();
     HRESULT finishAudio();
@@ -167,19 +184,19 @@ class Session {
     HRESULT endSession();
 
   private:
-    HRESULT createVideoContext(int32_t input_width, int32_t input_height, const std::string& inputPixelFormatString,
-                               int32_t fps_num, int32_t fps_den, uint8_t input_motionBlurSamples,
-                               float input_shutterPosition, const std::string& outputPixelFormatString,
-                               const std::string& vcodec, const std::string& preset);
-    HRESULT createAudioContext(int32_t inputChannels, int32_t inputSampleRate, int32_t inputBitsPerSample,
-                               const std::string& inputSampleFormat, int32_t inputAlignment,
-                               const std::string& outputSampleFormatString, const std::string& acodec,
-                               const std::string& preset);
-    HRESULT createFormatContext(const std::string& format, const std::string& filename, std::string exrOutputPath,
-                                const std::string& fmtOptions);
-    HRESULT createVideoFrames(int32_t srcWidth, int32_t srcHeight, AVPixelFormat srcFmt, int32_t dstWidth,
+    // HRESULT createVideoContext(int32_t input_width, int32_t input_height, const std::string& inputPixelFormatString,
+    //                           int32_t fps_num, int32_t fps_den, uint8_t input_motionBlurSamples,
+    //                           float input_shutterPosition, const std::string& outputPixelFormatString,
+    //                           const std::string& vcodec, const std::string& preset);
+    // HRESULT createAudioContext(int32_t inputChannels, int32_t inputSampleRate, int32_t inputBitsPerSample,
+    //                           const std::string& inputSampleFormat, int32_t inputAlignment,
+    //                           const std::string& outputSampleFormatString, const std::string& acodec,
+    //                           const std::string& preset);
+    // HRESULT createFormatContext(const std::string& format, const std::string& filename, std::string exrOutputPath,
+    //                            const std::string& fmtOptions);
+    /*HRESULT createVideoFrames(int32_t srcWidth, int32_t srcHeight, AVPixelFormat srcFmt, int32_t dstWidth,
                               int32_t dstHeight, AVPixelFormat dstFmt);
     HRESULT createAudioFrames(int32_t inputChannels, AVSampleFormat inputSampleFmt, int32_t inputSampleRate,
-                              int32_t outputChannels, AVSampleFormat outputSampleFmt, int32_t outputSampleRate);
+                              int32_t outputChannels, AVSampleFormat outputSampleFmt, int32_t outputSampleRate);*/
 };
 } // namespace Encoder

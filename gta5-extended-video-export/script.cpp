@@ -10,18 +10,20 @@
 #include "util.h"
 #include "yara-helper.h"
 #include <DirectXMath.h>
-//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\comdecl.h>
-//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\xaudio2.h>
-//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\XAudio2fx.h>
-//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\XAPOFX.h>
+#include <mferror.h>
+// #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\comdecl.h>
+// #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\xaudio2.h>
+// #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\XAudio2fx.h>
+// #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\XAPOFX.h>
 #pragma warning(push)
 #pragma warning(disable : 4005)
-//#include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\x3daudio.h>
+// #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\x3daudio.h>
 #pragma warning(pop)
-//#pragma comment(lib,"x3daudio.lib")
-//#pragma comment(lib,"xapofx.lib")
+// #pragma comment(lib,"x3daudio.lib")
+// #pragma comment(lib,"xapofx.lib")
 
 #include <DirectXTex.h>
+#include <variant>
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
@@ -85,6 +87,9 @@ ComPtr<IDXGISwapChain> mainSwapChain;
 
 ComPtr<IDXGIFactory> pDXGIFactory;
 
+std::queue<std::packaged_task<void()>> asyncQueue;
+std::mutex mxAsyncQueue;
+
 struct ExportContext {
 
     ExportContext() {
@@ -145,19 +150,20 @@ std::shared_ptr<YaraHelper> pYaraHelper;
 // tDraw oDraw;
 // tAudioUnk01 oAudioUnk01;
 
-void avlog_callback(void* ptr, int level, const char* fmt, const va_list vargs) {
-    static char msg[8192];
-    vsnprintf_s(msg, sizeof(msg), fmt, vargs);
-    Logger::instance().write(Logger::instance().getTimestamp(), " ", Logger::instance().getLogLevelString(LL_NON), " ",
-                             Logger::instance().getThreadId(), " AVCODEC: ");
-    if (ptr) {
-        const AVClass* avc = *static_cast<AVClass**>(ptr);
-        Logger::instance().write("(");
-        Logger::instance().write(avc->item_name(ptr));
-        Logger::instance().write("): ");
-    }
-    Logger::instance().write(msg);
-}
+// void avlog_callback(void* ptr, int level, const char* fmt, const va_list vargs) {
+//    static char msg[8192];
+//    vsnprintf_s(msg, sizeof(msg), fmt, vargs);
+//    Logger::instance().write(Logger::instance().getTimestamp(), " ", Logger::instance().getLogLevelString(LL_NON), "
+//    ",
+//                             Logger::instance().getThreadId(), " AVCODEC: ");
+//    if (ptr) {
+//        const AVClass* avc = *static_cast<AVClass**>(ptr);
+//        Logger::instance().write("(");
+//        Logger::instance().write(avc->item_name(ptr));
+//        Logger::instance().write("): ");
+//    }
+//    Logger::instance().write(msg);
+//}
 
 // static HRESULT CreateSourceVoice(
 //	IXAudio2                    *pThis,
@@ -233,10 +239,22 @@ void onPresent(IDXGISwapChain* swapChain) {
             LOG(LL_ERR, ex.what());
         }
     }
+
+    // Process Async Queue
+    {
+        std::lock_guard<std::mutex> asyncQueueLock(mxAsyncQueue);
+        while (!asyncQueue.empty()) {
+            if (auto& task = asyncQueue.front(); task.valid()) {
+                task();
+            }
+            asyncQueue.pop();
+        }
+    }
 }
 
 void initialize() {
     PRE();
+
     try {
         mainThreadId = std::this_thread::get_id();
 
@@ -291,8 +309,8 @@ void initialize() {
         // uint64_t pStepAudio = NULL;
         uint64_t pCreateThread = NULL;
         // uint64_t pWaitForSingleObject = NULL;
-        pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function,
-                              &pGetRenderTimeBase);
+        // pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function,
+        //                      &pGetRenderTimeBase);
         // pYaraHelper->addEntry("yara_get_game_speed_multiplier_function", yara_get_game_speed_multiplier_function,
         //                      &pGetGameSpeedMultiplier);
         // pYaraHelper->addEntry("yara_step_audio_function", yara_step_audio_function, &pStepAudio);
@@ -405,8 +423,8 @@ void initialize() {
 
         // LOG_CALL(LL_DBG, av_register_all());
         // LOG_CALL(LL_DBG, avcodec_register_all());
-        LOG_CALL(LL_DBG, av_log_set_level(AV_LOG_TRACE));
-        LOG_CALL(LL_DBG, av_log_set_callback(&avlog_callback));
+        // LOG_CALL(LL_DBG, av_log_set_level(AV_LOG_TRACE));
+        // LOG_CALL(LL_DBG, av_log_set_callback(&avlog_callback));
     } catch (std::exception& ex) {
         // TODO cleanup
         POST();
@@ -446,9 +464,9 @@ static void
 ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext* pThis, UINT NumViews,
                                                              ID3D11RenderTargetView* const* ppRenderTargetViews,
                                                              ID3D11DepthStencilView* pDepthStencilView) {
-    //PRE();
+    PRE();
     if (::exportContext) {
-        //LOG(LL_TRC, "Trying to find out if this ID3D11DeviceContext is linear depth buffer...");
+        // LOG(LL_TRC, "Trying to find out if this ID3D11DeviceContext is linear depth buffer...");
         for (uint32_t i = 0; i < NumViews; i++) {
             if (ppRenderTargetViews[i]) {
                 ComPtr<ID3D11Resource> pResource;
@@ -556,8 +574,10 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                 NOT_NULL(image, "Could not get current frame.");
                 NOT_NULL(image->pixels, "Could not get current frame.");
 
-                REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, (int)(image->width * image->height * 4)),
-                        "Failed to enqueue frame");
+                /*REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, (int)(image->width * image->height * 4)),
+                        "Failed to enqueue frame");*/
+                REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch, image->slicePitch),
+                        "Failed to enqueue frame.");
                 ::exportContext->capturedImage->Release();
             } catch (std::exception&) {
                 LOG(LL_ERR, "Reading video frame from D3D Device failed.");
@@ -569,7 +589,7 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
     }
     LOG_CALL(LL_TRC, ID3D11DeviceContextHooks::OMSetRenderTargets::OriginalFunc(pThis, NumViews, ppRenderTargetViews,
                                                                                 pDepthStencilView));
-    //POST();
+    POST();
 }
 
 static HRESULT ImportHooks::MFCreateSinkWriterFromURL::Implementation(LPCWSTR pwszOutputURL, IMFByteStream* pByteStream,
@@ -690,17 +710,118 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
 
                 LOG(LL_NFO, "Output file: ", filename);
 
-                REQUIRE(encodingSession->createContext(
+                /*IVoukoder* tmpVoukoder = nullptr;
+                REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
+                                         reinterpret_cast<void**>(&tmpVoukoder)),*/
+                //"Failed to create an instance of IVoukoder interface.");
+                // ComPtr<IVoukoder> pVoukoder = tmpVoukoder;
+                // tmpVoukoder = nullptr;
+
+                /*REQUIRE(tmpVoukoder->ShowVoukoderDialog(true, true, &isOK, nullptr, nullptr),
+                        "Failed to show Voukoder dialog.");*/
+
+                /*ASSERT_RUNTIME(isOK, "Exporting was cancelled.");*/
+
+                IVoukoder* pVoukoder = nullptr;
+                ACTCTX* actctx = nullptr;
+                VKENCODERCONFIG vkConfig2{
+                    .version = 1,
+                    .video{.encoder{"libx264"},
+                           .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
+                                    "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
+                                    "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
+                                    "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
+                           .filters{""},
+                           .sidedata{""}},
+                    .audio{.encoder{"aac"},                                          // @clang-format
+                           .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
+                           .filters{""},                                             // @clang-format
+                           .sidedata{""}},
+                    .format = {.container{"mp4"}, .faststart = true}};
+
+                // CreateActCtx()
+                ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
+                               "Failed to get Activation Context for current thread.");
+                if (!actctx) {
+                    actctx = new ACTCTX{};
+                    actctx->cbSize = sizeof(ACTCTX);
+                    actctx->dwFlags = ACTCTX_FLAG_HMODULE_VALID;
+                    actctx->hModule = GetModuleHandle(nullptr);
+                    CreateActCtx(actctx);
+                }
+
+                REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
+                REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
+                                         reinterpret_cast<void**>(&pVoukoder)),
+                        "Failed to create an instance of IVoukoder interface.");
+                // ComPtr<IVoukoder> pVoukoder = tmpVoukoder;
+                // tmpVoukoder = nullptr;
+
+                REQUIRE(pVoukoder->SetConfig(vkConfig2), "Failed to set Voukoder config.");
+
+                {
+                    VKENCODERCONFIG vkConfig1;
+                    BOOL isOK = false;
+                    std::future<void> future;
+                    {
+                        std::lock_guard<std::mutex> asyncQueueLock(mxAsyncQueue);
+                        future =
+                            asyncQueue
+                                .emplace([vkConfig2, pvkConfig1 = &vkConfig1, pIsOK = &isOK] {
+                                    IVoukoder* pVoukoder = nullptr;
+                                    ACTCTX* actctx = nullptr;
+
+                                    ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
+                                                   "Failed to get Activation Context for current thread.");
+                                    REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
+                                    REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER,
+                                                             IID_IVoukoder, reinterpret_cast<void**>(&pVoukoder)),
+                                            "Failed to create an instance of IVoukoder interface.");
+                                    REQUIRE(pVoukoder->ShowVoukoderDialog(true, true, pIsOK, actctx,
+                                                                          GetModuleHandle(nullptr)),
+                                            "Failed to show Voukoder dialog.");
+                                    REQUIRE(pVoukoder->GetConfig(pvkConfig1), "Failed to get config from Voukoder.");
+                                })
+                                .get_future();
+                    }
+                    future.wait();
+                }
+
+                VKENCODERCONFIG vkConfig{
+                    .version = 1,
+                    .video{.encoder{"libx264"},
+                           .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
+                                    "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
+                                    "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
+                                    "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
+                           .filters{""},
+                           .sidedata{""}},
+                    .audio{.encoder{"aac"},                                          // @clang-format
+                           .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
+                           .filters{""},                                             // @clang-format
+                           .sidedata{""}},
+                    .format = {.container{"mp4"}, .faststart = true}};
+                // REQUIRE(tmpVoukoder->GetConfig(&vkConfig),
+                // "Failed to get config from
+                // Voukoder."); tmpVoukoder->Release();
+
+                REQUIRE(encodingSession->createContext(vkConfig, std::wstring(filename.begin(), filename.end()),
+                                                       desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num,
+                                                       fps_den, numChannels, sampleRate, "s16", blockAlignment),
+                        "Failed to create encoding context.");
+
+                /*REQUIRE(encodingSession->createContext(
                             config::container_format, filename.c_str(), exrOutputPath, config::format_cfg,
                             desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den,
                             config::motion_blur_samples, 1 - config::motion_blur_strength, config::video_fmt,
                             config::video_enc, config::video_cfg, numChannels, sampleRate, bitsPerSample, "s16",
                             blockAlignment, config::audio_fmt, config::audio_enc, config::audio_cfg),
-                        "Failed to create encoding context.");
+                        "Failed to create encoding context.");*/
             } catch (std::exception& ex) {
                 LOG(LL_ERR, ex.what());
                 LOG_CALL(LL_DBG, encodingSession.reset());
                 LOG_CALL(LL_DBG, ::exportContext.reset());
+                return MF_E_INVALIDMEDIATYPE;
             }
         }
     }
@@ -726,16 +847,21 @@ static HRESULT IMFSinkWriterHooks::WriteSample::Implementation(IMFSinkWriter* pT
             pBuffer->GetCurrentLength(&length);
             BYTE* buffer;
             if (SUCCEEDED(pBuffer->Lock(&buffer, NULL, NULL))) {
-                LOG_CALL(LL_DBG, encodingSession->writeAudioFrame(buffer, length, sampleTime));
+                try {
+                    LOG_CALL(LL_DBG, encodingSession->writeAudioFrame(
+                                         buffer, length / 4 /* 2 channels * 2 bytes per sample*/, sampleTime));
+                } catch (std::exception& ex) {
+                    LOG(LL_ERR, ex.what());
+                }
+                pBuffer->Unlock();
             }
-
         } catch (std::exception& ex) {
             LOG(LL_ERR, ex.what());
             LOG_CALL(LL_DBG, encodingSession.reset());
             LOG_CALL(LL_DBG, ::exportContext.reset());
-            if (pBuffer) {
+            /*if (pBuffer) {
                 pBuffer->Unlock();
-            }
+            }*/
         }
     }
     /*if (!session) {
@@ -827,6 +953,7 @@ static void ID3D11DeviceContextHooks::Draw::Implementation(ID3D11DeviceContext* 
 
 static HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20,
                                                       int32_t rsp28, char* name) {
+    PRE();
     void* result = GameHooks::CreateThread::OriginalFunc(pFunc, pParams, r8d, r9d, rsp20, rsp28, name);
     LOG(LL_TRC, "CreateThread:", " pFunc:", pFunc, " pParams:", pParams, " r8d:", Logger::hex(r8d, 4),
         " r9d:", Logger::hex(r9d, 4), " rsp20:", rsp20, " rsp28:", rsp28, " name:", name ? name : "<NULL>");
@@ -837,6 +964,7 @@ static HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams
     //	}
     //}
 
+    POST();
     return result;
 }
 
@@ -850,11 +978,13 @@ static HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams
 //}
 
 static float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
+    PRE();
     const std::pair<int32_t, int32_t> fps = config::fps;
     const float result = 1000.0f * static_cast<float>(fps.second) /
                          (static_cast<float>(fps.first) * (static_cast<float>(config::motion_blur_samples) + 1));
     // float result = 1000.0f / 60.0f;
     LOG(LL_NFO, "Time step: ", result);
+    POST();
     return result;
 }
 

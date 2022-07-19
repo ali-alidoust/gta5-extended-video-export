@@ -22,9 +22,9 @@
 
 #include <ImfImage.h>
 
-extern "C" {
-#include "libavcodec/avcodec.h"
-#include "libswscale/swscale.h"
-#include "libavutil/audio_fifo.h"
-#include "libavutil/opt.h"
-}
+//extern "C" {
+//#include "libavcodec/avcodec.h"
+//#include "libswscale/swscale.h"
+//#include "libavutil/audio_fifo.h"
+//#include "libavutil/opt.h"
+//}

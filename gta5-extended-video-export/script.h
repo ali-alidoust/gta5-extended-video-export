@@ -2,6 +2,8 @@
 
 #include <dxgi.h>
 #include <d3d11.h>
+#include <future>
+#include <queue>
 
 template <class T> void SafeRelease(T **ppT)
 {
@@ -20,6 +22,7 @@ template <class B, class A> B ForceCast(A a) {
 	x.a = a;
 	return x.b;
 }
+
 void initialize();
 void ScriptMain();
 void onPresent(IDXGISwapChain *swapChain);

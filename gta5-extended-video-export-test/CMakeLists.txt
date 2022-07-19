@@ -103,10 +103,10 @@ endif()
 
 
 # FFMPEG (libavcodec)
-find_package(FFMPEG REQUIRED)
-target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
-target_link_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARY_DIRS})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
+# find_package(FFMPEG REQUIRED)
+# target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
+# target_link_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARY_DIRS})
+# target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
 
 # OpenEXR
 find_package(IlmBase CONFIG REQUIRED)

@@ -1,4 +1,5 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
+#include "encoder.h"
 #include "logger.h"
 #include "script.h"
 #include "stdafx.h"
@@ -25,13 +26,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         Logger::instance().level = config::log_level;
         LOG_CALL(LL_DBG, initialize());
         LOG(LL_NFO, "Registering script...");
-        LOG_CALL(LL_DBG, presentCallbackRegister((void (*)(void *))onPresent));
+        LOG_CALL(LL_DBG, presentCallbackRegister((void (*)(void*))onPresent));
         LOG_CALL(LL_DBG, scriptRegister(hModule, ScriptMain));
         break;
     case DLL_PROCESS_DETACH:
         LOG(LL_NFO, "Unregistering DXGI callback");
         LOG_CALL(LL_DBG, scriptUnregister(hModule));
-        LOG_CALL(LL_DBG, presentCallbackUnregister((void (*)(void *))onPresent));
+        LOG_CALL(LL_DBG, presentCallbackUnregister((void (*)(void*))onPresent));
         LOG_CALL(LL_DBG, finalize());
         break;
     }
