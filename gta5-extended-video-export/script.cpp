@@ -309,8 +309,8 @@ void initialize() {
         // uint64_t pStepAudio = NULL;
         uint64_t pCreateThread = NULL;
         // uint64_t pWaitForSingleObject = NULL;
-        // pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function,
-        //                      &pGetRenderTimeBase);
+        pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function,
+                              &pGetRenderTimeBase);
         // pYaraHelper->addEntry("yara_get_game_speed_multiplier_function", yara_get_game_speed_multiplier_function,
         //                      &pGetGameSpeedMultiplier);
         // pYaraHelper->addEntry("yara_step_audio_function", yara_step_audio_function, &pStepAudio);
@@ -722,8 +722,7 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
 
                 /*ASSERT_RUNTIME(isOK, "Exporting was cancelled.");*/
 
-                IVoukoder* pVoukoder = nullptr;
-                ACTCTX* actctx = nullptr;
+                // IVoukoder* pVoukoder = nullptr;
                 VKENCODERCONFIG vkConfig2{
                     .version = 1,
                     .video{.encoder{"libx264"},
@@ -740,70 +739,64 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                     .format = {.container{"mp4"}, .faststart = true}};
 
                 // CreateActCtx()
-                ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
-                               "Failed to get Activation Context for current thread.");
-                if (!actctx) {
-                    actctx = new ACTCTX{};
-                    actctx->cbSize = sizeof(ACTCTX);
-                    actctx->dwFlags = ACTCTX_FLAG_HMODULE_VALID;
-                    actctx->hModule = GetModuleHandle(nullptr);
-                    CreateActCtx(actctx);
-                }
-
-                REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
-                REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
-                                         reinterpret_cast<void**>(&pVoukoder)),
-                        "Failed to create an instance of IVoukoder interface.");
+                // REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
+                // REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
+                //                         reinterpret_cast<void**>(&pVoukoder)),
+                //"Failed to create an instance of IVoukoder interface.");
                 // ComPtr<IVoukoder> pVoukoder = tmpVoukoder;
                 // tmpVoukoder = nullptr;
 
-                REQUIRE(pVoukoder->SetConfig(vkConfig2), "Failed to set Voukoder config.");
+                ShowCursor(TRUE);
 
+                VKENCODERCONFIG vkConfig;
+                BOOL isOK = false;
+                std::future<void> future;
                 {
-                    VKENCODERCONFIG vkConfig1;
-                    BOOL isOK = false;
-                    std::future<void> future;
-                    {
-                        std::lock_guard<std::mutex> asyncQueueLock(mxAsyncQueue);
-                        future =
-                            asyncQueue
-                                .emplace([vkConfig2, pvkConfig1 = &vkConfig1, pIsOK = &isOK] {
-                                    IVoukoder* pVoukoder = nullptr;
-                                    ACTCTX* actctx = nullptr;
+                    std::lock_guard<std::mutex> asyncQueueLock(mxAsyncQueue);
+                    future =
+                        asyncQueue
+                            .emplace([&vkConfig2, &vkConfig, &isOK] {
+                                IVoukoder* pVoukoder = nullptr;
+                                ACTCTX* actctx = nullptr;
 
-                                    ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
-                                                   "Failed to get Activation Context for current thread.");
-                                    REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
-                                    REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER,
-                                                             IID_IVoukoder, reinterpret_cast<void**>(&pVoukoder)),
-                                            "Failed to create an instance of IVoukoder interface.");
-                                    REQUIRE(pVoukoder->ShowVoukoderDialog(true, true, pIsOK, actctx,
-                                                                          GetModuleHandle(nullptr)),
-                                            "Failed to show Voukoder dialog.");
-                                    REQUIRE(pVoukoder->GetConfig(pvkConfig1), "Failed to get config from Voukoder.");
-                                })
-                                .get_future();
-                    }
-                    future.wait();
+                                ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
+                                               "Failed to get Activation Context for current thread.");
+                                REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
+                                REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
+                                                         reinterpret_cast<void**>(&pVoukoder)),
+                                        "Failed to create an instance of IVoukoder interface.");
+                                REQUIRE(pVoukoder->SetConfig(vkConfig2), "Failed to set Voukoder config.");
+
+                                REQUIRE(
+                                    pVoukoder->ShowVoukoderDialog(true, true, &isOK, actctx, GetModuleHandle(nullptr)),
+                                    "Failed to show Voukoder dialog.");
+                                REQUIRE(pVoukoder->GetConfig(&vkConfig), "Failed to get config from Voukoder.");
+                            })
+                            .get_future();
+                }
+                future.wait();
+
+                if (!isOK) {
+                    throw std::exception("Cancelled by user.");
                 }
 
-                VKENCODERCONFIG vkConfig{
-                    .version = 1,
-                    .video{.encoder{"libx264"},
-                           .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
-                                    "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
-                                    "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
-                                    "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
-                           .filters{""},
-                           .sidedata{""}},
-                    .audio{.encoder{"aac"},                                          // @clang-format
-                           .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
-                           .filters{""},                                             // @clang-format
-                           .sidedata{""}},
-                    .format = {.container{"mp4"}, .faststart = true}};
-                // REQUIRE(tmpVoukoder->GetConfig(&vkConfig),
-                // "Failed to get config from
-                // Voukoder."); tmpVoukoder->Release();
+                // VKENCODERCONFIG vkConfig{
+                //     .version = 1,
+                //     .video{.encoder{"libx264"},
+                //            .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
+                //                     "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
+                //                     "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
+                //                     "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
+                //            .filters{""},
+                //            .sidedata{""}},
+                //     .audio{.encoder{"aac"},                                          // @clang-format
+                //            .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
+                //            .filters{""},                                             // @clang-format
+                //            .sidedata{""}},
+                //     .format = {.container{"mp4"}, .faststart = true}};
+                //  REQUIRE(tmpVoukoder->GetConfig(&vkConfig),
+                //  "Failed to get config from
+                //  Voukoder."); tmpVoukoder->Release();
 
                 REQUIRE(encodingSession->createContext(vkConfig, std::wstring(filename.begin(), filename.end()),
                                                        desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num,

@@ -11,12 +11,12 @@
 #include <xutility>
 #pragma warning(pop)
 
-//#pragma warning(push, 0)
-// extern "C" {
-//#include <libavutil/imgutils.h>
-//#include <libavutil/pixdesc.h>
-//}
-//#pragma warning(pop)
+// #pragma warning(push, 0)
+//  extern "C" {
+// #include <libavutil/imgutils.h>
+// #include <libavutil/pixdesc.h>
+// }
+// #pragma warning(pop)
 
 //#define IGNORE_DATA_LOSS_WARNING(o)                                                                                    \
 //    {                                                                                                                  \
@@ -39,22 +39,22 @@ Session::~Session() {
     PRE();
     LOG(LL_NFO, "Closing session: ", reinterpret_cast<uint64_t>(this));
     this->isCapturing = false;
-    LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, 0)));
+    //LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, 0)));
 
-    if (thread_video_encoder.joinable()) {
-        thread_video_encoder.join();
-    }
+    //if (thread_video_encoder.joinable()) {
+    //    thread_video_encoder.join();
+    //}
 
-    LOG_CALL(LL_DBG, this->exrImageQueue.enqueue(Encoder::Session::exr_queue_item()));
+    //LOG_CALL(LL_DBG, this->exrImageQueue.enqueue(Encoder::Session::exr_queue_item()));
 
-    if (thread_exr_encoder.joinable()) {
-        thread_exr_encoder.join();
-    }
+    //if (thread_exr_encoder.joinable()) {
+    //    thread_exr_encoder.join();
+    //}
 
     LOG_CALL(LL_DBG, this->finishVideo());
     LOG_CALL(LL_DBG, this->finishAudio());
     LOG_CALL(LL_DBG, this->endSession());
-    LOG_CALL(LL_DBG, pVoukoder->Close(true));
+    //LOG_CALL(LL_DBG, pVoukoder->Close(true));
     this->isBeingDeleted = true;
 
     // LOG_CALL(LL_DBG, av_free(this->oformat));
@@ -832,63 +832,61 @@ HRESULT Session::finishVideo() {
     PRE();
     std::lock_guard<std::mutex> guard(this->mxFinish);
 
-    if (!(this->isVideoFinished || this->isBeingDeleted)) {
+    if (!this->isVideoFinished) {
         // Wait until the video encoding thread is finished.
-        {
+        if (thread_video_encoder.joinable()) {
             // Write end of the stream object with a nullptr
             this->videoFrameQueue.enqueue(frameQueueItem(nullptr, 0));
             std::unique_lock<std::mutex> lock(this->mxEncodingThread);
             while (!this->isEncodingThreadFinished) {
                 this->cvEncodingThreadFinished.wait(lock);
             }
+
+            thread_video_encoder.join();
         }
 
         // Wait until the exr encoding thread is finished
-        {
+        if (thread_exr_encoder.joinable()) {
             // Write end of the stream object with a nullptr
             this->exrImageQueue.enqueue(exr_queue_item());
             std::unique_lock<std::mutex> lock(this->mxEXREncodingThread);
             while (!this->isEXREncodingThreadFinished) {
                 this->cvEXREncodingThreadFinished.wait(lock);
             }
-        }
 
-        if (thread_video_encoder.joinable()) {
-            thread_video_encoder.join();
-        }
-
-        if (thread_exr_encoder.joinable()) {
             thread_exr_encoder.join();
         }
+
+        // Write delayed frames
+        //{
+        //    AVPacket pkt;
+
+        //    av_init_packet(&pkt);
+        //    pkt.data = nullptr;
+        //    pkt.size = 0;
+
+        //    // int got_packet;
+        //    // avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
+        //    avcodec_send_frame(this->videoCodecContext, nullptr);
+        //    while (SUCCEEDED(avcodec_receive_packet(this->videoCodecContext, &pkt))) {
+        //        std::lock_guard<std::mutex> guard(this->mxWriteFrame);
+        //        av_packet_rescale_ts(&pkt, this->videoCodecContext->time_base, this->videoStream->time_base);
+        //        // pkt.dts = outputFrame->pts;
+        //        pkt.stream_index = this->videoStream->index;
+        //        av_interleaved_write_frame(this->fmtContext, &pkt);
+        //        // avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
+        //    }
+
+        //    av_packet_unref(&pkt);
+        //}
+
+        delete videoFrame.buffer;
+        videoFrame.buffer = nullptr;
+        delete videoFrame.rowsize;
+        videoFrame.rowsize = nullptr;
+
+        this->isVideoFinished = true;
     }
-
-    // Write delayed frames
-    //{
-    //    AVPacket pkt;
-
-    //    av_init_packet(&pkt);
-    //    pkt.data = nullptr;
-    //    pkt.size = 0;
-
-    //    // int got_packet;
-    //    // avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
-    //    avcodec_send_frame(this->videoCodecContext, nullptr);
-    //    while (SUCCEEDED(avcodec_receive_packet(this->videoCodecContext, &pkt))) {
-    //        std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-    //        av_packet_rescale_ts(&pkt, this->videoCodecContext->time_base, this->videoStream->time_base);
-    //        // pkt.dts = outputFrame->pts;
-    //        pkt.stream_index = this->videoStream->index;
-    //        av_interleaved_write_frame(this->fmtContext, &pkt);
-    //        // avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
-    //    }
-
-    //    av_packet_unref(&pkt);
-    //}
-
-    delete videoFrame.buffer;
-    delete videoFrame.rowsize;
-
-    this->isVideoFinished = true;
 
     POST();
     return S_OK;
@@ -927,9 +925,9 @@ HRESULT Session::finishAudio() {
     //    // av_free_packet(&pkt);
     //    // av_packet_unref(&pkt);
     //}
-
-    if (this->audioChunk.buffer) {
-        delete (this->audioChunk.buffer);
+    if (!this->isAudioFinished) {
+        delete this->audioChunk.buffer;
+        this->audioChunk.buffer = nullptr;
     }
 
     this->isAudioFinished = true;
@@ -959,14 +957,6 @@ HRESULT Session::endSession() {
     LOG(LL_NFO, "Ending session...");
 
     LOG_IF_FAILED(pVoukoder->Close(true), "Failed to close Voukoder context.");
-
-    // LOG(LL_NFO, "Closing files...");
-    // LOG_IF_FAILED_AV(av_write_trailer(this->fmtContext), "Could not finalize the output file.");
-    // LOG_IF_FAILED_AV(avcodec_close(this->videoCodecContext), "Could not close the video codec.");
-    // LOG_IF_FAILED_AV(avcodec_close(this->audioCodecContext), "Could not close the audio codec.");
-    // LOG_IF_FAILED_AV(avio_close(this->fmtContext->pb), "Could not close the output file.");
-    /*av_free(this->videoCodecContext.get());
-    av_free(this->audioCodecContext.get());*/
 
     this->isSessionFinished = true;
     this->cvEndSession.notify_all();
