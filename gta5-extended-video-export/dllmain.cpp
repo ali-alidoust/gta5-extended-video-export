@@ -28,11 +28,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         LOG(LL_NFO, "Registering script...");
         LOG_CALL(LL_DBG, presentCallbackRegister((void (*)(void*))onPresent));
         LOG_CALL(LL_DBG, scriptRegister(hModule, ScriptMain));
+        LOG_CALL(LL_DBG, keyboardHandlerRegister(onKeyboardMessage));
         break;
     case DLL_PROCESS_DETACH:
         LOG(LL_NFO, "Unregistering DXGI callback");
         LOG_CALL(LL_DBG, scriptUnregister(hModule));
         LOG_CALL(LL_DBG, presentCallbackUnregister((void (*)(void*))onPresent));
+        LOG_CALL(LL_DBG, keyboardHandlerUnregister(onKeyboardMessage));
         LOG_CALL(LL_DBG, finalize());
         break;
     }

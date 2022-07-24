@@ -25,6 +25,18 @@
 #include <DirectXTex.h>
 #include <variant>
 
+namespace PSAccumulate {
+#include <PSAccumulate.h>
+}
+
+namespace PSDivide {
+#include <PSDivide.h>
+}
+
+namespace VSFullScreen {
+#include <VSFullScreen.h>
+}
+
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
@@ -90,6 +102,27 @@ ComPtr<IDXGIFactory> pDXGIFactory;
 std::queue<std::packaged_task<void()>> asyncQueue;
 std::mutex mxAsyncQueue;
 
+ComPtr<ID3D11DeviceContext> pDContext;
+
+ComPtr<ID3D11Texture2D> pMotionBlurAccBuffer;
+ComPtr<ID3D11Texture2D> pMotionBlurFinalBuffer;
+ComPtr<ID3D11VertexShader> pVSFullScreen;
+ComPtr<ID3D11PixelShader> pPSAccumulate;
+ComPtr<ID3D11PixelShader> pPSDivide;
+ComPtr<ID3D11Buffer> pDivideConstantBuffer;
+ComPtr<ID3D11RasterizerState> pRasterState;
+ComPtr<ID3D11SamplerState> pPSSampler;
+ComPtr<ID3D11RenderTargetView> pRTVAccBuffer;
+ComPtr<ID3D11RenderTargetView> pRTVBlurBuffer;
+ComPtr<ID3D11ShaderResourceView> pSRVAccBuffer;
+ComPtr<ID3D11Texture2D> pSourceSRVTexture;
+ComPtr<ID3D11ShaderResourceView> pSourceSRV;
+ComPtr<ID3D11BlendState> pAccBlendState;
+
+struct PSConstantBuffer {
+    XMFLOAT4 floats;
+} cb;
+
 struct ExportContext {
 
     ExportContext() {
@@ -124,6 +157,9 @@ struct ExportContext {
     UINT pts = 0;
 
     ComPtr<IMFMediaType> videoMediaType;
+
+    int accCount = 0;
+    int totalFrameNum = 0;
 };
 
 std::shared_ptr<ExportContext> exportContext;
@@ -196,6 +232,38 @@ std::shared_ptr<YaraHelper> pYaraHelper;
 //	//return S_OK;
 //}
 
+void onKeyboardMessage(DWORD key, WORD repeats, BYTE scanCode, BOOL isExtended, BOOL isWithAlt, BOOL wasDownBefore,
+                       BOOL isUpNow) {
+    if (key == VK_MULTIPLY && wasDownBefore && isUpNow && isWithAlt) {
+        VKENCODERCONFIG vkConfig, vkConfig2;
+        BOOL isOK = false;
+        ShowCursor(TRUE);
+        IVoukoder* pVoukoder = nullptr;
+        ACTCTX* actctx = nullptr;
+
+        ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
+                       "Failed to get Activation Context for current thread.");
+        REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
+        REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
+                                 reinterpret_cast<void**>(&pVoukoder)),
+                "Failed to create an instance of IVoukoder interface.");
+        // REQUIRE(pVoukoder->SetConfig(vkConfig), "Failed to set Voukoder config.");
+
+        REQUIRE(pVoukoder->ShowVoukoderDialog(true, true, &isOK, actctx, GetModuleHandle(nullptr)),
+                "Failed to show Voukoder dialog.");
+
+        if (isOK) {
+            LOG(LL_NFO, "Updating configuration...");
+            REQUIRE(pVoukoder->GetConfig(&vkConfig), "Failed to get config from Voukoder.");
+            config::encoder_config = vkConfig;
+            LOG_CALL(LL_DBG, config::writeEncoderConfig());
+
+        } else {
+            LOG(LL_NFO, "Voukoder config cancelled by user.");
+        }
+    }
+}
+
 void onPresent(IDXGISwapChain* swapChain) {
     mainSwapChain = swapChain;
     static bool initialized = false;
@@ -234,6 +302,8 @@ void onPresent(IDXGISwapChain* swapChain) {
                     "Failed to get IDXGIAdapter");
             REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)pDXGIFactory.GetAddressOf()),
                     "Failed to get IDXGIFactory");
+
+            prepareDeferredContext(pDevice, pDeviceContext);
 
         } catch (std::exception& ex) {
             LOG(LL_ERR, ex.what());
@@ -496,95 +566,128 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
 
     if (::exportContext != nullptr && ::exportContext->pExportRenderTarget != nullptr &&
         (::exportContext->pExportRenderTarget == pRTVTexture)) {
-        std::lock_guard<std::mutex> sessionLock(mxSession);
-        if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
 
-            // Time to capture rendered frame
-            try {
-                ComPtr<ID3D11Device> pDevice;
-                pThis->GetDevice(pDevice.GetAddressOf());
+        // Time to capture rendered frame
+        try {
+            ComPtr<ID3D11Device> pDevice;
+            pThis->GetDevice(pDevice.GetAddressOf());
 
-                ComPtr<ID3D11Texture2D> pDepthBufferCopy = nullptr;
-                ComPtr<ID3D11Texture2D> pBackBufferCopy = nullptr;
-                ComPtr<ID3D11Texture2D> pStencilBufferCopy = nullptr;
+            ComPtr<ID3D11Texture2D> pDepthBufferCopy = nullptr;
+            ComPtr<ID3D11Texture2D> pBackBufferCopy = nullptr;
+            ComPtr<ID3D11Texture2D> pStencilBufferCopy = nullptr;
 
-                if (config::export_openexr) {
-                    {
-                        D3D11_TEXTURE2D_DESC desc;
-                        pLinearDepthTexture->GetDesc(&desc);
+            if (config::export_openexr) {
+                {
+                    D3D11_TEXTURE2D_DESC desc;
+                    pLinearDepthTexture->GetDesc(&desc);
 
-                        desc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
-                        desc.BindFlags = 0;
-                        desc.MiscFlags = 0;
-                        desc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
+                    desc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
+                    desc.BindFlags = 0;
+                    desc.MiscFlags = 0;
+                    desc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
 
-                        REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pDepthBufferCopy.GetAddressOf()),
-                                "Failed to create depth buffer copy texture");
+                    REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pDepthBufferCopy.GetAddressOf()),
+                            "Failed to create depth buffer copy texture");
 
-                        pThis->CopyResource(pDepthBufferCopy.Get(), pLinearDepthTexture.Get());
-                    }
-                    {
-                        D3D11_TEXTURE2D_DESC desc;
-                        pGameBackBufferResolved->GetDesc(&desc);
-                        desc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
-                        desc.BindFlags = 0;
-                        desc.MiscFlags = 0;
-                        desc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
-
-                        REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pBackBufferCopy.GetAddressOf()),
-                                "Failed to create back buffer copy texture");
-
-                        pThis->CopyResource(pBackBufferCopy.Get(), pGameBackBufferResolved.Get());
-                    }
-                    {
-                        D3D11_TEXTURE2D_DESC desc;
-                        pStencilTexture->GetDesc(&desc);
-                        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-                        desc.BindFlags = 0;
-                        desc.MiscFlags = 0;
-                        desc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
-
-                        REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pStencilBufferCopy.GetAddressOf()),
-                                "Failed to create stencil buffer copy");
-
-                        // pThis->ResolveSubresource(pStencilBufferCopy.Get(), 0, pGameDepthBuffer.Get(), 0,
-                        // DXGI_FORMAT::DXGI_FORMAT_R32G8X24_TYPELESS);
-                        pThis->CopyResource(pStencilBufferCopy.Get(), pGameEdgeCopy.Get());
-                    }
-                    encodingSession->enqueueEXRImage(pThis, pBackBufferCopy, pDepthBufferCopy, pStencilBufferCopy);
+                    pThis->CopyResource(pDepthBufferCopy.Get(), pLinearDepthTexture.Get());
                 }
-                LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
-                                     0, DXGI_PRESENT_TEST)); // IMPORTANT: This call makes ENB and ReShade effects to be
-                                                             // applied to the render target
+                {
+                    D3D11_TEXTURE2D_DESC desc;
+                    pGameBackBufferResolved->GetDesc(&desc);
+                    desc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_READ;
+                    desc.BindFlags = 0;
+                    desc.MiscFlags = 0;
+                    desc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
 
-                ComPtr<ID3D11Texture2D> pSwapChainBuffer;
-                REQUIRE(::exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
-                                                               (void**)pSwapChainBuffer.GetAddressOf()),
-                        "Failed to get swap chain's buffer");
+                    REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pBackBufferCopy.GetAddressOf()),
+                            "Failed to create back buffer copy texture");
 
-                auto& image_ref = *(::exportContext->capturedImage);
-                LOG_CALL(LL_DBG,
-                         DirectX::CaptureTexture(::exportContext->pDevice.Get(), ::exportContext->pDeviceContext.Get(),
-                                                 pSwapChainBuffer.Get(), image_ref));
-                if (::exportContext->capturedImage->GetImageCount() == 0) {
-                    LOG(LL_ERR, "There is no image to capture.");
-                    throw std::exception();
+                    pThis->CopyResource(pBackBufferCopy.Get(), pGameBackBufferResolved.Get());
                 }
-                const DirectX::Image* image = ::exportContext->capturedImage->GetImage(0, 0, 0);
-                NOT_NULL(image, "Could not get current frame.");
-                NOT_NULL(image->pixels, "Could not get current frame.");
+                {
+                    D3D11_TEXTURE2D_DESC desc;
+                    pStencilTexture->GetDesc(&desc);
+                    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+                    desc.BindFlags = 0;
+                    desc.MiscFlags = 0;
+                    desc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
 
-                /*REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, (int)(image->width * image->height * 4)),
-                        "Failed to enqueue frame");*/
-                REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch, image->slicePitch),
-                        "Failed to enqueue frame.");
-                ::exportContext->capturedImage->Release();
-            } catch (std::exception&) {
-                LOG(LL_ERR, "Reading video frame from D3D Device failed.");
-                ::exportContext->capturedImage->Release();
-                LOG_CALL(LL_DBG, encodingSession.reset());
-                LOG_CALL(LL_DBG, ::exportContext.reset());
+                    REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pStencilBufferCopy.GetAddressOf()),
+                            "Failed to create stencil buffer copy");
+
+                    // pThis->ResolveSubresource(pStencilBufferCopy.Get(), 0, pGameDepthBuffer.Get(), 0,
+                    // DXGI_FORMAT::DXGI_FORMAT_R32G8X24_TYPELESS);
+                    pThis->CopyResource(pStencilBufferCopy.Get(), pGameEdgeCopy.Get());
+                }
+                {
+                    std::lock_guard<std::mutex> sessionLock(mxSession);
+                    if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
+                        encodingSession->enqueueEXRImage(pThis, pBackBufferCopy, pDepthBufferCopy, pStencilBufferCopy);
+                    }
+                }
             }
+            LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
+                                 0, DXGI_PRESENT_TEST)); // IMPORTANT: This call makes ENB and ReShade effects to be
+                                                         // applied to the render target
+
+            ComPtr<ID3D11Texture2D> pSwapChainBuffer;
+            REQUIRE(::exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
+                                                           (void**)pSwapChainBuffer.GetAddressOf()),
+                    "Failed to get swap chain's buffer");
+
+            // BEGIN CPU
+            // auto& image_ref = *(::exportContext->capturedImage);
+            // LOG_CALL(LL_DBG,
+            //         DirectX::CaptureTexture(::exportContext->pDevice.Get(), ::exportContext->pDeviceContext.Get(),
+            //                                 pSwapChainBuffer.Get(), image_ref));
+            // if (::exportContext->capturedImage->GetImageCount() == 0) {
+            //    LOG(LL_ERR, "There is no image to capture.");
+            //    throw std::exception();
+            //}
+            // const DirectX::Image* image = ::exportContext->capturedImage->GetImage(0, 0, 0);
+            // NOT_NULL(image, "Could not get current frame.");
+            // NOT_NULL(image->pixels, "Could not get current frame.");
+            // END CPU
+
+            {
+                float current_shutter_position = (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
+                                                 (float)config::motion_blur_samples;
+                if (current_shutter_position >= (1 - config::motion_blur_strength)) {
+                    drawAdditive(pDevice, pThis, pSwapChainBuffer);
+                }
+                if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) ==
+                    config::motion_blur_samples) {
+                    ComPtr<ID3D11Texture2D>* result = new ComPtr<ID3D11Texture2D>();
+
+                    *result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
+                    ::exportContext->accCount = 0;
+                    // TODO: Fix this memory leak made for testing
+
+                    auto mapped = new D3D11_MAPPED_SUBRESOURCE();
+                    pThis->Map(result->Get(), 0, D3D11_MAP_READ, 0, mapped);
+
+                    {
+                        std::lock_guard<std::mutex> sessionLock(mxSession);
+                        if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
+                            // CPU
+                            // REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch,
+                            // image->slicePitch),
+                            //        "Failed to enqueue frame.");
+                            REQUIRE(encodingSession->enqueueVideoFrame(static_cast<BYTE*>(mapped->pData),
+                                                                       mapped->RowPitch, mapped->DepthPitch),
+                                    "Failed to enqueue frame.");
+                        }
+                    }
+                }
+                ::exportContext->totalFrameNum++;
+            }
+
+            ::exportContext->capturedImage->Release();
+        } catch (std::exception&) {
+            LOG(LL_ERR, "Reading video frame from D3D Device failed.");
+            ::exportContext->capturedImage->Release();
+            LOG_CALL(LL_DBG, encodingSession.reset());
+            LOG_CALL(LL_DBG, ::exportContext.reset());
         }
     }
     LOG_CALL(LL_TRC, ID3D11DeviceContextHooks::OMSetRenderTargets::OriginalFunc(pThis, NumViews, ppRenderTargetViews,
@@ -604,15 +707,13 @@ static HRESULT ImportHooks::MFCreateSinkWriterFromURL::Implementation(LPCWSTR pw
             PERFORM_MEMBER_HOOK_REQUIRED(IMFSinkWriter, SetInputMediaType, *ppSinkWriter);
             PERFORM_MEMBER_HOOK_REQUIRED(IMFSinkWriter, WriteSample, *ppSinkWriter);
             PERFORM_MEMBER_HOOK_REQUIRED(IMFSinkWriter, Finalize, *ppSinkWriter);
-            /*REQUIRE(hookVirtualFunction(*ppSinkWriter, 3, &Hook_IMFSinkWriter_AddStream, &oIMFSinkWriter_AddStream,
-                                        hkIMFSinkWriter_AddStream),
-                    "Failed to hook IMFSinkWriter::AddStream");
+            /*REQUIRE(hookVirtualFunction(*ppSinkWriter, 3, &Hook_IMFSinkWriter_AddStream,
+            &oIMFSinkWriter_AddStream, hkIMFSinkWriter_AddStream), "Failed to hook IMFSinkWriter::AddStream");
             REQUIRE(hookVirtualFunction(*ppSinkWriter, 4, &IMFSinkWriter_SetInputMediaType,
                                         &oIMFSinkWriter_SetInputMediaType, hkIMFSinkWriter_SetInputMediaType),
                     "Failed to hook IMFSinkWriter::SetInputMediaType");
-            REQUIRE(hookVirtualFunction(*ppSinkWriter, 6, &Hook_IMFSinkWriter_WriteSample, &oIMFSinkWriter_WriteSample,
-                                        hkIMFSinkWriter_WriteSample),
-                    "Failed to hook IMFSinkWriter::WriteSample");
+            REQUIRE(hookVirtualFunction(*ppSinkWriter, 6, &Hook_IMFSinkWriter_WriteSample,
+            &oIMFSinkWriter_WriteSample, hkIMFSinkWriter_WriteSample), "Failed to hook IMFSinkWriter::WriteSample");
             REQUIRE(hookVirtualFunction(*ppSinkWriter, 11, &Hook_IMFSinkWriter_Finalize, &oIMFSinkWriter_Finalize,
                                         hkIMFSinkWriter_Finalize),
                     "Failed to hook IMFSinkWriter::Finalize");*/
@@ -672,9 +773,9 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                     }
                 }
 
-                // REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num,
-                // fps_den, config::motion_blur_samples,  config::video_fmt, config::video_enc, config::video_cfg),
-                // "Failed to create video context");
+                // REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra",
+                // fps_num, fps_den, config::motion_blur_samples,  config::video_fmt, config::video_enc,
+                // config::video_cfg), "Failed to create video context");
 
                 UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
                 GUID subType;
@@ -688,8 +789,8 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 /*if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
                         REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, "s16",
                 blockAlignment, config::audio_fmt, config::audio_enc, config::audio_cfg), "Failed to create audio
-                context."); } else { char buffer[64]; GUIDToString(subType, buffer, 64); LOG(LL_ERR, "Unsupported input
-                audio format: ", buffer); throw std::runtime_error("Unsupported input audio format");
+                context."); } else { char buffer[64]; GUIDToString(subType, buffer, 64); LOG(LL_ERR, "Unsupported
+                input audio format: ", buffer); throw std::runtime_error("Unsupported input audio format");
                 }*/
 
                 char buffer[128];
@@ -704,7 +805,7 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
                 output_file += buffer;
                 exrOutputPath = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
-                output_file += "." + config::format_ext;
+                output_file += ".mp4";
 
                 std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
 
@@ -723,7 +824,7 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 /*ASSERT_RUNTIME(isOK, "Exporting was cancelled.");*/
 
                 // IVoukoder* pVoukoder = nullptr;
-                VKENCODERCONFIG vkConfig2{
+                VKENCODERCONFIG vkConfig{
                     .version = 1,
                     .video{.encoder{"libx264"},
                            .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
@@ -745,40 +846,6 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 //"Failed to create an instance of IVoukoder interface.");
                 // ComPtr<IVoukoder> pVoukoder = tmpVoukoder;
                 // tmpVoukoder = nullptr;
-
-                ShowCursor(TRUE);
-
-                VKENCODERCONFIG vkConfig;
-                BOOL isOK = false;
-                std::future<void> future;
-                {
-                    std::lock_guard<std::mutex> asyncQueueLock(mxAsyncQueue);
-                    future =
-                        asyncQueue
-                            .emplace([&vkConfig2, &vkConfig, &isOK] {
-                                IVoukoder* pVoukoder = nullptr;
-                                ACTCTX* actctx = nullptr;
-
-                                ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
-                                               "Failed to get Activation Context for current thread.");
-                                REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
-                                REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
-                                                         reinterpret_cast<void**>(&pVoukoder)),
-                                        "Failed to create an instance of IVoukoder interface.");
-                                REQUIRE(pVoukoder->SetConfig(vkConfig2), "Failed to set Voukoder config.");
-
-                                REQUIRE(
-                                    pVoukoder->ShowVoukoderDialog(true, true, &isOK, actctx, GetModuleHandle(nullptr)),
-                                    "Failed to show Voukoder dialog.");
-                                REQUIRE(pVoukoder->GetConfig(&vkConfig), "Failed to get config from Voukoder.");
-                            })
-                            .get_future();
-                }
-                future.wait();
-
-                if (!isOK) {
-                    throw std::exception("Cancelled by user.");
-                }
 
                 // VKENCODERCONFIG vkConfig{
                 //     .version = 1,
@@ -1073,6 +1140,87 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
             pGameGBuffer0 = nullptr;
 
             pGameBackBuffer = pTexture;
+
+            D3D11_TEXTURE2D_DESC desc;
+
+            pGameBackBuffer->GetDesc(&desc);
+
+            D3D11_TEXTURE2D_DESC accBufDesc = desc;
+            accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+            accBufDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            accBufDesc.CPUAccessFlags = 0;
+            accBufDesc.MiscFlags = 0;
+            accBufDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
+            accBufDesc.MipLevels = 1;
+            accBufDesc.ArraySize = 1;
+            accBufDesc.SampleDesc.Count = 1;
+            accBufDesc.SampleDesc.Quality = 0;
+
+            LOG_IF_FAILED(pDevice->CreateTexture2D(&accBufDesc, NULL, pMotionBlurAccBuffer.ReleaseAndGetAddressOf()),
+                          "Failed to create accumulation buffer texture");
+
+            D3D11_TEXTURE2D_DESC mbBufferDesc = accBufDesc;
+            mbBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+            mbBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+            LOG_IF_FAILED(
+                pDevice->CreateTexture2D(&mbBufferDesc, NULL, pMotionBlurFinalBuffer.ReleaseAndGetAddressOf()),
+                "Failed to create motion blur buffer texture");
+
+            D3D11_RENDER_TARGET_VIEW_DESC accBufRTVDesc;
+            accBufRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            accBufRTVDesc.Texture2D.MipSlice = 0;
+            accBufRTVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+            LOG_IF_FAILED(pDevice->CreateRenderTargetView(pMotionBlurAccBuffer.Get(), &accBufRTVDesc,
+                                                          pRTVAccBuffer.ReleaseAndGetAddressOf()),
+                          "Failed to create acc buffer RTV.");
+
+            D3D11_RENDER_TARGET_VIEW_DESC mbBufferRTVDesc;
+            mbBufferRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            mbBufferRTVDesc.Texture2D.MipSlice = 0;
+            mbBufferRTVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+            LOG_IF_FAILED(pDevice->CreateRenderTargetView(pMotionBlurFinalBuffer.Get(), &mbBufferRTVDesc,
+                                                          pRTVBlurBuffer.ReleaseAndGetAddressOf()),
+                          "Failed to create blur buffer RTV.");
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC accBufSRVDesc;
+            accBufSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            accBufSRVDesc.Texture2D.MipLevels = 1;
+            accBufSRVDesc.Texture2D.MostDetailedMip = 0;
+            accBufSRVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+            LOG_IF_FAILED(pDevice->CreateShaderResourceView(pMotionBlurAccBuffer.Get(), &accBufSRVDesc,
+                                                            pSRVAccBuffer.ReleaseAndGetAddressOf()),
+                          "Failed to create blur buffer SRV.");
+
+            D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
+            sourceSRVTextureDesc.CPUAccessFlags = 0;
+            sourceSRVTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            sourceSRVTextureDesc.MiscFlags = 0;
+            sourceSRVTextureDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
+            sourceSRVTextureDesc.ArraySize = 1;
+            sourceSRVTextureDesc.SampleDesc.Count = 1;
+            sourceSRVTextureDesc.SampleDesc.Quality = 0;
+            sourceSRVTextureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            sourceSRVTextureDesc.MipLevels = 1;
+
+            REQUIRE(pDevice->CreateTexture2D(&sourceSRVTextureDesc, NULL, pSourceSRVTexture.ReleaseAndGetAddressOf()),
+                    "Failed to create back buffer copy texture");
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC sourceSRVDesc;
+            sourceSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            sourceSRVDesc.Texture2D.MipLevels = 1;
+            sourceSRVDesc.Texture2D.MostDetailedMip = 0;
+            sourceSRVDesc.Format = sourceSRVTextureDesc.Format;
+
+            LOG_IF_FAILED(pDevice->CreateShaderResourceView(pSourceSRVTexture.Get(), &sourceSRVDesc,
+                                                            pSourceSRV.ReleaseAndGetAddressOf()),
+                          "Failed to create backbuffer copy SRV.");
+
+            /*ComPtr<ID3D11DeviceContext> pDeviceContext;
+            pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());*/
         } else if ((std::strcmp("BackBuffer_Resolved", name) == 0) || (std::strcmp("BackBufferCopy", name) == 0)) {
             pGameBackBufferResolved = pTexture;
         } else if (std::strcmp("VideoEncode", name) == 0) {
@@ -1111,4 +1259,173 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
     }
 
     return result;
+}
+
+static void prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext) {
+    REQUIRE(pDevice->CreateDeferredContext(0, pDContext.GetAddressOf()), "Failed to create deferred context");
+    REQUIRE(pDevice->CreateVertexShader(VSFullScreen::g_main, sizeof(VSFullScreen::g_main), NULL,
+                                        pVSFullScreen.GetAddressOf()),
+            "Failed to create g_VSFullScreen vertex shader");
+    REQUIRE(pDevice->CreatePixelShader(PSAccumulate::g_main, sizeof(PSAccumulate::g_main), NULL,
+                                       pPSAccumulate.GetAddressOf()),
+            "Failed to create pixel shader");
+    REQUIRE(pDevice->CreatePixelShader(PSDivide::g_main, sizeof(PSDivide::g_main), NULL, pPSDivide.GetAddressOf()),
+            "Failed to create pixel shader");
+
+    D3D11_BUFFER_DESC clipBufDesc;
+    clipBufDesc.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
+    clipBufDesc.ByteWidth = sizeof(PSConstantBuffer);
+    clipBufDesc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_WRITE;
+    clipBufDesc.MiscFlags = 0;
+    clipBufDesc.StructureByteStride = 0;
+    clipBufDesc.Usage = D3D11_USAGE::D3D11_USAGE_DYNAMIC;
+
+    REQUIRE(pDevice->CreateBuffer(&clipBufDesc, NULL, pDivideConstantBuffer.GetAddressOf()),
+            "Failed to create constant buffer for pixel shader");
+
+    D3D11_SAMPLER_DESC samplerDesc;
+    samplerDesc.Filter = D3D11_FILTER::D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_MODE::D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_MODE::D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_MODE::D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.MipLODBias = 0.0f;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_FUNC::D3D11_COMPARISON_NEVER;
+    samplerDesc.BorderColor[0] = 1.0f;
+    samplerDesc.BorderColor[1] = 1.0f;
+    samplerDesc.BorderColor[2] = 1.0f;
+    samplerDesc.BorderColor[3] = 1.0f;
+    samplerDesc.MinLOD = -FLT_MAX;
+    samplerDesc.MaxLOD = FLT_MAX;
+
+    REQUIRE(pDevice->CreateSamplerState(&samplerDesc, pPSSampler.GetAddressOf()), "Failed to create sampler state");
+
+    D3D11_RASTERIZER_DESC rasterStateDesc;
+    rasterStateDesc.AntialiasedLineEnable = FALSE;
+    rasterStateDesc.CullMode = D3D11_CULL_FRONT;
+    rasterStateDesc.DepthClipEnable = FALSE;
+    rasterStateDesc.FillMode = D3D11_FILL_MODE::D3D11_FILL_SOLID;
+    rasterStateDesc.MultisampleEnable = FALSE;
+    rasterStateDesc.ScissorEnable = FALSE;
+    REQUIRE(pDevice->CreateRasterizerState(&rasterStateDesc, pRasterState.GetAddressOf()),
+            "Failed to create raster state");
+
+    D3D11_BLEND_DESC blendDesc;
+    blendDesc.AlphaToCoverageEnable = FALSE;
+    blendDesc.IndependentBlendEnable = FALSE;
+    blendDesc.RenderTarget[0].BlendEnable = TRUE;
+    blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+    REQUIRE(pDevice->CreateBlendState(&blendDesc, pAccBlendState.GetAddressOf()),
+            "Failed to create accumulation blend state");
+}
+
+static void drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,
+                         ComPtr<ID3D11Texture2D> pSource) {
+    D3D11_TEXTURE2D_DESC desc;
+    pSource->GetDesc(&desc);
+
+    LOG_CALL(LL_DBG, pDContext->ClearState());
+    LOG_CALL(LL_DBG, pDContext->IASetIndexBuffer(NULL, DXGI_FORMAT::DXGI_FORMAT_UNKNOWN, 0));
+    LOG_CALL(LL_DBG, pDContext->IASetInputLayout(NULL));
+    LOG_CALL(LL_DBG, pDContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP));
+
+    LOG_CALL(LL_DBG, pDContext->VSSetShader(pVSFullScreen.Get(), NULL, 0));
+    LOG_CALL(LL_DBG, pDContext->PSSetSamplers(0, 1, pPSSampler.GetAddressOf()));
+    LOG_CALL(LL_DBG, pDContext->PSSetShader(pPSAccumulate.Get(), NULL, 0));
+    LOG_CALL(LL_DBG, pDContext->RSSetState(pRasterState.Get()));
+
+    float factors[4] = {0, 0, 0, 0};
+
+    LOG_CALL(LL_DBG, pDContext->OMSetBlendState(pAccBlendState.Get(), factors, 0xFFFFFFFF));
+
+    D3D11_VIEWPORT viewport;
+    viewport.TopLeftX = 0;
+    viewport.TopLeftY = 0;
+    viewport.Width = desc.Width;
+    viewport.Height = desc.Height;
+    viewport.MinDepth = 0;
+    viewport.MaxDepth = 1;
+    LOG_CALL(LL_DBG, pDContext->RSSetViewports(1, &viewport));
+
+    LOG_CALL(LL_DBG, pDContext->CopyResource(pSourceSRVTexture.Get(), pSource.Get()));
+
+    LOG_CALL(LL_DBG, pDContext->PSSetShaderResources(0, 1, pSourceSRV.GetAddressOf()));
+    LOG_CALL(LL_DBG, pDContext->OMSetRenderTargets(1, pRTVAccBuffer.GetAddressOf(), nullptr));
+    if (::exportContext->accCount == 0) {
+        float color[4] = {0, 0, 0, 1};
+        LOG_CALL(LL_DBG, pDContext->ClearRenderTargetView(pRTVAccBuffer.Get(), color));
+    }
+
+    LOG_CALL(LL_DBG, pDContext->Draw(4, 0));
+
+    ComPtr<ID3D11CommandList> pCmdList;
+    LOG_CALL(LL_DBG, pDContext->FinishCommandList(FALSE, pCmdList.GetAddressOf()));
+    LOG_CALL(LL_DBG, pContext->ExecuteCommandList(pCmdList.Get(), TRUE));
+
+    ::exportContext->accCount++;
+}
+
+static ComPtr<ID3D11Texture2D> divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,
+                                            uint32_t k) {
+
+    D3D11_TEXTURE2D_DESC desc;
+    pMotionBlurFinalBuffer->GetDesc(&desc);
+
+    LOG_CALL(LL_DBG, pDContext->ClearState());
+    LOG_CALL(LL_DBG, pDContext->IASetIndexBuffer(NULL, DXGI_FORMAT::DXGI_FORMAT_UNKNOWN, 0));
+    LOG_CALL(LL_DBG, pDContext->IASetInputLayout(NULL));
+    LOG_CALL(LL_DBG, pDContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP));
+
+    LOG_CALL(LL_DBG, pDContext->VSSetShader(pVSFullScreen.Get(), NULL, 0));
+    LOG_CALL(LL_DBG, pDContext->PSSetShader(pPSDivide.Get(), NULL, 0));
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    REQUIRE(pDContext->Map(pDivideConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped),
+            "Failed to map divide shader constant buffer");
+    ;
+    float* floats = (float*)mapped.pData;
+    floats[0] = static_cast<float>(k);
+    /*floats[0] = 1.0f;*/
+    LOG_CALL(LL_DBG, pDContext->Unmap(pDivideConstantBuffer.Get(), 0));
+
+    LOG_CALL(LL_DBG, pDContext->PSSetConstantBuffers(0, 1, pDivideConstantBuffer.GetAddressOf()));
+    LOG_CALL(LL_DBG, pDContext->PSSetShaderResources(0, 1, pSRVAccBuffer.GetAddressOf()));
+    LOG_CALL(LL_DBG, pDContext->RSSetState(pRasterState.Get()));
+
+    D3D11_VIEWPORT viewport;
+    viewport.TopLeftX = 0;
+    viewport.TopLeftY = 0;
+    viewport.Width = desc.Width;
+    viewport.Height = desc.Height;
+    viewport.MinDepth = 0;
+    viewport.MaxDepth = 1;
+    LOG_CALL(LL_DBG, pDContext->RSSetViewports(1, &viewport));
+
+    LOG_CALL(LL_DBG, pDContext->OMSetRenderTargets(1, pRTVBlurBuffer.GetAddressOf(), NULL));
+    float color[4] = {0, 0, 0, 1};
+    LOG_CALL(LL_DBG, pDContext->ClearRenderTargetView(pRTVBlurBuffer.Get(), color));
+
+    LOG_CALL(LL_DBG, pDContext->Draw(4, 0));
+
+    ComPtr<ID3D11CommandList> pCmdList;
+    LOG_CALL(LL_DBG, pDContext->FinishCommandList(FALSE, pCmdList.GetAddressOf()));
+    LOG_CALL(LL_DBG, pContext->ExecuteCommandList(pCmdList.Get(), TRUE));
+
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+
+    ComPtr<ID3D11Texture2D> ret;
+    REQUIRE(pDevice->CreateTexture2D(&desc, NULL, ret.GetAddressOf()),
+            "Failed to create copy of motion blur dest texture");
+    LOG_CALL(LL_DBG, pContext->CopyResource(ret.Get(), pMotionBlurFinalBuffer.Get()));
+
+    return ret;
 }

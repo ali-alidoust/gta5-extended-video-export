@@ -29,7 +29,7 @@ namespace Encoder {
 
 // const AVRational MF_TIME_BASE = {1, 10000000};
 
-Session::Session() : videoFrameQueue(16), exrImageQueue(16) {
+Session::Session() : videoFrameQueue(128), exrImageQueue(16) {
     PRE();
     LOG(LL_NFO, "Opening session: ", reinterpret_cast<uint64_t>(this));
     POST();
@@ -653,73 +653,17 @@ HRESULT Session::writeVideoFrame(BYTE* pData, const int32_t length, const int ro
     }
 
     // Wait until format context is created
-    if (pVoukoder == nullptr) {
-        std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
-        while (pVoukoder == nullptr) {
-            this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
-        }
-    }
+    //if (pVoukoder == nullptr) {
+    //    std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
+    //    while (pVoukoder == nullptr) {
+    //        this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
+    //    }
+    //}
 
     videoFrame.buffer[0] = pData;
     videoFrame.rowsize[0] = rowPitch;
 
     REQUIRE(pVoukoder->SendVideoFrame(videoFrame), "Failed to send video frame to Voukoder.");
-
-    /*if (const int32_t bufferLength = av_image_get_buffer_size(this->inputPixelFormat, this->width, this->height,
-    1); length != bufferLength) { LOG(LL_ERR, "IMFSample buffer size != av_image_get_buffer_size: ", length, " vs ",
-    bufferLength); POST(); return E_FAIL;
-    }*/
-
-    /*AVFrame* inputFrame = av_frame_alloc();
-    RET_IF_NULL(inputFrame, "Could not allocate video frame", E_FAIL);
-    inputFrame->format = this->inputPixelFormat;
-    inputFrame->width = this->width;
-    inputFrame->height = this->height;*/
-
-    /*AVFrame* outputFrame = av_frame_alloc();
-    RET_IF_NULL(outputFrame, "Could not allocate video frame", E_FAIL);
-    outputFrame->format = this->outputPixelFormat;
-    outputFrame->width = this->width;
-    outputFrame->height = this->height;
-    av_frame_get_buffer(outputFrame, 1);*/
-    // REQUIRE(av_frame_make_writable(inputFrame), "inputFrame is not writable");
-
-    /*RET_IF_FAILED(av_image_fill_arrays(inputFrame->data, inputFrame->linesize, pData, this->inputPixelFormat,
-                                       this->width, this->height, 1),
-                  "Could not fill the frame with data from the buffer", E_FAIL);*/
-
-    // RET_IF_FAILED(av_frame_make_writable(outputFrame), "outputFrame is not writable", E_FAIL);
-
-    /*sws_scale(pSwsContext, inputFrame->data, inputFrame->linesize, 0, this->height, outputFrame->data,
-              outputFrame->linesize);*/
-
-    /*av_frame_unref(inputFrame);
-    av_frame_free(&inputFrame);*/
-    // outputFrame->pts = av_rescale_q(sampleTime, this->videoCodecContext->time_base,
-    // this->videoStream->time_base);
-    // outputFrame->pts = sampleTime;
-
-    // const std::shared_ptr<AVPacket> pPkt(av_packet_alloc(), av_packet_unref);
-
-    /*pPkt->data = nullptr;
-    pPkt->size = 0;*/
-
-    // int got_packet;
-    // avcodec_encode_video2(this->videoCodecContext, pPkt.get(), outputFrame, &got_packet);
-
-    /*avcodec_send_frame(this->videoCodecContext, outputFrame);
-
-    if (SUCCEEDED(avcodec_receive_packet(this->videoCodecContext, pPkt.get()))) {
-        std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-        av_packet_rescale_ts(pPkt.get(), this->videoCodecContext->time_base, this->videoStream->time_base);
-        pPkt->stream_index = this->videoStream->index;
-        av_interleaved_write_frame(this->fmtContext, pPkt.get());
-    }*/
-
-    // av_frame_unref()
-    /*av_frame_unref(outputFrame);
-    av_frame_free(&outputFrame);*/
-    // av_frame_free(&inputFrame);
 
     POST();
     return S_OK;
@@ -739,90 +683,17 @@ HRESULT Session::writeAudioFrame(BYTE* pData, const int32_t length, LONGLONG sam
     }
 
     // Wait until format context is created
-    if (pVoukoder == nullptr) {
-        std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
-        while (pVoukoder == nullptr) {
-            this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
-        }
-    }
+    //if (pVoukoder == nullptr) {
+    //    std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
+    //    while (pVoukoder == nullptr) {
+    //        this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
+    //    }
+    //}
 
     audioChunk.buffer[0] = pData;
     audioChunk.samples = length;
 
     REQUIRE(pVoukoder->SendAudioSampleChunk(audioChunk), "Failed to send audio chunk to Voukoder.");
-
-    /*const int32_t numSamples =
-        length / av_samples_get_buffer_size(nullptr, this->inputAudioFrame->channels, 1,
-                                            static_cast<AVSampleFormat>(this->inputAudioFrame->format),
-                                            this->audioBlockAlign);
-
-    this->inputAudioFrame->nb_samples = numSamples;*/
-
-    // int64_t numOutSamples = av_rescale_rnd(swr_get_delay(this->pSwrContext, this->inputAudioSampleRate) +
-    // numSamples, this->outputAudioSampleRate, this->inputAudioSampleRate, AV_ROUND_UP);
-    /*int numOutSamples = swr_get_out_samples(this->pSwrContext, this->inputAudioFrame->nb_samples);
-    if (numOutSamples < 0) {
-            RET_IF_FAILED_AV(numOutSamples, "Failed to calculate number of output samples.", E_FAIL);
-    }
-
-    if (!numOutSamples) {
-            return S_OK;
-    }*/
-
-    // const int frameSize = this->audioCodecContext->frame_size ? this->audioCodecContext->frame_size : 256;
-    // this->outputAudioFrame->nb_samples = frameSize; // static_cast<int>(numOutSamples);
-
-    // avcodec_fill_audio_frame(this->inputAudioFrame, this->inputAudioFrame->channels,
-    //                         static_cast<AVSampleFormat>(this->inputAudioFrame->format), pData, length,
-    //                         this->audioBlockAlign);
-    // RET_IF_FAILED_AV(swr_convert_frame(this->pSwrContext, this->outputAudioFrame, this->inputAudioFrame),
-    //"Failed to convert audio frame", E_FAIL);
-
-    // swr_convert()
-
-    // if (!this->outputAudioFrame->nb_samples) {
-    //    POST();
-    //    return S_OK;
-    //}
-
-    // av_audio_fifo_write(this->audioSampleBuffer, reinterpret_cast<void**>(this->outputAudioFrame->data),
-    //                    this->outputAudioFrame->nb_samples);
-
-    // if (av_audio_fifo_size(this->audioSampleBuffer) < frameSize) {
-    //    POST();
-    //    return S_OK;
-    //}
-
-    // const int bufferSize =
-    //    av_samples_get_buffer_size(nullptr, this->outputAudioChannels, frameSize, this->outputAudioSampleFormat, 0);
-    // const uint8_t* localBuffer = new uint8_t[bufferSize];
-    // AVFrame* localFrame = av_frame_alloc();
-    // localFrame->channel_layout = AV_CH_LAYOUT_STEREO;
-    // localFrame->format = this->outputAudioSampleFormat;
-    // localFrame->nb_samples = frameSize;
-    // avcodec_fill_audio_frame(localFrame, this->outputAudioChannels, this->outputAudioSampleFormat, localBuffer,
-    //                         bufferSize, 0);
-    // av_audio_fifo_read(this->audioSampleBuffer, reinterpret_cast<void**>(localFrame->data), frameSize);
-
-    // localFrame->pts = this->audioPTS;
-    //// this->audioPTS += localFrame->nb_samples;
-    //// this->outputAudioFrame->pts = this->audioPTS;
-    // this->audioPTS += frameSize;
-
-    // const std::shared_ptr<AVPacket> pPkt(av_packet_alloc(), av_packet_unref);
-
-    // pPkt->data = nullptr;
-    // pPkt->size = 0;
-
-    // avcodec_send_frame(this->audioCodecContext, localFrame);
-    // delete[] localBuffer;
-    // av_frame_free(&localFrame);
-    // if (SUCCEEDED(avcodec_receive_packet(this->audioCodecContext, pPkt.get()))) {
-    //    std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-    //    av_packet_rescale_ts(pPkt.get(), this->audioCodecContext->time_base, this->audioStream->time_base);
-    //    pPkt->stream_index = this->audioStream->index;
-    //    av_interleaved_write_frame(this->fmtContext, pPkt.get());
-    //}
 
     POST();
     return S_OK;

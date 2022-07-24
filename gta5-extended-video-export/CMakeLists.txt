@@ -62,6 +62,34 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
         TARGET_NAME_RELWITHDEBINFO "ExtendedVideoExport"
         SUFFIX ".asi"
         )
+
+# Build HLSL shaders
+add_custom_target(shaders)
+
+set(HLSL_SHADER_FILES "shaders/PSAccumulate.hlsl" "shaders/PSDivide.hlsl" "shaders/VSFullScreen.hlsl")
+
+set_source_files_properties("shaders/VSFullScreen.hlsl" PROPERTIES ShaderType "vs")
+set_source_files_properties("shaders/PSAccumulate.hlsl" PROPERTIES ShaderType "ps")
+set_source_files_properties("shaders/PSDivide.hlsl" PROPERTIES ShaderType "ps")
+set_source_files_properties(${HLSL_SHADER_FILES} PROPERTIES ShaderModel "4_0")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/shaders")
+
+add_custom_command(TARGET shaders
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/shaders")
+
+foreach(FILE ${HLSL_SHADER_FILES})
+  get_filename_component(FILE_WE ${FILE} NAME_WE)
+  get_source_file_property(shadertype ${FILE} ShaderType)
+  get_source_file_property(shadermodel ${FILE} ShaderModel)
+  add_custom_command(TARGET shaders
+                     COMMAND fxc.exe /nologo /Emain /T${shadertype}_${shadermodel} $<IF:$<CONFIG:DEBUG>,/Od,/O1> /Zi /Fh ${CMAKE_BINARY_DIR}/shaders/${FILE_WE}.h /Fd ${CMAKE_BINARY_DIR}/shaders/${FILE_WE}.pdb ${FILE}
+                     MAIN_DEPENDENCY ${FILE}
+                     COMMENT "HLSL ${FILE}"
+                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                     VERBATIM)
+endforeach(FILE)
+
+add_dependencies(${PROJECT_NAME} shaders)
 ################################################################################
 # Compile definitions
 ################################################################################
@@ -184,6 +212,9 @@ add_custom_command_if(
 ################################################################################
 # Dependencies
 ################################################################################
+# Shaders
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/shaders")
+
 # ScriptHookV
 find_library(SCRIPT_HOOK_V_LIBRARY ScriptHookV REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../ScriptHookV/lib")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${SCRIPT_HOOK_V_LIBRARY})
