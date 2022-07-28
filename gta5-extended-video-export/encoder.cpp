@@ -39,22 +39,22 @@ Session::~Session() {
     PRE();
     LOG(LL_NFO, "Closing session: ", reinterpret_cast<uint64_t>(this));
     this->isCapturing = false;
-    //LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, 0)));
+    // LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, 0)));
 
-    //if (thread_video_encoder.joinable()) {
-    //    thread_video_encoder.join();
-    //}
+    // if (thread_video_encoder.joinable()) {
+    //     thread_video_encoder.join();
+    // }
 
-    //LOG_CALL(LL_DBG, this->exrImageQueue.enqueue(Encoder::Session::exr_queue_item()));
+    // LOG_CALL(LL_DBG, this->exrImageQueue.enqueue(Encoder::Session::exr_queue_item()));
 
-    //if (thread_exr_encoder.joinable()) {
-    //    thread_exr_encoder.join();
-    //}
+    // if (thread_exr_encoder.joinable()) {
+    //     thread_exr_encoder.join();
+    // }
 
     LOG_CALL(LL_DBG, this->finishVideo());
     LOG_CALL(LL_DBG, this->finishAudio());
     LOG_CALL(LL_DBG, this->endSession());
-    //LOG_CALL(LL_DBG, pVoukoder->Close(true));
+    // LOG_CALL(LL_DBG, pVoukoder->Close(true));
     this->isBeingDeleted = true;
 
     // LOG_CALL(LL_DBG, av_free(this->oformat));
@@ -177,7 +177,7 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
 
     pVoukoder = std::move(m_pVoukoder);
 
-    this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
+    //this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
     this->thread_exr_encoder = std::thread(&Session::exrEncodingThread, this);
 
     this->isCapturing = true;
@@ -185,267 +185,6 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
     POST();
     return S_OK;
 }
-
-// HRESULT Session::createVideoContext(const int32_t input_width, const int32_t input_height,
-//                                    const std::string& inputPixelFormatString, const int32_t fps_num,
-//                                    const int32_t fps_den, const uint8_t input_motionBlurSamples,
-//                                    const float input_shutterPosition, const std::string& outputPixelFormatString,
-//                                    const std::string& vcodec, const std::string& preset) {
-//    PRE();
-//    if (this->isBeingDeleted) {
-//        POST();
-//        return E_FAIL;
-//    }
-//
-//    if (vcodec.empty()) {
-//        this->videoCodecContext = nullptr;
-//        this->isVideoContextCreated = true;
-//        POST();
-//        return S_OK;
-//    }
-//
-//    LOG(LL_NFO, "Creating video context:");
-//    LOG(LL_NFO, "  encoder: ", vcodec);
-//    LOG(LL_NFO, "  options: ", preset);
-//
-//    this->inputPixelFormat = av_get_pix_fmt(inputPixelFormatString.c_str());
-//    if (this->inputPixelFormat == AV_PIX_FMT_NONE) {
-//        LOG(LL_ERR, "Unknown input pixel format specified: ", inputPixelFormatString);
-//        POST();
-//        return E_FAIL;
-//    }
-//
-//    this->outputPixelFormat = av_get_pix_fmt(outputPixelFormatString.c_str());
-//    if (this->outputPixelFormat == AV_PIX_FMT_NONE) {
-//        LOG(LL_ERR, "Unknown output pixel format specified: ", outputPixelFormatString);
-//        POST();
-//        return E_FAIL;
-//    }
-//    const auto numPixels = static_cast<size_t>(input_width) * static_cast<size_t>(input_height);
-//    this->width = input_width;
-//    this->height = input_height;
-//    this->motionBlurSamples = input_motionBlurSamples;
-//    this->motionBlurAccBuffer = std::valarray<uint16_t>(numPixels * 4);
-//    this->motionBlurTempBuffer = std::valarray<uint16_t>(numPixels * 4);
-//    this->motionBlurDestBuffer = std::valarray<uint8_t>(numPixels * 4);
-//    this->shutterPosition = input_shutterPosition;
-//
-//    // this->audioSampleRateMultiplier = ((float)fps_num * ((float)motionBlurSamples + 1)) / ((float)fps_den
-//    // * 60.0f);
-//
-//    this->videoCodec = avcodec_find_encoder_by_name(vcodec.c_str());
-//    RET_IF_NULL(this->videoCodec, "Could not find video codec:" + vcodec, E_FAIL);
-//
-//    this->videoCodecContext = avcodec_alloc_context3(this->videoCodec);
-//    RET_IF_NULL(this->videoCodecContext, "Could not allocate context for the video codec", E_FAIL);
-//
-//    av_dict_parse_string(&this->videoOptions, preset.c_str(), "=", "/", 0);
-//    // av_set_options_string(this->videoCodecContext, preset.c_str(), "=", "/");
-//
-//    RET_IF_FAILED(this->createVideoFrames(input_width, input_height, this->inputPixelFormat, input_width,
-//    input_height,
-//                                          this->outputPixelFormat),
-//                  "Could not create video frames", E_FAIL);
-//
-//    this->videoCodecContext->codec_id = this->videoCodec->id;
-//    this->videoCodecContext->pix_fmt = this->outputPixelFormat;
-//    this->videoCodecContext->width = input_width;
-//    this->videoCodecContext->height = input_height;
-//    this->videoCodecContext->time_base = av_make_q(fps_den, fps_num);
-//    this->videoCodecContext->framerate = av_make_q(fps_num, fps_den);
-//    this->videoCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
-//
-//    if (this->oformat->flags & AVFMT_GLOBALHEADER) {
-//        this->videoCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-//    }
-//
-//    RET_IF_FAILED_AV(avcodec_open2(this->videoCodecContext, this->videoCodec, &this->videoOptions),
-//                     "Could not open video codec", E_FAIL);
-//
-//    this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
-//    this->thread_exr_encoder = std::thread(&Session::exrEncodingThread, this);
-//
-//    LOG(LL_NFO, "Video context was created successfully.");
-//    this->isVideoContextCreated = true;
-//    POST();
-//    return S_OK;
-//}
-//
-// HRESULT Session::createAudioContext(const int32_t inputChannels, const int32_t inputSampleRate,
-//                                    const int32_t inputBitsPerSample, const std::string& inputSampleFormat,
-//                                    const int32_t inputAlignment, const std::string& outputSampleFormatString,
-//                                    const std::string& acodec, const std::string& preset) {
-//    PRE();
-//    if (this->isBeingDeleted) {
-//        POST();
-//        return E_FAIL;
-//    }
-//
-//    if (acodec.empty()) {
-//        this->audioCodecContext = nullptr;
-//        this->isAudioContextCreated = true;
-//        POST();
-//        return S_OK;
-//    }
-//
-//    LOG(LL_NFO, "Creating audio context:");
-//    LOG(LL_NFO, "  encoder: ", acodec);
-//    LOG(LL_NFO, "  options: ", preset);
-//    // AVCodecID audioCodecId = AV_CODEC_ID_PCM_S16LE;
-//
-//    // this->inputAudioSampleRate = static_cast<uint32_t>(inputSampleRate * this->audioSampleRateMultiplier);
-//    this->inputAudioSampleRate = inputSampleRate;
-//    this->inputAudioChannels = inputChannels;
-//    this->outputAudioChannels = inputChannels; // FIXME
-//
-//    this->inputAudioSampleFormat = av_get_sample_fmt(inputSampleFormat.c_str());
-//    if (this->inputAudioSampleFormat == AV_SAMPLE_FMT_NONE) {
-//        LOG(LL_ERR, "Unknown audio sample format specified: ", inputSampleFormat);
-//        POST();
-//        return E_FAIL;
-//    }
-//
-//    this->outputAudioSampleFormat = av_get_sample_fmt(outputSampleFormatString.c_str());
-//    if (this->outputAudioSampleFormat == AV_SAMPLE_FMT_NONE) {
-//        LOG(LL_ERR, "Unknown audio sample format specified: ", outputSampleFormatString);
-//        POST();
-//        return E_FAIL;
-//    }
-//
-//    this->audioCodec = avcodec_find_encoder_by_name(acodec.c_str());
-//    RET_IF_NULL(this->audioCodec, "Could not find audio codec:" + acodec, E_FAIL);
-//    this->audioCodecContext = avcodec_alloc_context3(this->audioCodec);
-//    RET_IF_NULL(this->audioCodecContext, "Could not allocate context for the audio codec", E_FAIL);
-//
-//    // av_set_options_string(this->audioCodecContext, preset.c_str(), "=", "/");
-//
-//    this->audioCodecContext->codec_id = this->audioCodec->id;
-//    this->audioCodecContext->codec_type = AVMEDIA_TYPE_AUDIO;
-//    this->audioCodecContext->channels = inputChannels;
-//    this->audioCodecContext->sample_fmt = this->outputAudioSampleFormat;
-//    this->audioCodecContext->time_base = {1, inputSampleRate};
-//    // this->audioCodecContext->frame_size = 256;
-//    this->audioCodecContext->channel_layout = AV_CH_LAYOUT_STEREO;
-//
-//    if (this->oformat->flags & AVFMT_GLOBALHEADER) {
-//        this->audioCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-//    }
-//    av_dict_parse_string(&this->audioOptions, preset.c_str(), "=", "/", 0);
-//    this->audioBlockAlign = inputAlignment;
-//
-//    RET_IF_FAILED_AV(avcodec_open2(this->audioCodecContext, this->audioCodec, &this->audioOptions),
-//                     "Could not open audio codec", E_FAIL);
-//
-//    this->outputAudioSampleRate = this->audioCodecContext->sample_rate;
-//    LOG(LL_TRC, this->outputAudioSampleRate);
-//    RET_IF_FAILED(this->createAudioFrames(inputChannels, this->inputAudioSampleFormat, this->inputAudioSampleRate,
-//                                          inputChannels, this->outputAudioSampleFormat, this->outputAudioSampleRate),
-//                  "Could not create audio frames", E_FAIL);
-//
-//    LOG(LL_NFO, "Audio context was created successfully.");
-//    this->isAudioContextCreated = true;
-//
-//    POST();
-//    return S_OK;
-//}
-
-// HRESULT Session::createFormatContext(const std::string& format, const std::string& filename, std::string
-// exrOutputPath,
-//                                     const std::string& fmtOptions) {
-//    PRE();
-//    if (this->isBeingDeleted) {
-//        POST();
-//        return E_FAIL;
-//    }
-//
-//    std::lock_guard<std::mutex> guard(this->mxFormatContext);
-//
-//    this->exrOutputPath = std::move(exrOutputPath);
-//
-//    this->filename = filename;
-//    LOG(LL_NFO, "Exporting to file: ", this->filename);
-//
-//    /*this->oformat = av_guess_format(format.c_str(), NULL, NULL);
-//    RET_IF_NULL(this->oformat, "Could not create format", E_FAIL);*/
-//    RET_IF_FAILED_AV(avformat_alloc_output_context2(&this->fmtContext, this->oformat, NULL, NULL),
-//                     "Could not allocate format context", E_FAIL);
-//    RET_IF_NULL(this->fmtContext, "Could not allocate format context", E_FAIL);
-//    // this->fmtContext = avformat_alloc_context();
-//
-//    this->fmtContext->oformat = this->oformat;
-//    /*if (this->videoCodec) {
-//            this->fmtContext->video_codec_id = this->videoCodec->id;
-//    }
-//    if (this->audioCodec) {
-//            this->fmtContext->audio_codec_id = this->audioCodec->id;
-//    }*/
-//
-//    // this->fmtContext->oformat = this->oformat;
-//
-//    /*if (this->fmtContext->oformat->flags & AVFMT_GLOBALHEADER)
-//    {
-//            if (this->videoCodecContext) {
-//                    this->videoCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
-//            }
-//            if (this->audioCodecContext) {
-//                    this->audioCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
-//            }
-//    }*/
-//
-//    // av_set_options_string(this->fmtContext, fmtPreset.c_str(), "=", "/");
-//    av_dict_parse_string(&this->fmtOptions, fmtOptions.c_str(), "=", "/", 0);
-//
-//    // av_opt_set(this->fmtContext->priv_data, "path", filename, 0);
-//    strcpy_s(this->fmtContext->filename, this->filename.c_str());
-//    // av_opt_set(this->fmtContext, "filename", this->filename.c_str(), 0);
-//
-//    bool hasVideo = false;
-//    bool hasAudio = false;
-//
-//    if (this->videoCodecContext &&
-//        (!this->oformat->query_codec || this->oformat->query_codec(this->videoCodec->id, 0) == 1)) {
-//        this->videoStream = avformat_new_stream(this->fmtContext, this->videoCodec);
-//        RET_IF_NULL(this->videoStream, "Could not create video stream", E_FAIL);
-//        avcodec_parameters_from_context(this->videoStream->codecpar, this->videoCodecContext);
-//        // avcodec_copy_context(this->videoStream->codec, this->videoCodecContext);
-//        this->videoStream->time_base = this->videoCodecContext->time_base;
-//        // this->videoStream->index = this->fmtContext->nb_streams - 1;
-//        hasVideo = true;
-//    }
-//
-//    if (this->audioCodecContext &&
-//        (!this->oformat->query_codec || this->oformat->query_codec(this->audioCodec->id, 0) == 1)) {
-//        this->audioStream = avformat_new_stream(this->fmtContext, this->audioCodec);
-//        RET_IF_NULL(this->audioStream, "Could not create audio stream", E_FAIL);
-//        avcodec_parameters_from_context(this->audioStream->codecpar, this->audioCodecContext);
-//        // avcodec_copy_context(this->audioStream->codec, this->audioCodecContext);
-//        this->audioStream->time_base = this->audioCodecContext->time_base;
-//        // this->audioStream->index = this->fmtContext->nb_streams - 1;
-//        hasAudio = true;
-//    }
-//
-//    if (!hasAudio && !hasVideo) {
-//        LOG(LL_NFO, "Both audio and video are disabled. Cannot create format context");
-//        this->isCapturing = true;
-//        this->isFormatContextCreated = true;
-//        this->cvFormatContext.notify_all();
-//        POST();
-//        return E_FAIL;
-//    }
-//
-//    RET_IF_FAILED_AV(avio_open(&this->fmtContext->pb, filename.c_str(), AVIO_FLAG_WRITE), "Could not open output
-//    file",
-//                     E_FAIL);
-//    RET_IF_NULL(this->fmtContext->pb, "Could not open output file", E_FAIL);
-//    RET_IF_FAILED_AV(avformat_write_header(this->fmtContext, &this->fmtOptions), "Could not write header", E_FAIL);
-//    LOG(LL_NFO, "Format context was created successfully.");
-//    this->isCapturing = true;
-//    this->isFormatContextCreated = true;
-//    this->cvFormatContext.notify_all();
-//
-//    POST();
-//    return S_OK;
-//}
 
 HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContext>& pDeviceContext,
                                  const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cRGB,
@@ -482,78 +221,77 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
     return S_OK;
 }
 
-HRESULT Session::enqueueVideoFrame(BYTE* pData, int rowPitch, int size) {
+HRESULT Session::enqueueVideoFrame(const D3D11_MAPPED_SUBRESOURCE& subresource) {
     PRE();
-
-    // if (!this->videoCodecContext) {
-    //    POST();
-    //    return S_OK;
-    //}
 
     if (this->isBeingDeleted) {
         POST();
         return E_FAIL;
     }
-    const auto pVector = std::make_shared<std::valarray<uint8_t>>(size);
 
-    std::copy_n(pData, size, std::begin(*pVector));
+    LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
+    REQUIRE(this->writeVideoFrame(static_cast<BYTE*>(subresource.pData), static_cast<int32_t>(subresource.DepthPitch),
+                                  subresource.RowPitch, this->videoPTS++),
+            "Failed to write video frame.");
 
-    const frameQueueItem item(pVector, rowPitch);
-    this->videoFrameQueue.enqueue(item);
+    // const frameQueueItem item(subresource);
+    // this->videoFrameQueue.enqueue(item);
     POST();
     return S_OK;
 }
 
-void Session::videoEncodingThread() {
-    PRE();
-    std::lock_guard lock(this->mxEncodingThread);
-    try {
-        int16_t k = 0;
-        bool firstFrame = true;
-        frameQueueItem item = this->videoFrameQueue.dequeue();
-        while (item.data != nullptr) {
-            auto& data = *(item.data);
-            if (this->motionBlurSamples == 0) {
-                LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
-                REQUIRE(this->writeVideoFrame(std::begin(data), static_cast<int32_t>(item.data->size()), item.rowPitch,
-                                              this->videoPTS++),
-                        "Failed to write video frame.");
-            } else {
-                const auto frameRemainder =
-                    static_cast<uint8_t>(this->motionBlurPTS++ % (static_cast<uint64_t>(this->motionBlurSamples) + 1));
-                const float currentShutterPosition =
-                    static_cast<float>(frameRemainder) / static_cast<float>(this->motionBlurSamples + 1);
-                std::ranges::copy(data, std::begin(this->motionBlurTempBuffer));
-                if (frameRemainder == this->motionBlurSamples) {
-                    // Flush motion blur buffer
-                    this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-                    this->motionBlurAccBuffer /= ++k;
-                    std::ranges::copy(this->motionBlurAccBuffer, std::begin(this->motionBlurDestBuffer));
-                    REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer),
-                                                  this->motionBlurDestBuffer.size(), item.rowPitch, this->videoPTS++),
-                            "Failed to write video frame.");
-                    k = 0;
-                    firstFrame = true;
-                } else if (currentShutterPosition >= this->shutterPosition) {
-                    if (firstFrame) {
-                        // Reset accumulation buffer
-                        this->motionBlurAccBuffer = this->motionBlurTempBuffer;
-                        firstFrame = false;
-                    } else {
-                        this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-                    }
-                    k++;
-                }
-            }
-            item = this->videoFrameQueue.dequeue();
-        }
-    } catch (...) {
-        // Do nothing
-    }
-    this->isEncodingThreadFinished = true;
-    this->cvEncodingThreadFinished.notify_all();
-    POST();
-}
+//void Session::videoEncodingThread() {
+//    PRE();
+//    std::lock_guard lock(this->mxEncodingThread);
+//    try {
+//        int16_t k = 0;
+//        bool firstFrame = true;
+//        frameQueueItem item = this->videoFrameQueue.dequeue();
+//        while (item.subresource != nullptr) {
+//            auto& data = *(item.subresource);
+//            // if (this->motionBlurSamples == 0) {
+//            LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
+//            REQUIRE(this->writeVideoFrame(static_cast<BYTE*>(data.pData),
+//                                          static_cast<int32_t>(item.subresource->DepthPitch),
+//                                          item.subresource->RowPitch, this->videoPTS++),
+//                    "Failed to write video frame.");
+//            //} else {
+//            //    const auto frameRemainder =
+//            //        static_cast<uint8_t>(this->motionBlurPTS++ % (static_cast<uint64_t>(this->motionBlurSamples) +
+//            //        1));
+//            //    const float currentShutterPosition =
+//            //        static_cast<float>(frameRemainder) / static_cast<float>(this->motionBlurSamples + 1);
+//            //    std::ranges::copy(data, std::begin(this->motionBlurTempBuffer));
+//            //    if (frameRemainder == this->motionBlurSamples) {
+//            //        // Flush motion blur buffer
+//            //        this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+//            //        this->motionBlurAccBuffer /= ++k;
+//            //        std::ranges::copy(this->motionBlurAccBuffer, std::begin(this->motionBlurDestBuffer));
+//            //        REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer),
+//            //                                      this->motionBlurDestBuffer.size(), item.rowPitch, this->videoPTS++),
+//            //                "Failed to write video frame.");
+//            //        k = 0;
+//            //        firstFrame = true;
+//            //    } else if (currentShutterPosition >= this->shutterPosition) {
+//            //        if (firstFrame) {
+//            //            // Reset accumulation buffer
+//            //            this->motionBlurAccBuffer = this->motionBlurTempBuffer;
+//            //            firstFrame = false;
+//            //        } else {
+//            //            this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+//            //        }
+//            //        k++;
+//            //    }
+//            //}
+//            item = this->videoFrameQueue.dequeue();
+//        }
+//    } catch (...) {
+//        // Do nothing
+//    }
+//    this->isEncodingThreadFinished = true;
+//    this->cvEncodingThreadFinished.notify_all();
+//    POST();
+//}
 
 void Session::exrEncodingThread() {
     PRE();
@@ -653,7 +391,7 @@ HRESULT Session::writeVideoFrame(BYTE* pData, const int32_t length, const int ro
     }
 
     // Wait until format context is created
-    //if (pVoukoder == nullptr) {
+    // if (pVoukoder == nullptr) {
     //    std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
     //    while (pVoukoder == nullptr) {
     //        this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
@@ -683,7 +421,7 @@ HRESULT Session::writeAudioFrame(BYTE* pData, const int32_t length, LONGLONG sam
     }
 
     // Wait until format context is created
-    //if (pVoukoder == nullptr) {
+    // if (pVoukoder == nullptr) {
     //    std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
     //    while (pVoukoder == nullptr) {
     //        this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
@@ -705,16 +443,16 @@ HRESULT Session::finishVideo() {
 
     if (!this->isVideoFinished) {
         // Wait until the video encoding thread is finished.
-        if (thread_video_encoder.joinable()) {
-            // Write end of the stream object with a nullptr
-            this->videoFrameQueue.enqueue(frameQueueItem(nullptr, 0));
-            std::unique_lock<std::mutex> lock(this->mxEncodingThread);
-            while (!this->isEncodingThreadFinished) {
-                this->cvEncodingThreadFinished.wait(lock);
-            }
+        //if (thread_video_encoder.joinable()) {
+        //    // Write end of the stream object with a nullptr
+        //    this->videoFrameQueue.enqueue(frameQueueItem(nullptr));
+        //    std::unique_lock<std::mutex> lock(this->mxEncodingThread);
+        //    while (!this->isEncodingThreadFinished) {
+        //        this->cvEncodingThreadFinished.wait(lock);
+        //    }
 
-            thread_video_encoder.join();
-        }
+        //    thread_video_encoder.join();
+        //}
 
         // Wait until the exr encoding thread is finished
         if (thread_exr_encoder.joinable()) {

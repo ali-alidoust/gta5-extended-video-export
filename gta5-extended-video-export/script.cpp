@@ -11,6 +11,7 @@
 #include "yara-helper.h"
 #include <DirectXMath.h>
 #include <mferror.h>
+
 // #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\comdecl.h>
 // #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\xaudio2.h>
 // #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\XAudio2fx.h>
@@ -322,6 +323,13 @@ void onPresent(IDXGISwapChain* swapChain) {
     }
 }
 
+static HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
+    if (!mainSwapChain) {
+        onPresent(pThis);
+    }
+    return IDXGISwapChainHooks::Present::OriginalFunc(pThis, SyncInterval, Flags);
+}
+
 void initialize() {
     PRE();
 
@@ -333,8 +341,9 @@ void initialize() {
         ComPtr<IXAudio2> pXAudio;
         REQUIRE(XAudio2Create(pXAudio.GetAddressOf(), 0, XAUDIO2_DEFAULT_PROCESSOR), "Failed to create XAudio2
         object");*/
-        // REQUIRE(hookVirtualFunction(pXAudio.Get(), 11, &CreateSourceVoice, &oCreateSourceVoice, hkCreateSourceVoice),
-        // "Failed to hook IXAudio2::CreateSourceVoice"); IXAudio2MasteringVoice *pMasterVoice; WAVEFORMATEX waveFormat;
+        // REQUIRE(hookVirtualFunction(pXAudio.Get(), 11, &CreateSourceVoice, &oCreateSourceVoice,
+        // hkCreateSourceVoice), "Failed to hook IXAudio2::CreateSourceVoice"); IXAudio2MasteringVoice
+        // *pMasterVoice; WAVEFORMATEX waveFormat;
 
         // UINT32 deviceCount; // Number of devices
         // pXAudio->GetDeviceCount(&deviceCount);
@@ -400,9 +409,6 @@ void initialize() {
         try {
             if (pGetRenderTimeBase) {
                 PERFORM_X64_HOOK_REQUIRED(GetRenderTimeBase, pGetRenderTimeBase);
-                /*REQUIRE(hookX64Function(pGetRenderTimeBase, &Detour_GetRenderTimeBase, &oGetRenderTimeBase,
-                                        hkGetRenderTimeBase),*/
-                //"Failed to hook FPS function.");
                 isCustomFrameRateSupported = true;
             } else {
                 LOG(LL_ERR, "Could not find the address for FPS function.");
@@ -649,7 +655,24 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
             // NOT_NULL(image->pixels, "Could not get current frame.");
             // END CPU
 
-            {
+            if (config::motion_blur_samples == 0) {
+                D3D11_MAPPED_SUBRESOURCE mapped;
+
+                pThis->Map(pSwapChainBuffer.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+
+                {
+                    std::lock_guard<std::mutex> sessionLock(mxSession);
+                    if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
+                        // CPU
+                        // REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch,
+                        // image->slicePitch),
+                        //        "Failed to enqueue frame.");
+                        REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
+                    }
+                }
+
+                pThis->Unmap(pSwapChainBuffer.Get(), 0);
+            } else {
                 float current_shutter_position = (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
                                                  (float)config::motion_blur_samples;
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
@@ -657,14 +680,15 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                 }
                 if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) ==
                     config::motion_blur_samples) {
-                    ComPtr<ID3D11Texture2D>* result = new ComPtr<ID3D11Texture2D>();
+                    ComPtr<ID3D11Texture2D> result;
 
-                    *result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
+                    result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
                     ::exportContext->accCount = 0;
                     // TODO: Fix this memory leak made for testing
 
-                    auto mapped = new D3D11_MAPPED_SUBRESOURCE();
-                    pThis->Map(result->Get(), 0, D3D11_MAP_READ, 0, mapped);
+                    D3D11_MAPPED_SUBRESOURCE mapped;
+
+                    pThis->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped);
 
                     {
                         std::lock_guard<std::mutex> sessionLock(mxSession);
@@ -673,19 +697,17 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                             // REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch,
                             // image->slicePitch),
                             //        "Failed to enqueue frame.");
-                            REQUIRE(encodingSession->enqueueVideoFrame(static_cast<BYTE*>(mapped->pData),
-                                                                       mapped->RowPitch, mapped->DepthPitch),
-                                    "Failed to enqueue frame.");
+                            REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
                         }
                     }
                 }
                 ::exportContext->totalFrameNum++;
             }
 
-            ::exportContext->capturedImage->Release();
+            //::exportContext->capturedImage->Release();
         } catch (std::exception&) {
             LOG(LL_ERR, "Reading video frame from D3D Device failed.");
-            ::exportContext->capturedImage->Release();
+            //::exportContext->capturedImage->Release();
             LOG_CALL(LL_DBG, encodingSession.reset());
             LOG_CALL(LL_DBG, ::exportContext.reset());
         }
@@ -866,7 +888,7 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 //  Voukoder."); tmpVoukoder->Release();
 
                 REQUIRE(encodingSession->createContext(vkConfig, std::wstring(filename.begin(), filename.end()),
-                                                       desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num,
+                                                       desc.BufferDesc.Width, desc.BufferDesc.Height, "rgba", fps_num,
                                                        fps_den, numChannels, sampleRate, "s16", blockAlignment),
                         "Failed to create encoding context.");
 
@@ -1094,6 +1116,40 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
         " *r+10:", vresult ? *(vresult + 10) : "<NULL>", " *r+11:", vresult ? *(vresult + 11) : "<NULL>",
         " *r+12:", vresult ? *(vresult + 12) : "<NULL>", " *r+13:", vresult ? *(vresult + 13) : "<NULL>",
         " *r+14:", vresult ? *(vresult + 14) : "<NULL>", " *r+15:", vresult ? *(vresult + 15) : "<NULL>");
+
+    static bool presentHooked = false;
+    if (!presentHooked && pTexture && !mainSwapChain) {
+        ID3D11Device* pTempDevice = nullptr;
+        pTexture->GetDevice(&pTempDevice);
+
+        IDXGIDevice* pDXGIDevice = nullptr;
+        REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), (void **)&pDXGIDevice), "Failed to get IDXGIDevice");
+
+        IDXGIAdapter* pDXGIAdapter = nullptr;
+        REQUIRE(pDXGIDevice->GetAdapter(&pDXGIAdapter), "Failed to get IDXGIAdapter");
+
+        IDXGIFactory* pDXGIFactory = nullptr;
+        REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void **)&pDXGIFactory), "Failed to get IDXGIFactory");
+
+        DXGI_SWAP_CHAIN_DESC tempDesc{0};
+        tempDesc.BufferCount = 1;
+        tempDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        tempDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        tempDesc.BufferDesc.Width = 800;
+        tempDesc.BufferDesc.Height = 600;
+        tempDesc.BufferDesc.RefreshRate = {30,1};
+        tempDesc.OutputWindow = GetForegroundWindow();
+        tempDesc.Windowed = true;
+        tempDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        tempDesc.SampleDesc.Count = 1;
+        tempDesc.SampleDesc.Quality = 0;
+
+        IDXGISwapChain* pTempSwapChain;
+        REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc, &pTempSwapChain), "Failed to create temporary swapchain");
+
+        PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, pTempSwapChain);
+        presentHooked = true;
+    }
 
     if (pTexture && name) {
         ComPtr<ID3D11Device> pDevice;

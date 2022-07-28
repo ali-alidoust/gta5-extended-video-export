@@ -1,7 +1,7 @@
 #include "logger.h"
 #include <iostream>
 
-Logger::Logger() { this->filestream.open("EVE\\" TARGET_NAME ".log"); }
+Logger::Logger() { ensureStream(); }
 
 Logger::~Logger() {
     try {
@@ -15,8 +15,21 @@ Logger::~Logger() {
     }
 }
 
-void Logger::writeLine() {
+bool Logger::ensureStream() {
     if (this->filestream.is_open()) {
+        return true;
+    }
+    this->filestream.open(TARGET_NAME ".log");
+    if (this->filestream.is_open()) {
+        std::lock_guard<std::mutex> guard(mtx);
+        filestream << "Logger initialized." << std::endl;
+        return true;
+    }
+    return false;
+}
+
+void Logger::writeLine() {
+    if (this->ensureStream()) {
         std::lock_guard<std::mutex> guard(mtx);
         filestream << std::endl;
     }

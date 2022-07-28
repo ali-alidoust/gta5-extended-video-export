@@ -247,6 +247,10 @@ DEFINE_MEMBER_HOOK(ID3D11DeviceContext, Draw, 13, void, //
                    UINT VertexCount,                    //
                    UINT StartVertexLocation);           //
 
+DEFINE_MEMBER_HOOK(IDXGISwapChain, Present, 8, HRESULT, //
+                   UINT SyncInterval,                   //
+                   UINT Flags);                         //
+
 DEFINE_MEMBER_HOOK(ID3D11DeviceContext, OMSetRenderTargets, 33, void,  //
                    UINT NumViews,                                      //
                    ID3D11RenderTargetView* const* ppRenderTargetViews, //
@@ -305,3 +309,4 @@ DEFINE_X64_HOOK(CreateThread, HANDLE, //
                 void* rsp20,          //
                 int32_t rsp28,        //
                 char* name);          //
+

@@ -9,7 +9,6 @@
 #include <mutex>
 #include <sstream>
 
-
 #define __CUSTOM_FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
 
 #pragma warning(push, 0)
@@ -19,7 +18,7 @@ enum LogLevel { LL_NON = 0, LL_ERR = 10, LL_WRN = 20, LL_NFO = 30, LL_DBG = 40, 
 class Logger {
   public:
     template <class T> void writeLine(const T& value) {
-        if (this->filestream.is_open()) {
+        if (this->ensureStream()) {
             {
                 std::lock_guard<std::mutex> guard(mtx);
                 filestream << value << std::endl;
@@ -28,7 +27,7 @@ class Logger {
     }
 
     template <typename... Targs> void write(const Targs&... args) {
-        if (this->filestream.is_open()) {
+        if (this->ensureStream()) {
             {
                 std::lock_guard<std::mutex> guard(mtx);
                 this->_write(args...);
@@ -60,7 +59,7 @@ class Logger {
 
   private:
     template <typename T, typename... Targs> void _write(const T& value, const Targs&... args) {
-        if (this->filestream.is_open()) {
+        if (this->ensureStream()) {
             // std::lock_guard<std::mutex> guard(mtx);
             filestream << value;
             this->_write(args...);
@@ -68,7 +67,7 @@ class Logger {
     }
 
     template <typename T> void _write(const T& value) {
-        if (this->filestream.is_open()) {
+        if (this->ensureStream()) {
             // std::lock_guard<std::mutex> guard(mtx);
             filestream << value;
         }
@@ -78,6 +77,8 @@ class Logger {
     ~Logger();
     std::mutex mtx;
     std::ofstream filestream;
+
+    bool ensureStream();
 };
 
 #define REQUIRE_SEMICOLON                                                                                              \

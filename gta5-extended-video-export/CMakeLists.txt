@@ -31,14 +31,19 @@ set(Source_Files
 set(VK_Source_Files
         "../voukoder/VoukoderTypeLib_i.c")
 
-source_group("Header Files" FILES ${Header_Files})
-source_group("Source Files" FILES ${Source_Files} ${VK_Source_Files})
+set(Kiero_Source_Files "../kiero/kiero.cpp")
+set(Kiero_Header_Files "../kiero/kiero.h")
+
+source_group("Header Files" FILES ${Header_Files} ${Kiero_Header_Files})
+source_group("Source Files" FILES ${Source_Files} ${VK_Source_Files} ${Kiero_Source_Files})
 
 set(ALL_FILES
         ${no_group_source_files}
         ${Header_Files}
         ${Source_Files}
         ${VK_Source_Files}
+        ${Kiero_Header_Files}
+        ${Kiero_Source_Files}
         )
 
 ################################################################################
@@ -52,6 +57,7 @@ set(ROOT_NAMESPACE gta5-extended-video-export)
 set_target_properties(${PROJECT_NAME} PROPERTIES
         VS_GLOBAL_KEYWORD "Win32Proj"
         )
+
 ################################################################################
 # Target name
 ################################################################################
@@ -212,6 +218,7 @@ add_custom_command_if(
 ################################################################################
 # Dependencies
 ################################################################################
+
 # Shaders
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/shaders")
 
