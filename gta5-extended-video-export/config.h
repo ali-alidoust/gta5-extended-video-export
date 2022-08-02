@@ -5,6 +5,7 @@
 
 #include "VoukoderTypeLib_h.h"
 #include "logger.h"
+#include "util.h"
 
 #include <INIReader.h>
 #include <ShlObj.h>
@@ -58,7 +59,7 @@ class config {
     static VKENCODERCONFIG encoder_config;
 
     static void reload() {
-        config_parser = std::make_shared<INIReader>(INI_FILE_NAME);
+        config_parser = std::make_shared<INIReader>(exePath() + "\\" INI_FILE_NAME);
         // preset_parser = std::make_shared<INIReader>(PRESET_FILE_NAME);
 
         is_mod_enabled = parse_lossless_export();
@@ -69,35 +70,68 @@ class config {
         motion_blur_samples = parse_motion_blur_samples();
         motion_blur_strength = parse_motion_blur_strength();
         export_openexr = parse_export_openexr();
+
+        readEncoderConfig();
     }
 
     static void readEncoderConfig() {
-        std::ifstream ifs(PRESET_FILE_NAME);
-        std::stringstream sts;
-        sts << ifs.rdbuf();
+        try {
+            std::ifstream ifs(exePath() + "\\" PRESET_FILE_NAME);
 
-        nlohmann::json j = sts.str();
+            nlohmann::json j = nlohmann::json::parse(ifs);
 
-        new (&encoder_config) VKENCODERCONFIG{};
+            encoder_config = {};
 
-        encoder_config.version = j["version"];
+            encoder_config.version = j["version"];
 
-        j["format"]["container"].dump().copy(encoder_config.format.container, sizeof(encoder_config.format.container));
-        encoder_config.format.faststart = j["format"]["faststart"];
+            j["format"]["container"].get<std::string>().copy(encoder_config.format.container,
+                                                             sizeof(encoder_config.format.container));
+            encoder_config.format.faststart = j["format"]["faststart"];
 
-        j["video"]["encoder"].dump().copy(encoder_config.video.encoder, sizeof(encoder_config.video.encoder));
-        j["video"]["options"].dump().copy(encoder_config.video.options, sizeof(encoder_config.video.options));
-        j["video"]["filters"].dump().copy(encoder_config.video.filters, sizeof(encoder_config.video.filters));
-        j["video"]["sidedata"].dump().copy(encoder_config.video.sidedata, sizeof(encoder_config.video.sidedata));
+            j["video"]["encoder"].get<std::string>().copy(encoder_config.video.encoder,
+                                                          sizeof(encoder_config.video.encoder));
+            j["video"]["options"].get<std::string>().copy(encoder_config.video.options,
+                                                          sizeof(encoder_config.video.options));
+            j["video"]["filters"].get<std::string>().copy(encoder_config.video.filters,
+                                                          sizeof(encoder_config.video.filters));
+            j["video"]["sidedata"].get<std::string>().copy(encoder_config.video.sidedata,
+                                                           sizeof(encoder_config.video.sidedata));
 
-        j["audio"]["encoder"].dump().copy(encoder_config.audio.encoder, sizeof(encoder_config.audio.encoder));
-        j["audio"]["options"].dump().copy(encoder_config.audio.options, sizeof(encoder_config.audio.options));
-        j["audio"]["filters"].dump().copy(encoder_config.audio.filters, sizeof(encoder_config.audio.filters));
-        j["audio"]["sidedata"].dump().copy(encoder_config.audio.sidedata, sizeof(encoder_config.audio.sidedata));
+            j["audio"]["encoder"].get<std::string>().copy(encoder_config.audio.encoder,
+                                                          sizeof(encoder_config.audio.encoder));
+            j["audio"]["options"].get<std::string>().copy(encoder_config.audio.options,
+                                                          sizeof(encoder_config.audio.options));
+            j["audio"]["filters"].get<std::string>().copy(encoder_config.audio.filters,
+                                                          sizeof(encoder_config.audio.filters));
+            j["audio"]["sidedata"].get<std::string>().copy(encoder_config.audio.sidedata,
+                                                           sizeof(encoder_config.audio.sidedata));
+        } catch (std::exception&) {
+            LOG(LL_ERR, "Failed to load preset.json, loading default values for encoder!");
+            encoder_config = {
+                .version = 1,                                                                            //
+                .video{                                                                                  //
+                       .encoder{"libx264"},                                                              //
+                       .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"         //
+                                "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"     //
+                                "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct=" //
+                                "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},            //
+                       .filters{""},                                                                     //
+                       .sidedata{""}},                                                                   //
+                .audio{                                                                                  //
+                       .encoder{"aac"},                                                                  //
+                       .options{"_sampleFormat=fltp|b=320000|profile=aac_main"},                         //
+                       .filters{""},                                                                     //
+                       .sidedata{""}},                                                                   //
+                .format{                                                                                 //
+                        .container{"mp4"},                                                               //
+                        .faststart = true}};                                                             //
+        }
     }
 
     static void writeEncoderConfig() {
         nlohmann::json j;
+
+        j["version"] = encoder_config.version;
 
         j["format"]["container"] = encoder_config.format.container;
         j["format"]["faststart"] = encoder_config.format.faststart;
@@ -112,7 +146,7 @@ class config {
         j["audio"]["filters"] = encoder_config.audio.filters;
         j["audio"]["sidedata"] = encoder_config.audio.sidedata;
 
-        std::ofstream ofs(PRESET_FILE_NAME);
+        std::ofstream ofs(exePath() + "\\" PRESET_FILE_NAME);
         ofs << j;
         ofs.flush();
     }

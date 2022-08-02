@@ -27,8 +27,8 @@ template <class B, class A> B ForceCast(A a) {
 void initialize();
 void ScriptMain();
 void onPresent(IDXGISwapChain* swapChain);
-void onKeyboardMessage(DWORD key, WORD repeats, BYTE scanCode, BOOL isExtended, BOOL isWithAlt, BOOL wasDownBefore,
-                       BOOL isUpNow);
+//void onKeyboardMessage(DWORD key, WORD repeats, BYTE scanCode, BOOL isExtended, BOOL isWithAlt, BOOL wasDownBefore,
+//                       BOOL isUpNow);
 void finalize();
 static void prepareDeferredContext(Microsoft::WRL::ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext);
 static ComPtr<ID3D11Texture2D> divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext, uint32_t k);

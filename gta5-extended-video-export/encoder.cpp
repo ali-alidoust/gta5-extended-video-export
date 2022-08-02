@@ -91,25 +91,25 @@ Session::~Session() {
 //                               uint32_t inputAlign, std::string outputSampleFmt, std::string acodec_str,
 //                               std::string aoptions) {
 
-HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring& filename, uint32_t width,
-                               uint32_t height, const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den,
+HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring& inFilename, uint32_t inWidth,
+                               uint32_t inHeight, const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den,
                                uint32_t inputChannels, uint32_t inputSampleRate, const std::string& inputSampleFormat,
                                uint32_t inputAlign) {
     PRE();
     // this->oformat = av_guess_format(format.c_str(), nullptr, nullptr);
     // RET_IF_NULL(this->oformat, "Could not find format: " + format, E_FAIL);
 
-    // REQUIRE(this->createVideoContext(width, height, inputPixelFmt, fps_num, fps_den, motionBlurSamples,
+    // REQUIRE(this->createVideoContext(inWidth, inHeight, inputPixelFmt, fps_num, fps_den, motionBlurSamples,
     // shutterPosition,
     //                                 outputPixelFmt, vcodec_str, voptions),
     //        "Failed to create video codec context.");
     // REQUIRE(this->createAudioContext(inputChannels, inputSampleRate, inputBitsPerSample, inputSampleFmt, inputAlign,
     //                                 outputSampleFmt, acodec_str, aoptions),
     //        "Failed to create audio codec context.");
-    // REQUIRE(this->createFormatContext(format, filename, exrOutputPath, fmtOptions), "Failed to create format
+    // REQUIRE(this->createFormatContext(format, inFilename, exrOutputPath, fmtOptions), "Failed to create format
     // context.");
 
-    ASSERT_RUNTIME(filename.length() < sizeof(VKENCODERINFO::filename) / sizeof(wchar_t), "File name too long.");
+    ASSERT_RUNTIME(inFilename.length() < sizeof(VKENCODERINFO::filename) / sizeof(wchar_t), "File name too long.");
     ASSERT_RUNTIME(inputChannels == 1 || inputChannels == 2 || inputChannels == 6,
                    "Invalid number of audio channels, only 1, 2 and 6 (5.1) are supported.");
 
@@ -125,8 +125,8 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         .application = L"Extended Video Export",
         .video{
             .enabled = true,
-            .width = static_cast<int>(width),
-            .height = static_cast<int>(height),
+            .width = static_cast<int>(inWidth),
+            .height = static_cast<int>(inHeight),
             .timebase = {static_cast<int>(fps_den), static_cast<int>(fps_num)},
             .aspectratio{1, 1},
             .fieldorder = FieldOrder::Progressive, // TODO
@@ -148,8 +148,8 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
             .numberChannels = static_cast<int>(inputChannels),
         },
     };
-    filename.copy(vkInfo.filename, std::size(vkInfo.filename));
-    // std::copy(filename.begin(), filename.end(), vkInfo.filename);
+    inFilename.copy(vkInfo.filename, std::size(vkInfo.filename));
+    // std::copy(inFilename.begin(), inFilename.end(), vkInfo.inFilename);
 
     REQUIRE(m_pVoukoder->Open(vkInfo), "Failed to open Voukoder context.");
 
@@ -157,8 +157,8 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         .buffer = new byte*[1], // We'll set this in writeVideoFrame() function
         .rowsize = new int[1],  // We'll set this in writeVideoFrame() function
         .planes = 1,
-        .width = static_cast<int>(width),
-        .height = static_cast<int>(height),
+        .width = static_cast<int>(inWidth),
+        .height = static_cast<int>(inHeight),
         .pass = 1,
     };
     // std::copy(inputPixelFmt.begin(), inputPixelFmt.end(), &videoFrame.format);

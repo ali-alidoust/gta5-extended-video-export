@@ -112,7 +112,7 @@ class Session {
                           std::string inputSampleFmt, uint32_t inputAlign, std::string outputSampleFmt,
                           std::string acodec, std::string aoptions);*/
 
-    HRESULT createContext(const VKENCODERCONFIG& config, const std::wstring& filename, uint32_t width, uint32_t height,
+    HRESULT createContext(const VKENCODERCONFIG& config, const std::wstring& inFilename, uint32_t inWidth, uint32_t inHeight,
                           const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den, uint32_t inputChannels,
                           uint32_t inputSampleRate, const std::string& inputSampleFormat, uint32_t inputAlign);
 

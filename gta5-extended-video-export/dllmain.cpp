@@ -6,18 +6,11 @@
 
 #include <filesystem>
 
-std::wstring ExePath() {
-    wchar_t buffer[MAX_PATH];
-    GetModuleFileNameW(NULL, buffer, MAX_PATH);
-    std::wstring::size_type pos = std::wstring(buffer).find_last_of(L"\\/");
-    return std::wstring(buffer).substr(0, pos);
-}
-
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     switch (reason) {
     case DLL_PROCESS_ATTACH:
         LOG(LL_NON, std::filesystem::current_path());
-        SetDllDirectoryW((ExePath() + L"\\EVE\\dlls\\").c_str());
+        SetDllDirectoryW(utf8_decode(exePath() + "\\EVE\\dlls\\").c_str());
         config::reload();
         if (!config::is_mod_enabled) {
             LOG(LL_NON, "Extended Video Export mod is disabled in the config file. Exiting...");
@@ -28,6 +21,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         Logger::instance().level = config::log_level;
         LOG_CALL(LL_DBG, initialize());
         LOG(LL_NFO, "Registering script...");
+        //LOG_CALL(LL_DBG, keyboardHandlerRegister(onKeyboardMessage));
         //LOG_CALL(LL_DBG, presentCallbackRegister((void (*)(void*))onPresent));
         LOG_CALL(LL_DBG, scriptRegister(hModule, ScriptMain));
         break;

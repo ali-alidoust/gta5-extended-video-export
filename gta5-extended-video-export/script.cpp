@@ -9,7 +9,7 @@
 #include "stdafx.h"
 #include "util.h"
 #include "yara-helper.h"
-#include <DirectXMath.h>
+// #include <DirectXMath.h>
 #include <mferror.h>
 
 // #include <C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include\comdecl.h>
@@ -233,37 +233,53 @@ std::shared_ptr<YaraHelper> pYaraHelper;
 //	//return S_OK;
 //}
 
-void onKeyboardMessage(DWORD key, WORD repeats, BYTE scanCode, BOOL isExtended, BOOL isWithAlt, BOOL wasDownBefore,
-                       BOOL isUpNow) {
-    if (key == VK_MULTIPLY && wasDownBefore && isUpNow && isWithAlt) {
-        VKENCODERCONFIG vkConfig, vkConfig2;
-        BOOL isOK = false;
-        ShowCursor(TRUE);
-        IVoukoder* pVoukoder = nullptr;
-        ACTCTX* actctx = nullptr;
-
-        ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
-                       "Failed to get Activation Context for current thread.");
-        REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
-        REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
-                                 reinterpret_cast<void**>(&pVoukoder)),
-                "Failed to create an instance of IVoukoder interface.");
-        // REQUIRE(pVoukoder->SetConfig(vkConfig), "Failed to set Voukoder config.");
-
-        REQUIRE(pVoukoder->ShowVoukoderDialog(true, true, &isOK, actctx, GetModuleHandle(nullptr)),
-                "Failed to show Voukoder dialog.");
-
-        if (isOK) {
-            LOG(LL_NFO, "Updating configuration...");
-            REQUIRE(pVoukoder->GetConfig(&vkConfig), "Failed to get config from Voukoder.");
-            config::encoder_config = vkConfig;
-            LOG_CALL(LL_DBG, config::writeEncoderConfig());
-
-        } else {
-            LOG(LL_NFO, "Voukoder config cancelled by user.");
-        }
-    }
-}
+// void onKeyboardMessage(DWORD key, WORD repeats, BYTE scanCode, BOOL isExtended, BOOL isWithAlt, BOOL wasDownBefore,
+//                        BOOL isUpNow) {
+//     if (key == VK_MULTIPLY) {
+//         // VKENCODERCONFIG vkConfig, vkConfig2;
+//
+//         VKENCODERCONFIG vkConfig{
+//             .version = 1,
+//             .video{.encoder{"libx264"},
+//                    .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
+//                             "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
+//                             "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
+//                             "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
+//                    .filters{""},
+//                    .sidedata{""}},
+//             .audio{.encoder{"aac"},                                          // @clang-format
+//                    .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
+//                    .filters{""},                                             // @clang-format
+//                    .sidedata{""}},
+//             .format = {.container{"mp4"}, .faststart = true}};
+//
+//         BOOL isOK = false;
+//         ShowCursor(TRUE);
+//         IVoukoder* pVoukoder = nullptr;
+//         // ACTCTX* actctx = nullptr;
+//
+//         // ASSERT_RUNTIME(GetCurrentActCtx(reinterpret_cast<PHANDLE>(&actctx)),
+//         //"Failed to get Activation Context for current thread.");
+//         // REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
+//         REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
+//                                  reinterpret_cast<void**>(&pVoukoder)),
+//                 "Failed to create an instance of IVoukoder interface.");
+//         REQUIRE(pVoukoder->SetConfig(vkConfig), "Failed to set Voukoder config.");
+//
+//         REQUIRE(pVoukoder->ShowVoukoderDialog(true, true, &isOK, nullptr, GetModuleHandle(nullptr)),
+//                 "Failed to show Voukoder dialog.");
+//
+//         if (isOK) {
+//             LOG(LL_NFO, "Updating configuration...");
+//             REQUIRE(pVoukoder->GetConfig(&vkConfig), "Failed to get config from Voukoder.");
+//             config::encoder_config = vkConfig;
+//             LOG_CALL(LL_DBG, config::writeEncoderConfig());
+//
+//         } else {
+//             LOG(LL_NFO, "Voukoder config cancelled by user.");
+//         }
+//     }
+// }
 
 void onPresent(IDXGISwapChain* swapChain) {
     mainSwapChain = swapChain;
@@ -468,8 +484,7 @@ void initialize() {
 
             if (pGetVarPtrByHash) {
                     REQUIRE(hookX64Function(pGetVarPtrByHash, &Detour_GetVarPtrByHash2, &oGetVarPtrByHash2,
-            hkGetVarPtrByHash), "Failed to hook GetVarPtrByHash function."); } else {
-
+                    HHHHHHHHHHHHHHHHY
             }*/
 
         } catch (std::exception& ex) {
@@ -632,14 +647,24 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                     }
                 }
             }
-            LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
-                                 0, DXGI_PRESENT_TEST)); // IMPORTANT: This call makes ENB and ReShade effects to be
-                                                         // applied to the render target
 
             ComPtr<ID3D11Texture2D> pSwapChainBuffer;
             REQUIRE(::exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
                                                            (void**)pSwapChainBuffer.GetAddressOf()),
                     "Failed to get swap chain's buffer");
+
+            // IDXGISwapChainHooks::Present::OriginalFunc(::exportContext->pSwapChain.Get(), 0, 0);
+            //float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+            //::exportContext->pDeviceContext->ClearRenderTargetView((ID3D11RenderTargetView*)pSwapChainBuffer.Get(),
+            //                                                       color);
+            LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
+                                                                          // effects to be applied to the render target
+            // LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
+            //                      0, 0)); // IMPORTANT: This call makes ENB and ReShade effects to be
+            //  applied to the render target
+            // LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
+            //                      0, 0)); // IMPORTANT: This call makes ENB and ReShade effects to be
+            //                                              // applied to the render target
 
             // BEGIN CPU
             // auto& image_ref = *(::exportContext->capturedImage);
@@ -654,11 +679,49 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
             // NOT_NULL(image, "Could not get current frame.");
             // NOT_NULL(image->pixels, "Could not get current frame.");
             // END CPU
+            float current_shutter_position = FLT_MAX;
+            if (config::motion_blur_samples != 0) {
+                current_shutter_position = (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
+                                           (float)config::motion_blur_samples;
+                if (current_shutter_position >= (1 - config::motion_blur_strength)) {
+                    drawAdditive(pDevice, pThis, pSwapChainBuffer);
+                }
+                // D3D11_MAPPED_SUBRESOURCE mapped;
 
-            if (config::motion_blur_samples == 0) {
+                // LOG_CALL(LL_DBG, pDContext->CopyResource(pSwapBufferCopy.Get(), pSwapChainBuffer.Get()));
+                // REQUIRE(pThis->Map(pSwapBufferCopy.Get(), 0, D3D11_MAP_READ, 0, &mapped),
+                //         "Failed to capture swapbuffer.");
+
+                //{
+                //    std::lock_guard<std::mutex> sessionLock(mxSession);
+                //    if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
+                //        // CPU
+                //        // REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch,
+                //        // image->slicePitch),
+                //        //        "Failed to enqueue frame.");
+                //        REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
+                //    }
+                //}
+
+                // pThis->Unmap(pSwapBufferCopy.Get(), 0);
+            } else {
+                // Trick to use the same buffers for when not using motion blur
+                ::exportContext->accCount = 0;
+                drawAdditive(pDevice, pThis, pSwapChainBuffer);
+                ::exportContext->accCount = 1;
+                ::exportContext->totalFrameNum = 1;
+            }
+
+            if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) == config::motion_blur_samples) {
+                ComPtr<ID3D11Texture2D> result;
+
+                result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
+                ::exportContext->accCount = 0;
+                // TODO: Fix this memory leak made for testing
+
                 D3D11_MAPPED_SUBRESOURCE mapped;
 
-                pThis->Map(pSwapChainBuffer.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+                pThis->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped);
 
                 {
                     std::lock_guard<std::mutex> sessionLock(mxSession);
@@ -670,39 +733,8 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                         REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
                     }
                 }
-
-                pThis->Unmap(pSwapChainBuffer.Get(), 0);
-            } else {
-                float current_shutter_position = (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
-                                                 (float)config::motion_blur_samples;
-                if (current_shutter_position >= (1 - config::motion_blur_strength)) {
-                    drawAdditive(pDevice, pThis, pSwapChainBuffer);
-                }
-                if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) ==
-                    config::motion_blur_samples) {
-                    ComPtr<ID3D11Texture2D> result;
-
-                    result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
-                    ::exportContext->accCount = 0;
-                    // TODO: Fix this memory leak made for testing
-
-                    D3D11_MAPPED_SUBRESOURCE mapped;
-
-                    pThis->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped);
-
-                    {
-                        std::lock_guard<std::mutex> sessionLock(mxSession);
-                        if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
-                            // CPU
-                            // REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch,
-                            // image->slicePitch),
-                            //        "Failed to enqueue frame.");
-                            REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
-                        }
-                    }
-                }
-                ::exportContext->totalFrameNum++;
             }
+            ::exportContext->totalFrameNum++;
 
             //::exportContext->capturedImage->Release();
         } catch (std::exception&) {
@@ -846,20 +878,20 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 /*ASSERT_RUNTIME(isOK, "Exporting was cancelled.");*/
 
                 // IVoukoder* pVoukoder = nullptr;
-                VKENCODERCONFIG vkConfig{
-                    .version = 1,
-                    .video{.encoder{"libx264"},
-                           .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
-                                    "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
-                                    "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
-                                    "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
-                           .filters{""},
-                           .sidedata{""}},
-                    .audio{.encoder{"aac"},                                          // @clang-format
-                           .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
-                           .filters{""},                                             // @clang-format
-                           .sidedata{""}},
-                    .format = {.container{"mp4"}, .faststart = true}};
+                // VKENCODERCONFIG vkConfig{
+                //    .version = 1,
+                //    .video{.encoder{"libx264"},
+                //           .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
+                //                    "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
+                //                    "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
+                //                    "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
+                //           .filters{""},
+                //           .sidedata{""}},
+                //    .audio{.encoder{"aac"},                                          // @clang-format
+                //           .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
+                //           .filters{""},                                             // @clang-format
+                //           .sidedata{""}},
+                //    .format = {.container{"mp4"}, .faststart = true}};
 
                 // CreateActCtx()
                 // REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
@@ -887,7 +919,8 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 //  "Failed to get config from
                 //  Voukoder."); tmpVoukoder->Release();
 
-                REQUIRE(encodingSession->createContext(vkConfig, std::wstring(filename.begin(), filename.end()),
+                REQUIRE(encodingSession->createContext(config::encoder_config,
+                                                       std::wstring(filename.begin(), filename.end()),
                                                        desc.BufferDesc.Width, desc.BufferDesc.Height, "rgba", fps_num,
                                                        fps_den, numChannels, sampleRate, "s16", blockAlignment),
                         "Failed to create encoding context.");
@@ -1119,36 +1152,41 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
 
     static bool presentHooked = false;
     if (!presentHooked && pTexture && !mainSwapChain) {
-        ID3D11Device* pTempDevice = nullptr;
-        pTexture->GetDevice(&pTempDevice);
+        if (auto foregroundWindow = GetForegroundWindow()) {
+            ID3D11Device* pTempDevice = nullptr;
+            pTexture->GetDevice(&pTempDevice);
 
-        IDXGIDevice* pDXGIDevice = nullptr;
-        REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), (void **)&pDXGIDevice), "Failed to get IDXGIDevice");
+            IDXGIDevice* pDXGIDevice = nullptr;
+            REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), (void**)&pDXGIDevice),
+                    "Failed to get IDXGIDevice");
 
-        IDXGIAdapter* pDXGIAdapter = nullptr;
-        REQUIRE(pDXGIDevice->GetAdapter(&pDXGIAdapter), "Failed to get IDXGIAdapter");
+            IDXGIAdapter* pDXGIAdapter = nullptr;
+            REQUIRE(pDXGIDevice->GetAdapter(&pDXGIAdapter), "Failed to get IDXGIAdapter");
 
-        IDXGIFactory* pDXGIFactory = nullptr;
-        REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void **)&pDXGIFactory), "Failed to get IDXGIFactory");
+            IDXGIFactory* pDXGIFactory = nullptr;
+            REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&pDXGIFactory),
+                    "Failed to get IDXGIFactory");
 
-        DXGI_SWAP_CHAIN_DESC tempDesc{0};
-        tempDesc.BufferCount = 1;
-        tempDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        tempDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        tempDesc.BufferDesc.Width = 800;
-        tempDesc.BufferDesc.Height = 600;
-        tempDesc.BufferDesc.RefreshRate = {30,1};
-        tempDesc.OutputWindow = GetForegroundWindow();
-        tempDesc.Windowed = true;
-        tempDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-        tempDesc.SampleDesc.Count = 1;
-        tempDesc.SampleDesc.Quality = 0;
+            DXGI_SWAP_CHAIN_DESC tempDesc{0};
+            tempDesc.BufferCount = 1;
+            tempDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            tempDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            tempDesc.BufferDesc.Width = 800;
+            tempDesc.BufferDesc.Height = 600;
+            tempDesc.BufferDesc.RefreshRate = {30, 1};
+            tempDesc.OutputWindow = foregroundWindow;
+            tempDesc.Windowed = true;
+            tempDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+            tempDesc.SampleDesc.Count = 1;
+            tempDesc.SampleDesc.Quality = 0;
 
-        IDXGISwapChain* pTempSwapChain;
-        REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc, &pTempSwapChain), "Failed to create temporary swapchain");
+            ComPtr<IDXGISwapChain> pTempSwapChain;
+            REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc, pTempSwapChain.ReleaseAndGetAddressOf()),
+                    "Failed to create temporary swapchain");
 
-        PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, pTempSwapChain);
-        presentHooked = true;
+            PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, pTempSwapChain.Get());
+            presentHooked = true;
+        }
     }
 
     if (pTexture && name) {
@@ -1200,6 +1238,17 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
             D3D11_TEXTURE2D_DESC desc;
 
             pGameBackBuffer->GetDesc(&desc);
+
+            // D3D11_TEXTURE2D_DESC swapBufferCopyDesc = desc;
+            // swapBufferCopyDesc.MiscFlags = 0;
+            // swapBufferCopyDesc.BindFlags = 0;
+            // swapBufferCopyDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            // swapBufferCopyDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            // swapBufferCopyDesc.Usage = D3D11_USAGE_STAGING;
+
+            // LOG_IF_FAILED(pDevice->CreateTexture2D(&swapBufferCopyDesc, NULL,
+            // pSwapBufferCopy.ReleaseAndGetAddressOf()),
+            //               "Failed to create swap buffer copy texture");
 
             D3D11_TEXTURE2D_DESC accBufDesc = desc;
             accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
