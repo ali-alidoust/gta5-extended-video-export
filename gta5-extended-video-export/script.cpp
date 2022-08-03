@@ -560,12 +560,13 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
         // LOG(LL_TRC, "Trying to find out if this ID3D11DeviceContext is linear depth buffer...");
         for (uint32_t i = 0; i < NumViews; i++) {
             if (ppRenderTargetViews[i]) {
-                ComPtr<ID3D11Resource> pResource;
-                ComPtr<ID3D11Texture2D> pTexture2D;
-                ppRenderTargetViews[i]->GetResource(pResource.GetAddressOf());
-                if (SUCCEEDED(pResource.As(&pTexture2D))) {
-                    if (pTexture2D.Get() == pGameDepthBufferQuarterLinear.Get()) {
-                        LOG(LL_DBG, " i:", i, " num:", NumViews, " dsv:", (void*)pDepthStencilView);
+                ID3D11Resource* pResource;
+                ID3D11Texture2D* pTexture2D;
+                ppRenderTargetViews[i]->GetResource(&pResource);
+                if (SUCCEEDED(
+                        pResource->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pTexture2D)))) {
+                    if (pTexture2D == pGameDepthBufferQuarterLinear.Get()) {
+                        LOG(LL_DBG, " i:", i, " num:", NumViews, " dsv:", static_cast<void*>(pDepthStencilView));
                         pCtxLinearizeBuffer = pThis;
                     }
                 }
@@ -573,20 +574,20 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
         }
     }
 
-    ComPtr<ID3D11Resource> pRTVTexture;
+    ID3D11Resource* pRTVTexture;
     if ((ppRenderTargetViews) && (ppRenderTargetViews[0])) {
-        LOG_CALL(LL_TRC, ppRenderTargetViews[0]->GetResource(pRTVTexture.GetAddressOf()));
+        LOG_CALL(LL_TRC, ppRenderTargetViews[0]->GetResource(&pRTVTexture));
     }
 
-    ComPtr<ID3D11RenderTargetView> pOldRTV;
-    ComPtr<ID3D11Resource> pOldRTVTexture;
-    pThis->OMGetRenderTargets(1, pOldRTV.GetAddressOf(), NULL);
+    ID3D11RenderTargetView* pOldRTV;
+    ID3D11Resource* pOldRTVTexture;
+    pThis->OMGetRenderTargets(1, &pOldRTV, NULL);
     if (pOldRTV) {
-        LOG_CALL(LL_TRC, pOldRTV->GetResource(pOldRTVTexture.GetAddressOf()));
+        LOG_CALL(LL_TRC, pOldRTV->GetResource(&pOldRTVTexture));
     }
 
     if (::exportContext != nullptr && ::exportContext->pExportRenderTarget != nullptr &&
-        (::exportContext->pExportRenderTarget == pRTVTexture)) {
+        (::exportContext->pExportRenderTarget.Get() == pRTVTexture)) {
 
         // Time to capture rendered frame
         try {
@@ -652,12 +653,15 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
             REQUIRE(::exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
                                                            (void**)pSwapChainBuffer.GetAddressOf()),
                     "Failed to get swap chain's buffer");
-
+            //ID3D11RenderTargetView* pCurrentRTV;
+            //ID3D11DepthStencilView* pCurrentDSV;
+            //pThis->OMGetRenderTargets(1, &pCurrentRTV, &pCurrentDSV);
+            //pThis->OMSetRenderTargets(1, &pCurrentRTV, pCurrentDSV);
             // IDXGISwapChainHooks::Present::OriginalFunc(::exportContext->pSwapChain.Get(), 0, 0);
-            //float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-            //::exportContext->pDeviceContext->ClearRenderTargetView((ID3D11RenderTargetView*)pSwapChainBuffer.Get(),
-            //                                                       color);
-            LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
+            //const float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+            /*::exportContext->pDeviceContext->ClearRenderTargetView(pCurrentRTV,
+                                                                   color);*/
+            //LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
                                                                           // effects to be applied to the render target
             // LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
             //                      0, 0)); // IMPORTANT: This call makes ENB and ReShade effects to be
@@ -679,10 +683,10 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
             // NOT_NULL(image, "Could not get current frame.");
             // NOT_NULL(image->pixels, "Could not get current frame.");
             // END CPU
-            float current_shutter_position = FLT_MAX;
             if (config::motion_blur_samples != 0) {
+                float current_shutter_position = FLT_MAX;
                 current_shutter_position = (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
-                                           (float)config::motion_blur_samples;
+                                           static_cast<float>(config::motion_blur_samples);
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
                     drawAdditive(pDevice, pThis, pSwapChainBuffer);
                 }
@@ -713,9 +717,7 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
             }
 
             if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) == config::motion_blur_samples) {
-                ComPtr<ID3D11Texture2D> result;
-
-                result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
+                const ComPtr<ID3D11Texture2D> result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
                 ::exportContext->accCount = 0;
                 // TODO: Fix this memory leak made for testing
 
@@ -737,8 +739,9 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
             ::exportContext->totalFrameNum++;
 
             //::exportContext->capturedImage->Release();
-        } catch (std::exception&) {
+        } catch (std::exception& ex) {
             LOG(LL_ERR, "Reading video frame from D3D Device failed.");
+            LOG(LL_ERR, ex.what());
             //::exportContext->capturedImage->Release();
             LOG_CALL(LL_DBG, encodingSession.reset());
             LOG_CALL(LL_DBG, ::exportContext.reset());
@@ -847,21 +850,32 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 input audio format: ", buffer); throw std::runtime_error("Unsupported input audio format");
                 }*/
 
-                char buffer[128];
-                std::string output_file = config::output_dir;
-                std::string exrOutputPath;
+                wchar_t buffer[128];
+                std::wstring output_file = config::output_dir;
+                std::wstring exrOutputPath;
 
-                output_file += "\\EVE-";
+                output_file += L"\\EVE-";
                 time_t rawtime;
-                struct tm timeinfo;
+                tm timeinfo;
                 time(&rawtime);
                 localtime_s(&timeinfo, &rawtime);
-                strftime(buffer, 128, "%Y%m%d%H%M%S", &timeinfo);
+                wcsftime(buffer, 128, L"%Y%m%d%H%M%S", &timeinfo);
                 output_file += buffer;
-                exrOutputPath = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
-                output_file += ".mp4";
+                exrOutputPath = std::regex_replace(output_file, std::wregex(L"\\\\+"), L"\\");
 
-                std::string filename = std::regex_replace(output_file, std::regex("\\\\+"), "\\");
+                if (strcmp(config::encoder_config.format.container, "mp4") == 0) {
+                    output_file += L".mp4";
+                } else if (strcmp(config::encoder_config.format.container, "mov") == 0) {
+                    output_file += L".mov";
+                } else if (strcmp(config::encoder_config.format.container, "mkv") == 0) {
+                    output_file += L".mkv";
+                } else if (strcmp(config::encoder_config.format.container, "avi") == 0) {
+                    output_file += L".avi";
+                } else {
+                    output_file += L".unk";
+                }
+
+                std::wstring filename = std::regex_replace(output_file, std::wregex(L"\\\\+"), L"\\");
 
                 LOG(LL_NFO, "Output file: ", filename);
 
@@ -919,10 +933,9 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 //  "Failed to get config from
                 //  Voukoder."); tmpVoukoder->Release();
 
-                REQUIRE(encodingSession->createContext(config::encoder_config,
-                                                       std::wstring(filename.begin(), filename.end()),
-                                                       desc.BufferDesc.Width, desc.BufferDesc.Height, "rgba", fps_num,
-                                                       fps_den, numChannels, sampleRate, "s16", blockAlignment),
+                REQUIRE(encodingSession->createContext(config::encoder_config, filename, desc.BufferDesc.Width,
+                                                       desc.BufferDesc.Height, "rgba", fps_num, fps_den, numChannels,
+                                                       sampleRate, "s16", blockAlignment, config::export_openexr),
                         "Failed to create encoding context.");
 
                 /*REQUIRE(encodingSession->createContext(

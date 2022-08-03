@@ -10,6 +10,7 @@
 #include <INIReader.h>
 #include <ShlObj.h>
 #include <algorithm>
+#include <filesystem>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <regex>
@@ -51,7 +52,7 @@ class config {
     static bool auto_reload_config;
     static bool export_openexr;
     //	static std::pair<uint32_t, uint32_t>   resolution;
-    static std::string output_dir;
+    static std::wstring output_dir;
     static LogLevel log_level;
     static std::pair<uint32_t, uint32_t> fps;
     static uint8_t motion_blur_samples;
@@ -166,24 +167,17 @@ class config {
         return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
     }
 
-    static HRESULT GetVideosDirectory(LPSTR output) {
+    static HRESULT GetVideosDirectory(LPWSTR output) {
         PWSTR vidPath = nullptr;
 
-        RET_IF_FAILED((SHGetKnownFolderPath(FOLDERID_Videos, 0, nullptr, &vidPath) != S_OK),
+        RET_IF_FAILED((SHGetKnownFolderPath(FOLDERID_Videos, 0, nullptr, &output) != S_OK),
                       "Failed to get Videos directory for the current user.", E_FAIL);
 
-        int pathlen = lstrlenW(vidPath);
+        //int pathlen = lstrlenW(vidPath);
 
-        int buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, nullptr, 0, nullptr, nullptr);
-        if (buflen <= 0) {
-            return E_FAIL;
-        }
+        //output[buflen] = 0;
 
-        buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, output, buflen, nullptr, nullptr);
-
-        output[buflen] = 0;
-
-        CoTaskMemFree(vidPath);
+        //CoTaskMemFree(vidPath);
 
         return S_OK;
     }
@@ -203,6 +197,12 @@ class config {
     }
 
     template <typename T> static T failed(const std::string& key, const std::string& value, T def) {
+        LOG(LL_NON, "Failed to parse value for \"", key, "\": ", value);
+        LOG(LL_NON, "Using default value of \"", def, "\" for \"", key, "\"");
+        return def;
+    }
+
+    template <typename T> static T failed(const std::string& key, const std::wstring& value, T def) {
         LOG(LL_NON, "Failed to parse value for \"", key, "\": ", value);
         LOG(LL_NON, "Using default value of \"", def, "\" for \"", key, "\"");
         return def;
@@ -263,17 +263,18 @@ class config {
         return failed(CFG_EXPORT_OPENEXR, string, false);
     }
 
-    static std::string parse_output_dir() {
+    static std::wstring parse_output_dir() {
         try {
-            std::string string = config_parser->GetString("", CFG_OUTPUT_DIR, "");
-            string = std::regex_replace(string, std::regex("(^\\s*)|(\\s*$)"), "");
+            std::wstring string = utf8_decode(config_parser->GetString("", CFG_OUTPUT_DIR, ""));
+            string = std::regex_replace(string, std::wregex(L"(^\\s*)|(\\s*$)"), L"");
 
             if ((!string.empty()) && (string.find_first_not_of(' ') != std::string::npos)) {
                 return succeeded(CFG_OUTPUT_DIR, string);
             } else {
-                char buffer[MAX_PATH] = {0};
-                REQUIRE(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
-                return failed(CFG_OUTPUT_DIR, string, buffer);
+                wchar_t buffer[MAX_PATH] = {0};
+                //REQUIRE(GetVideosDirectory(buffer), "Failed to get Videos directory for the current user.");
+                std::filesystem::create_directories(L"C:\\EVE\\");
+                return failed(CFG_OUTPUT_DIR, string, L"C:\\EVE\\");
             }
         } catch (std::exception& ex) {
             LOG(LL_ERR, ex.what());
