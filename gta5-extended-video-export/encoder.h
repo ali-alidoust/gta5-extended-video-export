@@ -97,6 +97,7 @@ class Session {
     int32_t outputAudioChannels{};
     std::string filename;
     std::string exrOutputPath;
+    bool exportExr = false;
     uint64_t exrPTS = 0;
     float shutterPosition{};
 
@@ -114,7 +115,7 @@ class Session {
 
     HRESULT createContext(const VKENCODERCONFIG& config, const std::wstring& inFilename, uint32_t inWidth, uint32_t inHeight,
                           const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den, uint32_t inputChannels,
-                          uint32_t inputSampleRate, const std::string& inputSampleFormat, uint32_t inputAlign);
+                          uint32_t inputSampleRate, const std::string& inputSampleFormat, uint32_t inputAlign, bool inExportOpenExr);
 
     // HRESULT enqueueVideoFrame(BYTE* pData, int length);
     HRESULT enqueueVideoFrame(const D3D11_MAPPED_SUBRESOURCE& subresource);
@@ -123,8 +124,8 @@ class Session {
                             const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cDepth,
                             const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cStencil);
 
-    void videoEncodingThread();
-    void exrEncodingThread();
+    //void videoEncodingThread();
+    //void exrEncodingThread();
 
     HRESULT writeVideoFrame(BYTE* pData, const int32_t length, const int rowPitch, const LONGLONG sampleTime);
     HRESULT writeAudioFrame(BYTE* pData, int32_t length, LONGLONG sampleTime);

@@ -654,7 +654,7 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                     "Failed to get swap chain's buffer");
 
             // IDXGISwapChainHooks::Present::OriginalFunc(::exportContext->pSwapChain.Get(), 0, 0);
-            //float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+            // float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
             //::exportContext->pDeviceContext->ClearRenderTargetView((ID3D11RenderTargetView*)pSwapChainBuffer.Get(),
             //                                                       color);
             LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
@@ -919,10 +919,10 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 //  "Failed to get config from
                 //  Voukoder."); tmpVoukoder->Release();
 
-                REQUIRE(encodingSession->createContext(config::encoder_config,
-                                                       std::wstring(filename.begin(), filename.end()),
-                                                       desc.BufferDesc.Width, desc.BufferDesc.Height, "rgba", fps_num,
-                                                       fps_den, numChannels, sampleRate, "s16", blockAlignment),
+                REQUIRE(encodingSession->createContext(
+                            config::encoder_config, std::wstring(filename.begin(), filename.end()),
+                            desc.BufferDesc.Width, desc.BufferDesc.Height, "rgba", fps_num, fps_den, numChannels,
+                            sampleRate, "s16", blockAlignment, config::export_openexr),
                         "Failed to create encoding context.");
 
                 /*REQUIRE(encodingSession->createContext(

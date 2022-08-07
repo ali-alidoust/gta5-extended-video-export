@@ -3,11 +3,14 @@
 #pragma warning(disable : 26812)
 #include "encoder.h"
 #include "logger.h"
+#include "util.h"
+
 #include <OpenEXR/ImfChannelList.h>
 #include <OpenEXR/ImfHeader.h>
 #include <OpenEXR/ImfOutputFile.h>
 #include <OpenEXR/ImfRgba.h>
 #include <OpenEXR/ImfRgbaFile.h>
+#include <filesystem>
 #include <xutility>
 #pragma warning(pop)
 
@@ -94,7 +97,7 @@ Session::~Session() {
 HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring& inFilename, uint32_t inWidth,
                                uint32_t inHeight, const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den,
                                uint32_t inputChannels, uint32_t inputSampleRate, const std::string& inputSampleFormat,
-                               uint32_t inputAlign) {
+                               uint32_t inputAlign, bool inExportOpenExr) {
     PRE();
     // this->oformat = av_guess_format(format.c_str(), nullptr, nullptr);
     // RET_IF_NULL(this->oformat, "Could not find format: " + format, E_FAIL);
@@ -108,6 +111,9 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
     //        "Failed to create audio codec context.");
     // REQUIRE(this->createFormatContext(format, inFilename, exrOutputPath, fmtOptions), "Failed to create format
     // context.");
+
+    this->width = inWidth;
+    this->height = inHeight;
 
     ASSERT_RUNTIME(inFilename.length() < sizeof(VKENCODERINFO::filename) / sizeof(wchar_t), "File name too long.");
     ASSERT_RUNTIME(inputChannels == 1 || inputChannels == 2 || inputChannels == 6,
@@ -149,6 +155,11 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         },
     };
     inFilename.copy(vkInfo.filename, std::size(vkInfo.filename));
+    this->exportExr = inExportOpenExr;
+    if (this->exportExr) {
+        this->exrOutputPath = utf8_encode(inFilename) + ".OpenEXR";
+        std::filesystem::create_directories(this->exrOutputPath);
+    }
     // std::copy(inFilename.begin(), inFilename.end(), vkInfo.inFilename);
 
     REQUIRE(m_pVoukoder->Open(vkInfo), "Failed to open Voukoder context.");
@@ -177,8 +188,8 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
 
     pVoukoder = std::move(m_pVoukoder);
 
-    //this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
-    this->thread_exr_encoder = std::thread(&Session::exrEncodingThread, this);
+    // this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
+    // this->thread_exr_encoder = std::thread(&Session::exrEncodingThread, this);
 
     this->isCapturing = true;
 
@@ -215,7 +226,78 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
                 "Failed to map stencil texture");
     }
 
-    this->exrImageQueue.enqueue(exr_queue_item(cRGB, mHDR.pData, cDepth, mDepth.pData, cStencil, mStencil));
+    // this->exrImageQueue.enqueue(exr_queue_item(cRGB, mHDR.pData, cDepth, mDepth.pData, cStencil, mStencil));
+
+    struct RGBA {
+        half R;
+        half G;
+        half B;
+        half A;
+    };
+
+    struct Depth {
+        float depth;
+    };
+
+    Imf::Header header(this->width, this->height);
+    Imf::FrameBuffer framebuffer;
+
+    if (cRGB != nullptr) {
+        LOG_CALL(LL_DBG, header.channels().insert("R", Imf::Channel(Imf::HALF)));
+        LOG_CALL(LL_DBG, header.channels().insert("G", Imf::Channel(Imf::HALF)));
+        LOG_CALL(LL_DBG, header.channels().insert("B", Imf::Channel(Imf::HALF)));
+        LOG_CALL(LL_DBG, header.channels().insert("SSS", Imf::Channel(Imf::HALF)));
+        const auto mHDRArray = static_cast<RGBA*>(mHDR.pData);
+
+        LOG_CALL(LL_DBG, framebuffer.insert("R", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].R),
+                                                            sizeof(RGBA), sizeof(RGBA) * this->width)));
+
+        LOG_CALL(LL_DBG, framebuffer.insert("G", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].G),
+                                                            sizeof(RGBA), sizeof(RGBA) * this->width)));
+
+        LOG_CALL(LL_DBG, framebuffer.insert("B", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].B),
+                                                            sizeof(RGBA), sizeof(RGBA) * this->width)));
+
+        LOG_CALL(LL_DBG, framebuffer.insert("SSS", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].A),
+                                                              sizeof(RGBA), sizeof(RGBA) * this->width)));
+    }
+
+    if (cDepth != nullptr) {
+        LOG_CALL(LL_DBG, header.channels().insert("depth.Z", Imf::Channel(Imf::FLOAT)));
+        // header.channels().insert("objectID", Imf::Channel(Imf::UINT));
+        const auto mDSArray = static_cast<Depth*>(mDepth.pData);
+
+        LOG_CALL(LL_DBG,
+                 framebuffer.insert("depth.Z", Imf::Slice(Imf::FLOAT, reinterpret_cast<char*>(&mDSArray[0].depth),
+                                                          sizeof(Depth), sizeof(Depth) * this->width)));
+    }
+
+    std::vector<uint32_t> stencilBuffer;
+    if (cStencil != nullptr) {
+        stencilBuffer =
+            std::vector<uint32_t>(static_cast<size_t>(mStencil.RowPitch) * static_cast<size_t>(this->height));
+        auto mSArray = static_cast<uint8_t*>(mStencil.pData);
+
+        for (uint32_t i = 0; i < mStencil.RowPitch * this->height; i++) {
+            stencilBuffer[i] = static_cast<uint32_t>(mSArray[i]);
+        }
+
+        LOG_CALL(LL_DBG, header.channels().insert("objectID", Imf::Channel(Imf::UINT)));
+
+        LOG_CALL(LL_DBG,
+                 framebuffer.insert("objectID",
+                                    Imf::Slice(Imf::UINT, reinterpret_cast<char*>(stencilBuffer.data()),
+                                               sizeof(uint32_t), static_cast<size_t>(mStencil.RowPitch) * size_t{4})));
+    }
+
+    // if (CreateDirectoryA(this->exrOutputPath.c_str(), nullptr) || ERROR_ALREADY_EXISTS == GetLastError()) {
+
+    std::stringstream sstream;
+    sstream << std::setw(5) << std::setfill('0') << this->exrPTS++;
+    Imf::OutputFile file((this->exrOutputPath + "\\frame." + sstream.str() + ".exr").c_str(), header);
+    LOG_CALL(LL_DBG, file.setFrameBuffer(framebuffer));
+    LOG_CALL(LL_DBG, file.writePixels(this->height));
+    //}
 
     POST();
     return S_OK;
@@ -240,148 +322,77 @@ HRESULT Session::enqueueVideoFrame(const D3D11_MAPPED_SUBRESOURCE& subresource) 
     return S_OK;
 }
 
-//void Session::videoEncodingThread() {
-//    PRE();
-//    std::lock_guard lock(this->mxEncodingThread);
-//    try {
-//        int16_t k = 0;
-//        bool firstFrame = true;
-//        frameQueueItem item = this->videoFrameQueue.dequeue();
-//        while (item.subresource != nullptr) {
-//            auto& data = *(item.subresource);
-//            // if (this->motionBlurSamples == 0) {
-//            LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
-//            REQUIRE(this->writeVideoFrame(static_cast<BYTE*>(data.pData),
-//                                          static_cast<int32_t>(item.subresource->DepthPitch),
-//                                          item.subresource->RowPitch, this->videoPTS++),
-//                    "Failed to write video frame.");
-//            //} else {
-//            //    const auto frameRemainder =
-//            //        static_cast<uint8_t>(this->motionBlurPTS++ % (static_cast<uint64_t>(this->motionBlurSamples) +
-//            //        1));
-//            //    const float currentShutterPosition =
-//            //        static_cast<float>(frameRemainder) / static_cast<float>(this->motionBlurSamples + 1);
-//            //    std::ranges::copy(data, std::begin(this->motionBlurTempBuffer));
-//            //    if (frameRemainder == this->motionBlurSamples) {
-//            //        // Flush motion blur buffer
-//            //        this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-//            //        this->motionBlurAccBuffer /= ++k;
-//            //        std::ranges::copy(this->motionBlurAccBuffer, std::begin(this->motionBlurDestBuffer));
-//            //        REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer),
-//            //                                      this->motionBlurDestBuffer.size(), item.rowPitch, this->videoPTS++),
-//            //                "Failed to write video frame.");
-//            //        k = 0;
-//            //        firstFrame = true;
-//            //    } else if (currentShutterPosition >= this->shutterPosition) {
-//            //        if (firstFrame) {
-//            //            // Reset accumulation buffer
-//            //            this->motionBlurAccBuffer = this->motionBlurTempBuffer;
-//            //            firstFrame = false;
-//            //        } else {
-//            //            this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-//            //        }
-//            //        k++;
-//            //    }
-//            //}
-//            item = this->videoFrameQueue.dequeue();
-//        }
-//    } catch (...) {
-//        // Do nothing
-//    }
-//    this->isEncodingThreadFinished = true;
-//    this->cvEncodingThreadFinished.notify_all();
-//    POST();
-//}
+// void Session::videoEncodingThread() {
+//     PRE();
+//     std::lock_guard lock(this->mxEncodingThread);
+//     try {
+//         int16_t k = 0;
+//         bool firstFrame = true;
+//         frameQueueItem item = this->videoFrameQueue.dequeue();
+//         while (item.subresource != nullptr) {
+//             auto& data = *(item.subresource);
+//             // if (this->motionBlurSamples == 0) {
+//             LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
+//             REQUIRE(this->writeVideoFrame(static_cast<BYTE*>(data.pData),
+//                                           static_cast<int32_t>(item.subresource->DepthPitch),
+//                                           item.subresource->RowPitch, this->videoPTS++),
+//                     "Failed to write video frame.");
+//             //} else {
+//             //    const auto frameRemainder =
+//             //        static_cast<uint8_t>(this->motionBlurPTS++ % (static_cast<uint64_t>(this->motionBlurSamples) +
+//             //        1));
+//             //    const float currentShutterPosition =
+//             //        static_cast<float>(frameRemainder) / static_cast<float>(this->motionBlurSamples + 1);
+//             //    std::ranges::copy(data, std::begin(this->motionBlurTempBuffer));
+//             //    if (frameRemainder == this->motionBlurSamples) {
+//             //        // Flush motion blur buffer
+//             //        this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+//             //        this->motionBlurAccBuffer /= ++k;
+//             //        std::ranges::copy(this->motionBlurAccBuffer, std::begin(this->motionBlurDestBuffer));
+//             //        REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer),
+//             //                                      this->motionBlurDestBuffer.size(), item.rowPitch,
+//             this->videoPTS++),
+//             //                "Failed to write video frame.");
+//             //        k = 0;
+//             //        firstFrame = true;
+//             //    } else if (currentShutterPosition >= this->shutterPosition) {
+//             //        if (firstFrame) {
+//             //            // Reset accumulation buffer
+//             //            this->motionBlurAccBuffer = this->motionBlurTempBuffer;
+//             //            firstFrame = false;
+//             //        } else {
+//             //            this->motionBlurAccBuffer += this->motionBlurTempBuffer;
+//             //        }
+//             //        k++;
+//             //    }
+//             //}
+//             item = this->videoFrameQueue.dequeue();
+//         }
+//     } catch (...) {
+//         // Do nothing
+//     }
+//     this->isEncodingThreadFinished = true;
+//     this->cvEncodingThreadFinished.notify_all();
+//     POST();
+// }
 
-void Session::exrEncodingThread() {
-    PRE();
-    std::lock_guard<std::mutex> lock(this->mxEXREncodingThread);
-    Imf::setGlobalThreadCount(8);
-    try {
-        exr_queue_item item = this->exrImageQueue.dequeue();
-        while (!item.isEndOfStream) {
-            struct RGBA {
-                half R;
-                half G;
-                half B;
-                half A;
-            };
-
-            struct Depth {
-                float depth;
-            };
-
-            Imf::Header header(this->width, this->height);
-            Imf::FrameBuffer framebuffer;
-
-            if (item.cRGB != nullptr) {
-                LOG_CALL(LL_DBG, header.channels().insert("R", Imf::Channel(Imf::HALF)));
-                LOG_CALL(LL_DBG, header.channels().insert("G", Imf::Channel(Imf::HALF)));
-                LOG_CALL(LL_DBG, header.channels().insert("B", Imf::Channel(Imf::HALF)));
-                LOG_CALL(LL_DBG, header.channels().insert("SSS", Imf::Channel(Imf::HALF)));
-                const auto mHDRArray = static_cast<RGBA*>(item.pRGBData);
-
-                LOG_CALL(LL_DBG, framebuffer.insert("R", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].R),
-                                                                    sizeof(RGBA), sizeof(RGBA) * this->width)));
-
-                LOG_CALL(LL_DBG, framebuffer.insert("G", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].G),
-                                                                    sizeof(RGBA), sizeof(RGBA) * this->width)));
-
-                LOG_CALL(LL_DBG, framebuffer.insert("B", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].B),
-                                                                    sizeof(RGBA), sizeof(RGBA) * this->width)));
-
-                LOG_CALL(LL_DBG,
-                         framebuffer.insert("SSS", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].A),
-                                                              sizeof(RGBA), sizeof(RGBA) * this->width)));
-            }
-
-            if (item.cDepth != nullptr) {
-                LOG_CALL(LL_DBG, header.channels().insert("depth.Z", Imf::Channel(Imf::FLOAT)));
-                // header.channels().insert("objectID", Imf::Channel(Imf::UINT));
-                const auto mDSArray = static_cast<Depth*>(item.pDepthData);
-
-                LOG_CALL(LL_DBG, framebuffer.insert("depth.Z",
-                                                    Imf::Slice(Imf::FLOAT, reinterpret_cast<char*>(&mDSArray[0].depth),
-                                                               sizeof(Depth), sizeof(Depth) * this->width)));
-            }
-
-            std::vector<uint32_t> stencilBuffer;
-            if (item.cStencil != nullptr) {
-                stencilBuffer = std::vector<uint32_t>(static_cast<size_t>(item.mStencilData.RowPitch) *
-                                                      static_cast<size_t>(this->height));
-                auto mSArray = static_cast<uint8_t*>(item.mStencilData.pData);
-
-                for (uint32_t i = 0; i < item.mStencilData.RowPitch * this->height; i++) {
-                    stencilBuffer[i] = static_cast<uint32_t>(mSArray[i]);
-                }
-
-                LOG_CALL(LL_DBG, header.channels().insert("objectID", Imf::Channel(Imf::UINT)));
-
-                LOG_CALL(LL_DBG,
-                         framebuffer.insert("objectID",
-                                            Imf::Slice(Imf::UINT, reinterpret_cast<char*>(stencilBuffer.data()),
-                                                       sizeof(uint32_t),
-                                                       static_cast<size_t>(item.mStencilData.RowPitch) * size_t{4})));
-            }
-
-            if (CreateDirectoryA(this->exrOutputPath.c_str(), nullptr) || ERROR_ALREADY_EXISTS == GetLastError()) {
-
-                std::stringstream sstream;
-                sstream << std::setw(5) << std::setfill('0') << this->exrPTS++;
-                Imf::OutputFile file((this->exrOutputPath + "\\frame" + sstream.str() + ".exr").c_str(), header);
-                LOG_CALL(LL_DBG, file.setFrameBuffer(framebuffer));
-                LOG_CALL(LL_DBG, file.writePixels(this->height));
-            }
-
-            item = this->exrImageQueue.dequeue();
-        }
-    } catch (std::exception& ex) {
-        LOG(LL_ERR, ex.what());
-    }
-    this->isEXREncodingThreadFinished = true;
-    this->cvEXREncodingThreadFinished.notify_all();
-    POST();
-}
+// void Session::exrEncodingThread() {
+//     PRE();
+//     std::lock_guard<std::mutex> lock(this->mxEXREncodingThread);
+//     Imf::setGlobalThreadCount(8);
+//     try {
+//         exr_queue_item item = this->exrImageQueue.dequeue();
+//         while (!item.isEndOfStream) {
+//
+//             item = this->exrImageQueue.dequeue();
+//         }
+//     } catch (std::exception& ex) {
+//         LOG(LL_ERR, ex.what());
+//     }
+//     this->isEXREncodingThreadFinished = true;
+//     this->cvEXREncodingThreadFinished.notify_all();
+//     POST();
+// }
 
 HRESULT Session::writeVideoFrame(BYTE* pData, const int32_t length, const int rowPitch, const LONGLONG sampleTime) {
     PRE();
@@ -443,7 +454,7 @@ HRESULT Session::finishVideo() {
 
     if (!this->isVideoFinished) {
         // Wait until the video encoding thread is finished.
-        //if (thread_video_encoder.joinable()) {
+        // if (thread_video_encoder.joinable()) {
         //    // Write end of the stream object with a nullptr
         //    this->videoFrameQueue.enqueue(frameQueueItem(nullptr));
         //    std::unique_lock<std::mutex> lock(this->mxEncodingThread);
