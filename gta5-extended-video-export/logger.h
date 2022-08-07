@@ -1,8 +1,6 @@
 // ReSharper disable CppClangTidyCppcoreguidelinesMacroUsage
 #pragma once
 
-#include "util.h"
-
 #include <Windows.h>
 #include <exception>
 #include <fstream>
@@ -61,35 +59,17 @@ class Logger {
 
   private:
     template <typename T, typename... Targs> void _write(const T& value, const Targs&... args) {
-        this->_write(value);
-        this->_write(args...);
+        if (this->ensureStream()) {
+            // std::lock_guard<std::mutex> guard(mtx);
+            filestream << value;
+            this->_write(args...);
+        }
     }
 
     template <typename T> void _write(const T& value) {
         if (this->ensureStream()) {
             // std::lock_guard<std::mutex> guard(mtx);
             filestream << value;
-        }
-    }
-
-    template <> void _write<std::wstring>(const std::wstring& value) {
-        if (this->ensureStream()) {
-            // std::lock_guard<std::mutex> guard(mtx);
-            filestream << utf8_encode(value);
-        }
-    }
-
-    template <> void _write<wchar_t*>(wchar_t* const& value) {
-        if (this->ensureStream()) {
-            // std::lock_guard<std::mutex> guard(mtx);
-            filestream << utf8_encode(value);
-        }
-    }
-
-    template <> void _write<const wchar_t*>(const wchar_t* const& value) {
-        if (this->ensureStream()) {
-            // std::lock_guard<std::mutex> guard(mtx);
-            filestream << utf8_encode(value);
         }
     }
 

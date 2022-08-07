@@ -1,7 +1,6 @@
 #pragma once
 
 #include <dxgi.h>
-#include <sstream>
 #include <string>
 
 #define RETURN_STR(val, e)                                                                                             \
@@ -133,13 +132,13 @@ inline static std::string conv_dxgi_format_to_string(int value) {
     return "<UNKNOWN FORMAT>";
 }
 
-//inline void StackDump(size_t size, std::string prefix) {
-//    uint64_t x = 0xDEADBEEFBAADF00D;
-//    void** ptr = (void**)&x;
-//    for (int i = 0; i < size; i++) {
-//        LOG(LL_TRC, "Stack dump: ", prefix, " ", Logger::hex(i, 4), ": 0x", *(ptr + i));
-//    }
-//}
+inline void StackDump(size_t size, std::string prefix) {
+    uint64_t x = 0xDEADBEEFBAADF00D;
+    void** ptr = (void**)&x;
+    for (int i = 0; i < size; i++) {
+        LOG(LL_TRC, "Stack dump: ", prefix, " ", Logger::hex(i, 4), ": 0x", *(ptr + i));
+    }
+}
 
 //bool isCurrentRenderTargetView(ID3D11DeviceContext* pCtx, ComPtr<ID3D11RenderTargetView>& pRTV) {
 //    if (pRTV == NULL) {
