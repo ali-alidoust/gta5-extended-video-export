@@ -26,7 +26,7 @@ bool Logger::ensureStream() {
     this->filestream.open(exePath() + "\\EVE\\" TARGET_NAME ".log");
     if (this->filestream.is_open()) {
         std::lock_guard<std::mutex> guard(mtx);
-        filestream << "Logger initialized." << std::endl;
+        filestream << "Logger initialized." << "\r\n";
         return true;
     }
     return false;
@@ -35,7 +35,7 @@ bool Logger::ensureStream() {
 void Logger::writeLine() {
     if (this->ensureStream()) {
         std::lock_guard<std::mutex> guard(mtx);
-        filestream << std::endl;
+        filestream << "\r\n";
     }
 }
 
@@ -46,7 +46,7 @@ std::string Logger::getTimestamp() {
     time(&rawtime);
     localtime_s(&timeinfo, &rawtime);
     strftime(buffer, 256, "[%Y-%m-%d %H:%M:%S]", &timeinfo);
-    return std::string(buffer);
+    return buffer;
 }
 
 std::string Logger::getThreadId() {

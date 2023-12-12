@@ -1,5 +1,7 @@
 #pragma once
 
+#define NOMINMAX
+
 #include <d3d11.h>
 #include <dxgi.h>
 #include <future>

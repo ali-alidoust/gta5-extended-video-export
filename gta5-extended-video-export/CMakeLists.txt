@@ -1,6 +1,13 @@
 set(PROJECT_NAME gta5-extended-video-export)
 
 ################################################################################
+# Resource fix
+################################################################################
+foreach(LANG  C CXX RC)
+    set(CMAKE_${LANG}_STANDARD_INCLUDE_DIRECTORIES ${CUSTOM_INCLUDE_DIRECTORIES})
+endforeach()
+
+################################################################################
 # Source groups
 ################################################################################
 source_group("" FILES ${no_group_source_files})
@@ -26,6 +33,7 @@ set(Source_Files
         "logger.cpp"
         "script.cpp"
         "yara-helper.cpp"
+        "resource.rc"
         )
 
 set(VK_Source_Files
@@ -40,7 +48,6 @@ set(ALL_FILES
         ${Source_Files}
         ${VK_Source_Files}
         )
-
 ################################################################################
 # Target
 ################################################################################
@@ -136,50 +143,39 @@ if (MSVC)
             )
     target_link_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
+            /DELAYLOAD:Iex-3_1_d.dll;
+            /DELAYLOAD:IlmThread-3_1_d.dll;
+            /DELAYLOAD:Imath-3_1_d.dll;
+            /DELAYLOAD:OpenEXR-3_1_d.dll;
             /DELAYLOAD:zlibd1.dll;
-            /DELAYLOAD:Half-2_5_d.dll;
-            /DELAYLOAD:Iex-2_5_d.dll;
-            /DELAYLOAD:IlmImf-2_5_d.dll;
-            /DELAYLOAD:IlmThread-2_5_d.dll;
-            /DELAYLOAD:Imath-2_5_d.dll;
             /DEBUG:FULL
             >
             $<$<CONFIG:MinSizeRel>:
-            /DELAYLOAD:zlib1.dll
-            /DELAYLOAD:Half-2_5_d.dll;
-            /DELAYLOAD:Iex-2_5_d.dll;
-            /DELAYLOAD:IlmImf-2_5_d.dll;
-            /DELAYLOAD:IlmThread-2_5_d.dll;
-            /DELAYLOAD:Imath-2_5_d.dll;
+            /DELAYLOAD:Iex-3_1.dll;
+            /DELAYLOAD:IlmThread-3_1.dll;
+            /DELAYLOAD:Imath-3_1.dll;
+            /DELAYLOAD:OpenEXR-3_1.dll;
+            /DELAYLOAD:zlib1.dll;
             >
             $<$<CONFIG:Release>:
-            /DELAYLOAD:zlib1.dll
-            /DELAYLOAD:Half-2_5.dll;
-            /DELAYLOAD:Iex-2_5.dll;
-            /DELAYLOAD:IlmImf-2_5.dll;
-            /DELAYLOAD:IlmThread-2_5.dll;
-            /DELAYLOAD:Imath-2_5.dll;
+            /DELAYLOAD:Iex-3_1.dll;
+            /DELAYLOAD:IlmThread-3_1.dll;
+            /DELAYLOAD:Imath-3_1.dll;
+            /DELAYLOAD:OpenEXR-3_1.dll;
+            /DELAYLOAD:zlib1.dll;
             >
             $<$<CONFIG:RelWithDebInfo>:
-            /DELAYLOAD:zlibd1.dll;
-            /DELAYLOAD:Half-2_5_d.dll;
-            /DELAYLOAD:Iex-2_5_d.dll;
-            /DELAYLOAD:IlmImf-2_5_d.dll;
-            /DELAYLOAD:IlmThread-2_5_d.dll;
-            /DELAYLOAD:Imath-2_5_d.dll;
+            /DELAYLOAD:Iex-3_1.dll;
+            /DELAYLOAD:IlmThread-3_1.dll;
+            /DELAYLOAD:Imath-3_1.dll;
+            /DELAYLOAD:OpenEXR-3_1.dll;
+            /DELAYLOAD:zlib1.dll;
             /DEBUG:FULL
             >
-            /DELAYLOAD:PolyHook_2.dll;
-            /DELAYLOAD:avcodec-58.dll;
-            /DELAYLOAD:avdevice-58.dll;
-            /DELAYLOAD:avfilter-7.dll;
-            /DELAYLOAD:avformat-58.dll;
-            /DELAYLOAD:avutil-56.dll;
-            /DELAYLOAD:swresample-3.dll;
-            /DELAYLOAD:swscale-5.dll;
-            /DELAYLOAD:capstone.dll;
-            /DELAYLOAD:Zydis.dll;
             /DELAYLOAD:asmjit.dll;
+            /DELAYLOAD:asmtk.dll;
+            /DELAYLOAD:PolyHook_2.dll;
+            /DELAYLOAD:Zydis.dll;
             /NODEFAULTLIB:libcmt.lib;
             /SUBSYSTEM:WINDOWS
             )
@@ -225,7 +221,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${SCRIPT_HOOK_V_LIBRARY})
 find_path(INIH_INCLUDE_DIR ini.h REQUIRED)
 find_library(INIH_LIBRARY inih REQUIRED)
 target_include_directories(${PROJECT_NAME} PRIVATE ${INIH_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${INIH_LIBRARY})
+target_include_directories(${PROJECT_NAME} PRIVATE ${INIH_INCLUDE_DIR}/cpp)
+find_package(unofficial-inih CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE unofficial::inih::inireader)
 
 # PolyHook2
 find_package(PolyHook_2 CONFIG REQUIRED)
@@ -238,14 +236,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE PolyHook_2::PolyHook_2)
 # target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
 
 # OpenEXR
-find_package(IlmBase CONFIG REQUIRED)
+# find_package(IlmBase CONFIG REQUIRED)
 find_package(OpenEXR CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE IlmBase::Iex IlmBase::Half IlmBase::Imath IlmBase::IexMath)
-target_link_libraries(${PROJECT_NAME} PRIVATE OpenEXR::IlmImf OpenEXR::IlmImfUtil OpenEXR::IlmImfConfig)
+# target_link_libraries(${PROJECT_NAME} PRIVATE IlmBase::Iex IlmBase::Half IlmBase::Imath IlmBase::IexMath)
+# target_link_libraries(${PROJECT_NAME} PRIVATE OpenEXR::IlmImf OpenEXR::IlmImfUtil OpenEXR::IlmImfConfig)
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenEXR::OpenEXR)
 
 # DirectX Headers
-find_package(directx-headers CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectX-Headers)
+# find_package(DirectX-Headers CONFIG REQUIRED)
+# target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectX-Headers)
 
 # DirectX Math
 find_package(directxmath CONFIG REQUIRED)

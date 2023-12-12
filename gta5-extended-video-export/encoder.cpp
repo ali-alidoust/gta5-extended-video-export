@@ -14,23 +14,7 @@
 #include <xutility>
 #pragma warning(pop)
 
-// #pragma warning(push, 0)
-//  extern "C" {
-// #include <libavutil/imgutils.h>
-// #include <libavutil/pixdesc.h>
-// }
-// #pragma warning(pop)
-
-//#define IGNORE_DATA_LOSS_WARNING(o)                                                                                    \
-//    {                                                                                                                  \
-//        __pragma(warning(push)) __pragma(warning(disable : 4244))(o);                                                  \
-//        __pragma(warning(pop))                                                                                         \
-//    }                                                                                                                  \
-//    REQUIRE_SEMICOLON
-
 namespace Encoder {
-
-// const AVRational MF_TIME_BASE = {1, 10000000};
 
 Session::Session() : videoFrameQueue(128), exrImageQueue(16) {
     PRE();
@@ -42,78 +26,21 @@ Session::~Session() {
     PRE();
     LOG(LL_NFO, "Closing session: ", reinterpret_cast<uint64_t>(this));
     this->isCapturing = false;
-    // LOG_CALL(LL_DBG, this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, 0)));
-
-    // if (thread_video_encoder.joinable()) {
-    //     thread_video_encoder.join();
-    // }
-
-    // LOG_CALL(LL_DBG, this->exrImageQueue.enqueue(Encoder::Session::exr_queue_item()));
-
-    // if (thread_exr_encoder.joinable()) {
-    //     thread_exr_encoder.join();
-    // }
-
     LOG_CALL(LL_DBG, this->finishVideo());
     LOG_CALL(LL_DBG, this->finishAudio());
     LOG_CALL(LL_DBG, this->endSession());
-    // LOG_CALL(LL_DBG, pVoukoder->Close(true));
     this->isBeingDeleted = true;
-
-    // LOG_CALL(LL_DBG, av_free(this->oformat));
-    // LOG_CALL(LL_DBG, av_free(this->fmtContext));
-    // LOG_CALL(LL_DBG, avcodec_close(this->videoCodecContext));
-    // LOG_CALL(LL_DBG, av_free(this->videoCodecContext));
-    // LOG_CALL(LL_DBG, av_free(this->inputFrame));
-    // LOG_CALL(LL_DBG, av_free(this->outputFrame));
-    // LOG_CALL(LL_DBG, sws_freeContext(this->pSwsContext));
-    // LOG_CALL(LL_DBG, swr_free(&this->pSwrContext));
-    // if (this->videoOptions) {
-    //    LOG_CALL(LL_DBG, av_dict_free(&this->videoOptions));
-    //}
-    // if (this->audioOptions) {
-    //    LOG_CALL(LL_DBG, av_dict_free(&this->audioOptions));
-    //}
-    // if (this->fmtOptions) {
-    //    LOG_CALL(LL_DBG, av_dict_free(&this->fmtOptions));
-    //}
-    // LOG_CALL(LL_DBG, avcodec_close(this->audioCodecContext));
-    // LOG_CALL(LL_DBG, av_free(this->audioCodecContext));
-    // LOG_CALL(LL_DBG, av_free(this->inputAudioFrame));
-    // LOG_CALL(LL_DBG, av_free(this->outputAudioFrame));
-    // LOG_CALL(LL_DBG, av_audio_fifo_free(this->audioSampleBuffer));
     POST();
 }
-
-// HRESULT Session::createContext(const std::string& format, std::string filename, std::string exrOutputPath,
-//                               std::string fmtOptions, uint64_t width, uint64_t height,
-//                               const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den,
-//                               uint8_t motionBlurSamples, float shutterPosition, const std::string& outputPixelFmt,
-//                               const std::string& vcodec_str, const std::string& voptions, uint32_t inputChannels,
-//                               uint32_t inputSampleRate, uint32_t inputBitsPerSample, std::string inputSampleFmt,
-//                               uint32_t inputAlign, std::string outputSampleFmt, std::string acodec_str,
-//                               std::string aoptions) {
 
 HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring& inFilename, uint32_t inWidth,
                                uint32_t inHeight, const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den,
                                uint32_t inputChannels, uint32_t inputSampleRate, const std::string& inputSampleFormat,
                                uint32_t inputAlign, bool inExportOpenExr) {
     PRE();
-    // this->oformat = av_guess_format(format.c_str(), nullptr, nullptr);
-    // RET_IF_NULL(this->oformat, "Could not find format: " + format, E_FAIL);
 
-    // REQUIRE(this->createVideoContext(inWidth, inHeight, inputPixelFmt, fps_num, fps_den, motionBlurSamples,
-    // shutterPosition,
-    //                                 outputPixelFmt, vcodec_str, voptions),
-    //        "Failed to create video codec context.");
-    // REQUIRE(this->createAudioContext(inputChannels, inputSampleRate, inputBitsPerSample, inputSampleFmt, inputAlign,
-    //                                 outputSampleFmt, acodec_str, aoptions),
-    //        "Failed to create audio codec context.");
-    // REQUIRE(this->createFormatContext(format, inFilename, exrOutputPath, fmtOptions), "Failed to create format
-    // context.");
-
-    this->width = inWidth;
-    this->height = inHeight;
+    this->width = static_cast<int32_t>(inWidth);
+    this->height = static_cast<int32_t>(inHeight);
 
     ASSERT_RUNTIME(inFilename.length() < sizeof(VKENCODERINFO::filename) / sizeof(wchar_t), "File name too long.");
     ASSERT_RUNTIME(inputChannels == 1 || inputChannels == 2 || inputChannels == 6,
@@ -122,7 +49,7 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
     Microsoft::WRL::ComPtr<IVoukoder> m_pVoukoder = nullptr;
 
     REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
-                             (void**)m_pVoukoder.GetAddressOf()),
+                             reinterpret_cast<void**>(m_pVoukoder.GetAddressOf())),
             "Failed to create an instance of IVoukoder interface.");
 
     REQUIRE(m_pVoukoder->SetConfig(config), "Failed to set Voukoder config");
@@ -160,9 +87,9 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         this->exrOutputPath = utf8_encode(inFilename) + ".OpenEXR";
         std::filesystem::create_directories(this->exrOutputPath);
     }
-    // std::copy(inFilename.begin(), inFilename.end(), vkInfo.inFilename);
 
     REQUIRE(m_pVoukoder->Open(vkInfo), "Failed to open Voukoder context.");
+    LOG(LL_NFO, "Voukoder context opened.");
 
     videoFrame = {
         .buffer = new byte*[1], // We'll set this in writeVideoFrame() function
@@ -172,7 +99,6 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         .height = static_cast<int>(inHeight),
         .pass = 1,
     };
-    // std::copy(inputPixelFmt.begin(), inputPixelFmt.end(), &videoFrame.format);
     inputPixelFmt.copy(videoFrame.format, std::size(videoFrame.format));
 
     audioChunk = {
@@ -184,12 +110,8 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         .layout = vkInfo.audio.channellayout,
     };
     inputSampleFormat.copy(audioChunk.format, std::size(audioChunk.format));
-    // std::copy(inputSampleFormat.begin(), inputSampleFormat.end(), &audioChunk.format);
 
     pVoukoder = std::move(m_pVoukoder);
-
-    // this->thread_video_encoder = std::thread(&Session::videoEncodingThread, this);
-    // this->thread_exr_encoder = std::thread(&Session::exrEncodingThread, this);
 
     this->isCapturing = true;
 
@@ -226,8 +148,6 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
                 "Failed to map stencil texture");
     }
 
-    // this->exrImageQueue.enqueue(exr_queue_item(cRGB, mHDR.pData, cDepth, mDepth.pData, cStencil, mStencil));
-
     struct RGBA {
         half R;
         half G;
@@ -242,11 +162,11 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
     Imf::Header header(this->width, this->height);
     Imf::FrameBuffer framebuffer;
 
-    if (cRGB != nullptr) {
+    if (mHDR.pData != nullptr) {
         LOG_CALL(LL_DBG, header.channels().insert("R", Imf::Channel(Imf::HALF)));
         LOG_CALL(LL_DBG, header.channels().insert("G", Imf::Channel(Imf::HALF)));
         LOG_CALL(LL_DBG, header.channels().insert("B", Imf::Channel(Imf::HALF)));
-        LOG_CALL(LL_DBG, header.channels().insert("SSS", Imf::Channel(Imf::HALF)));
+        LOG_CALL(LL_DBG, header.channels().insert("SubsurfaceScatter", Imf::Channel(Imf::HALF)));
         const auto mHDRArray = static_cast<RGBA*>(mHDR.pData);
 
         LOG_CALL(LL_DBG, framebuffer.insert("R", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].R),
@@ -258,13 +178,12 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
         LOG_CALL(LL_DBG, framebuffer.insert("B", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].B),
                                                             sizeof(RGBA), sizeof(RGBA) * this->width)));
 
-        LOG_CALL(LL_DBG, framebuffer.insert("SSS", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].A),
+        LOG_CALL(LL_DBG, framebuffer.insert("SubsurfaceScatter", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].A),
                                                               sizeof(RGBA), sizeof(RGBA) * this->width)));
     }
 
-    if (cDepth != nullptr) {
+    if (mDepth.pData != nullptr) {
         LOG_CALL(LL_DBG, header.channels().insert("depth.Z", Imf::Channel(Imf::FLOAT)));
-        // header.channels().insert("objectID", Imf::Channel(Imf::UINT));
         const auto mDSArray = static_cast<Depth*>(mDepth.pData);
 
         LOG_CALL(LL_DBG,
@@ -273,10 +192,10 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
     }
 
     std::vector<uint32_t> stencilBuffer;
-    if (cStencil != nullptr) {
+    if (mStencil.pData != nullptr) {
         stencilBuffer =
             std::vector<uint32_t>(static_cast<size_t>(mStencil.RowPitch) * static_cast<size_t>(this->height));
-        auto mSArray = static_cast<uint8_t*>(mStencil.pData);
+        const auto mSArray = static_cast<uint8_t*>(mStencil.pData);
 
         for (uint32_t i = 0; i < mStencil.RowPitch * this->height; i++) {
             stencilBuffer[i] = static_cast<uint32_t>(mSArray[i]);
@@ -290,14 +209,24 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
                                                sizeof(uint32_t), static_cast<size_t>(mStencil.RowPitch) * size_t{4})));
     }
 
-    // if (CreateDirectoryA(this->exrOutputPath.c_str(), nullptr) || ERROR_ALREADY_EXISTS == GetLastError()) {
-
     std::stringstream sstream;
     sstream << std::setw(5) << std::setfill('0') << this->exrPTS++;
     Imf::OutputFile file((this->exrOutputPath + "\\frame." + sstream.str() + ".exr").c_str(), header);
     LOG_CALL(LL_DBG, file.setFrameBuffer(framebuffer));
     LOG_CALL(LL_DBG, file.writePixels(this->height));
     //}
+
+    if (cRGB) {
+        LOG_CALL(LL_DBG, pDeviceContext->Unmap(cRGB.Get(), 0));
+    }
+
+    if (cDepth) {
+        LOG_CALL(LL_DBG, pDeviceContext->Unmap(cDepth.Get(), 0));
+    }
+
+    if (cStencil) {
+        LOG_CALL(LL_DBG, pDeviceContext->Unmap(cStencil.Get(), 0));
+    }
 
     POST();
     return S_OK;
@@ -316,83 +245,9 @@ HRESULT Session::enqueueVideoFrame(const D3D11_MAPPED_SUBRESOURCE& subresource) 
                                   subresource.RowPitch, this->videoPTS++),
             "Failed to write video frame.");
 
-    // const frameQueueItem item(subresource);
-    // this->videoFrameQueue.enqueue(item);
     POST();
     return S_OK;
 }
-
-// void Session::videoEncodingThread() {
-//     PRE();
-//     std::lock_guard lock(this->mxEncodingThread);
-//     try {
-//         int16_t k = 0;
-//         bool firstFrame = true;
-//         frameQueueItem item = this->videoFrameQueue.dequeue();
-//         while (item.subresource != nullptr) {
-//             auto& data = *(item.subresource);
-//             // if (this->motionBlurSamples == 0) {
-//             LOG(LL_NFO, "Encoding frame: ", this->videoPTS);
-//             REQUIRE(this->writeVideoFrame(static_cast<BYTE*>(data.pData),
-//                                           static_cast<int32_t>(item.subresource->DepthPitch),
-//                                           item.subresource->RowPitch, this->videoPTS++),
-//                     "Failed to write video frame.");
-//             //} else {
-//             //    const auto frameRemainder =
-//             //        static_cast<uint8_t>(this->motionBlurPTS++ % (static_cast<uint64_t>(this->motionBlurSamples) +
-//             //        1));
-//             //    const float currentShutterPosition =
-//             //        static_cast<float>(frameRemainder) / static_cast<float>(this->motionBlurSamples + 1);
-//             //    std::ranges::copy(data, std::begin(this->motionBlurTempBuffer));
-//             //    if (frameRemainder == this->motionBlurSamples) {
-//             //        // Flush motion blur buffer
-//             //        this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-//             //        this->motionBlurAccBuffer /= ++k;
-//             //        std::ranges::copy(this->motionBlurAccBuffer, std::begin(this->motionBlurDestBuffer));
-//             //        REQUIRE(this->writeVideoFrame(std::begin(this->motionBlurDestBuffer),
-//             //                                      this->motionBlurDestBuffer.size(), item.rowPitch,
-//             this->videoPTS++),
-//             //                "Failed to write video frame.");
-//             //        k = 0;
-//             //        firstFrame = true;
-//             //    } else if (currentShutterPosition >= this->shutterPosition) {
-//             //        if (firstFrame) {
-//             //            // Reset accumulation buffer
-//             //            this->motionBlurAccBuffer = this->motionBlurTempBuffer;
-//             //            firstFrame = false;
-//             //        } else {
-//             //            this->motionBlurAccBuffer += this->motionBlurTempBuffer;
-//             //        }
-//             //        k++;
-//             //    }
-//             //}
-//             item = this->videoFrameQueue.dequeue();
-//         }
-//     } catch (...) {
-//         // Do nothing
-//     }
-//     this->isEncodingThreadFinished = true;
-//     this->cvEncodingThreadFinished.notify_all();
-//     POST();
-// }
-
-// void Session::exrEncodingThread() {
-//     PRE();
-//     std::lock_guard<std::mutex> lock(this->mxEXREncodingThread);
-//     Imf::setGlobalThreadCount(8);
-//     try {
-//         exr_queue_item item = this->exrImageQueue.dequeue();
-//         while (!item.isEndOfStream) {
-//
-//             item = this->exrImageQueue.dequeue();
-//         }
-//     } catch (std::exception& ex) {
-//         LOG(LL_ERR, ex.what());
-//     }
-//     this->isEXREncodingThreadFinished = true;
-//     this->cvEXREncodingThreadFinished.notify_all();
-//     POST();
-// }
 
 HRESULT Session::writeVideoFrame(BYTE* pData, const int32_t length, const int rowPitch, const LONGLONG sampleTime) {
     PRE();
@@ -400,14 +255,6 @@ HRESULT Session::writeVideoFrame(BYTE* pData, const int32_t length, const int ro
         POST();
         return E_FAIL;
     }
-
-    // Wait until format context is created
-    // if (pVoukoder == nullptr) {
-    //    std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
-    //    while (pVoukoder == nullptr) {
-    //        this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
-    //    }
-    //}
 
     videoFrame.buffer[0] = pData;
     videoFrame.rowsize[0] = rowPitch;
@@ -421,23 +268,10 @@ HRESULT Session::writeVideoFrame(BYTE* pData, const int32_t length, const int ro
 HRESULT Session::writeAudioFrame(BYTE* pData, const int32_t length, LONGLONG sampleTime) {
     PRE();
 
-    /*if (!this->audioCodecContext) {
-        POST();
-        return S_OK;
-    }*/
-
     if (this->isBeingDeleted) {
         POST();
         return E_FAIL;
     }
-
-    // Wait until format context is created
-    // if (pVoukoder == nullptr) {
-    //    std::unique_lock<std::mutex> lk(this->mxVoukoderContext);
-    //    while (pVoukoder == nullptr) {
-    //        this->cvVoukoderContext.wait_for(lk, std::chrono::milliseconds(5));
-    //    }
-    //}
 
     audioChunk.buffer[0] = pData;
     audioChunk.samples = length;
@@ -453,19 +287,6 @@ HRESULT Session::finishVideo() {
     std::lock_guard<std::mutex> guard(this->mxFinish);
 
     if (!this->isVideoFinished) {
-        // Wait until the video encoding thread is finished.
-        // if (thread_video_encoder.joinable()) {
-        //    // Write end of the stream object with a nullptr
-        //    this->videoFrameQueue.enqueue(frameQueueItem(nullptr));
-        //    std::unique_lock<std::mutex> lock(this->mxEncodingThread);
-        //    while (!this->isEncodingThreadFinished) {
-        //        this->cvEncodingThreadFinished.wait(lock);
-        //    }
-
-        //    thread_video_encoder.join();
-        //}
-
-        // Wait until the exr encoding thread is finished
         if (thread_exr_encoder.joinable()) {
             // Write end of the stream object with a nullptr
             this->exrImageQueue.enqueue(exr_queue_item());
@@ -476,29 +297,6 @@ HRESULT Session::finishVideo() {
 
             thread_exr_encoder.join();
         }
-
-        // Write delayed frames
-        //{
-        //    AVPacket pkt;
-
-        //    av_init_packet(&pkt);
-        //    pkt.data = nullptr;
-        //    pkt.size = 0;
-
-        //    // int got_packet;
-        //    // avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
-        //    avcodec_send_frame(this->videoCodecContext, nullptr);
-        //    while (SUCCEEDED(avcodec_receive_packet(this->videoCodecContext, &pkt))) {
-        //        std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-        //        av_packet_rescale_ts(&pkt, this->videoCodecContext->time_base, this->videoStream->time_base);
-        //        // pkt.dts = outputFrame->pts;
-        //        pkt.stream_index = this->videoStream->index;
-        //        av_interleaved_write_frame(this->fmtContext, &pkt);
-        //        // avcodec_encode_video2(this->videoCodecContext, &pkt, NULL, &got_packet);
-        //    }
-
-        //    av_packet_unref(&pkt);
-        //}
 
         delete videoFrame.buffer;
         videoFrame.buffer = nullptr;
@@ -515,36 +313,7 @@ HRESULT Session::finishVideo() {
 HRESULT Session::finishAudio() {
     PRE();
     std::lock_guard<std::mutex> guard(this->mxFinish);
-    /*if (!(this->isAudioFinished || this->isBeingDeleted)) {
-        this->isAudioFinished = true;
-        POST();
-        return S_OK;
-    }*/
 
-    // Write delayed frames
-    //{
-
-    //    LOG(LL_WRN, "FIXME: Audio samples discarded:", av_audio_fifo_size(this->audioSampleBuffer));
-
-    //    // AVPacket pkt;
-
-    //    // av_init_packet(&pkt);
-    //    // pkt.data = NULL;
-    //    // pkt.size = 0;
-
-    //    // int got_packet;
-    //    // avcodec_encode_audio2(this->audioCodecContext, &pkt, NULL, &got_packet);
-    //    // while (got_packet != 0) {
-    //    //	std::lock_guard<std::mutex> guard(this->mxWriteFrame);
-    //    //	//av_packet_rescale_ts(&pkt, this->audioCodecContext->time_base, this->audioStream->time_base);
-    //    //	pkt.stream_index = this->audioStream->index;
-    //    //	av_interleaved_write_frame(this->fmtContext, &pkt);
-    //    //	avcodec_encode_audio2(this->audioCodecContext, &pkt, NULL, &got_packet);
-    //    //}
-
-    //    // av_free_packet(&pkt);
-    //    // av_packet_unref(&pkt);
-    //}
     if (!this->isAudioFinished) {
         delete this->audioChunk.buffer;
         this->audioChunk.buffer = nullptr;
@@ -563,8 +332,6 @@ HRESULT Session::endSession() {
         POST();
         return S_OK;
     }
-
-    // this->videoFrameQueue.enqueue(Encoder::Session::frameQueueItem(nullptr, -1));
 
     while (true) {
         std::lock_guard<std::mutex> guard(this->mxFinish);
@@ -585,79 +352,4 @@ HRESULT Session::endSession() {
     POST();
     return S_OK;
 }
-
-// HRESULT Session::createVideoFrames(const int32_t srcWidth, const int32_t srcHeight, const AVPixelFormat srcFmt,
-//                                   const int32_t dstWidth, const int32_t dstHeight, const AVPixelFormat dstFmt) {
-//    PRE();
-//    if (this->isBeingDeleted) {
-//        POST();
-//        return E_FAIL;
-//    }
-//    // this->inputFrame = av_frame_alloc();
-//    // RET_IF_NULL(this->inputFrame, "Could not allocate video frame", E_FAIL);
-//    // this->inputFrame->format = srcFmt;
-//    // this->inputFrame->width = srcWidth;
-//    // this->inputFrame->height = srcHeight;
-//
-//    // this->outputFrame = av_frame_alloc();
-//    // RET_IF_NULL(this->outputFrame, "Could not allocate video frame", E_FAIL);
-//    // this->outputFrame->format = dstFmt;
-//    // this->outputFrame->width = dstWidth;
-//    // this->outputFrame->height = dstHeight;
-//    // av_frame_get_buffer(this->outputFrame, 1);
-//    // av_image_alloc(outputFrame->data, outputFrame->linesize, dstWidth, dstHeight, dstFmt, 1);
-//    // av_alloc_buff
-//
-//    this->pSwsContext =
-//        sws_getContext(srcWidth, srcHeight, srcFmt, dstWidth, dstHeight, dstFmt, SWS_POINT, nullptr, nullptr,
-//        nullptr);
-//    POST();
-//    return S_OK;
-//}
-
-// HRESULT Session::createAudioFrames(const int32_t inputChannels, const AVSampleFormat inputSampleFmt,
-//                                   const int32_t inputSampleRate, const int32_t outputChannels,
-//                                   const AVSampleFormat outputSampleFmt, const int32_t outputSampleRate) {
-//    PRE();
-//    if (this->isBeingDeleted) {
-//        POST();
-//        return E_FAIL;
-//    }
-//    this->inputAudioFrame = av_frame_alloc();
-//    RET_IF_NULL(inputAudioFrame, "Could not allocate input audio frame", E_FAIL);
-//    inputAudioFrame->format = inputSampleFmt;
-//    inputAudioFrame->sample_rate = inputSampleRate;
-//    inputAudioFrame->channels = inputChannels;
-//    inputAudioFrame->channel_layout = AV_CH_LAYOUT_STEREO;
-//
-//    this->outputAudioFrame = av_frame_alloc();
-//    RET_IF_NULL(inputAudioFrame, "Could not allocate output audio frame", E_FAIL);
-//    outputAudioFrame->format = outputSampleFmt;
-//    outputAudioFrame->sample_rate = outputSampleRate;
-//    outputAudioFrame->channels = outputChannels;
-//    outputAudioFrame->channel_layout = AV_CH_LAYOUT_STEREO;
-//
-//    this->audioSampleBuffer =
-//        av_audio_fifo_alloc(outputSampleFmt, outputChannels,
-//                            (this->audioCodecContext->frame_size ? this->audioCodecContext->frame_size : 256) * 4);
-//
-//    this->pSwrContext = swr_alloc_set_opts(nullptr, AV_CH_LAYOUT_STEREO, outputSampleFmt, outputSampleRate,
-//                                           AV_CH_LAYOUT_STEREO, inputSampleFmt, inputSampleRate, AV_LOG_TRACE,
-//                                           nullptr);
-//
-//    // std::stringstream cutoff;
-//    // cutoff << std::fixed << std::setprecision(5) << 4.0f * 48000.0f / inputSampleRate;
-//
-//    // LOG(LL_DBG, cutoff.str());
-//    // av_opt_set(this->pSwrContext, "cutoff", cutoff.str().c_str(), 0);
-//    /*av_opt_set(this->pSwrContext, "filter_type", "kaiser", 0);
-//    av_opt_set(this->pSwrContext, "dither_method", "high_shibata", 0);*/
-//    // av_opt_set(this->pSwrContext, "filter_size", "128", 0);
-//
-//    RET_IF_NULL(this->pSwrContext, "Could not allocate audio resampling context", E_FAIL);
-//    RET_IF_FAILED_AV(swr_init(pSwrContext), "Could not initialize audio resampling context", E_FAIL);
-//
-//    POST();
-//    return S_OK;
-//}
 } // namespace Encoder

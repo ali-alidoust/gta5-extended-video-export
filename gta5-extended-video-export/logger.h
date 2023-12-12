@@ -1,6 +1,7 @@
 // ReSharper disable CppClangTidyCppcoreguidelinesMacroUsage
 #pragma once
 
+#define NOMINMAX
 #include <Windows.h>
 #include <exception>
 #include <fstream>
@@ -207,3 +208,14 @@ class Logger {
         }                                                                                                              \
     }                                                                                                                  \
     REQUIRE_SEMICOLON
+
+#define TRY(o)                                                                                                         \
+    [&] {                                                                                                              \
+        try {                                                                                                          \
+            o();                                                                                                       \
+            return S_OK;                                                                                               \
+        } catch (std::exception & ex) {                                                                                \
+            LOG(LL_ERR, ex.what());                                                                                    \
+            return E_FAIL;                                                                                             \
+        }                                                                                                              \
+    }()

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SafeQueue.h"
+#define NOMINMAX
 #include <Windows.h>
 #include <d3d11.h>
 #include <dxgi.h>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "yara-patterns.h"
+#define NOMINMAX
 #include <Windows.h>
 #include <Psapi.h>
 #include <map>
