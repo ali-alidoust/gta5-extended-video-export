@@ -121,8 +121,7 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
 
 HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContext>& pDeviceContext,
                                  const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cRGB,
-                                 const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cDepth,
-                                 const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cStencil) {
+                                 const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cDepth) {
     PRE();
 
     if (this->isBeingDeleted) {
@@ -141,11 +140,6 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
     if (cDepth) {
         REQUIRE(pDeviceContext->Map(cDepth.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mDepth),
                 "Failed to map depth texture");
-    }
-
-    if (cStencil) {
-        REQUIRE(pDeviceContext->Map(cStencil.Get(), 0, D3D11_MAP::D3D11_MAP_READ, 0, &mStencil),
-                "Failed to map stencil texture");
     }
 
     struct RGBA {
@@ -191,24 +185,6 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
                                                           sizeof(Depth), sizeof(Depth) * this->width)));
     }
 
-    std::vector<uint32_t> stencilBuffer;
-    if (mStencil.pData != nullptr) {
-        stencilBuffer =
-            std::vector<uint32_t>(static_cast<size_t>(mStencil.RowPitch) * static_cast<size_t>(this->height));
-        const auto mSArray = static_cast<uint8_t*>(mStencil.pData);
-
-        for (uint32_t i = 0; i < mStencil.RowPitch * this->height; i++) {
-            stencilBuffer[i] = static_cast<uint32_t>(mSArray[i]);
-        }
-
-        LOG_CALL(LL_DBG, header.channels().insert("objectID", Imf::Channel(Imf::UINT)));
-
-        LOG_CALL(LL_DBG,
-                 framebuffer.insert("objectID",
-                                    Imf::Slice(Imf::UINT, reinterpret_cast<char*>(stencilBuffer.data()),
-                                               sizeof(uint32_t), static_cast<size_t>(mStencil.RowPitch) * size_t{4})));
-    }
-
     std::stringstream sstream;
     sstream << std::setw(5) << std::setfill('0') << this->exrPTS++;
     Imf::OutputFile file((this->exrOutputPath + "\\frame." + sstream.str() + ".exr").c_str(), header);
@@ -222,10 +198,6 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
 
     if (cDepth) {
         LOG_CALL(LL_DBG, pDeviceContext->Unmap(cDepth.Get(), 0));
-    }
-
-    if (cStencil) {
-        LOG_CALL(LL_DBG, pDeviceContext->Unmap(cStencil.Get(), 0));
     }
 
     POST();

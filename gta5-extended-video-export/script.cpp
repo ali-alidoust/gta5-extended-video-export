@@ -51,8 +51,7 @@ ComPtr<IDXGISwapChain> mainSwapChain;
 
 ComPtr<IDXGIFactory> pDXGIFactory;
 
-std::queue<std::packaged_task<void()>> asyncQueue;
-std::mutex mxAsyncQueue;
+std::mutex mxOnPresent;
 
 ComPtr<ID3D11DeviceContext> pDContext;
 
@@ -87,26 +86,13 @@ struct ExportContext {
         POST();
     }
 
-    float audioSkipCounter = 0;
-    float audioSkip = 0;
-
     bool isAudioExportDisabled = false;
-
-    bool captureRenderTargetViewReference = false;
-    bool captureDepthStencilViewReference = false;
 
     ComPtr<ID3D11Texture2D> pExportRenderTarget;
     ComPtr<ID3D11DeviceContext> pDeviceContext;
     ComPtr<ID3D11Device> pDevice;
     ComPtr<IDXGIFactory> pDXGIFactory;
     ComPtr<IDXGISwapChain> pSwapChain;
-
-    float far_clip = 0;
-    float near_clip = 0;
-
-    std::shared_ptr<DirectX::ScratchImage> capturedImage = std::make_shared<DirectX::ScratchImage>();
-
-    UINT pts = 0;
 
     ComPtr<IMFMediaType> videoMediaType;
 
@@ -121,6 +107,9 @@ std::shared_ptr<YaraHelper> pYaraHelper;
 } // namespace
 
 void onPresent(IDXGISwapChain* swapChain) {
+
+    // For some unknown reason, we need this lock to prevent black exports
+    std::lock_guard<std::mutex> asyncQueueLock(mxOnPresent);
     mainSwapChain = swapChain;
     static bool initialized = false;
     if (!initialized) {
@@ -163,24 +152,13 @@ void onPresent(IDXGISwapChain* swapChain) {
             LOG(LL_ERR, ex.what());
         }
     }
-
-    // Process Async Queue
-    {
-        std::lock_guard<std::mutex> asyncQueueLock(mxAsyncQueue);
-        while (!asyncQueue.empty()) {
-            if (auto& task = asyncQueue.front(); task.valid()) {
-                task();
-            }
-            asyncQueue.pop();
-        }
-    }
 }
 
 static HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
     if (!mainSwapChain) {
         onPresent(pThis);
     }
-    return IDXGISwapChainHooks::Present::OriginalFunc(pThis, SyncInterval, Flags);
+    return OriginalFunc(pThis, SyncInterval, Flags);
 }
 
 void initialize() {
@@ -201,10 +179,13 @@ void initialize() {
         uint64_t pGetRenderTimeBase = NULL;
         uint64_t pCreateTexture = NULL;
         uint64_t pCreateThread = NULL;
+        uint64_t pCreateExportContext = 0;
         pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function,
                               &pGetRenderTimeBase);
         pYaraHelper->addEntry("yara_create_thread_function", yara_create_thread_function, &pCreateThread);
         pYaraHelper->addEntry("yara_create_texture_function", yara_create_texture_function, &pCreateTexture);
+        // pYaraHelper->addEntry("yara_create_export_context_function", yara_create_export_context_function,
+        //&pCreateExportContext);
         pYaraHelper->performScan();
 
         try {
@@ -227,6 +208,12 @@ void initialize() {
             } else {
                 LOG(LL_ERR, "Could not find the address for CreateThread function.");
             }
+
+            // if (pCreateExportContext) {
+            //     PERFORM_X64_HOOK_REQUIRED(CreateExportContext, pCreateExportContext);
+            // } else {
+            //     LOG(LL_ERR, "Could not find the address for CreateExportContext function.");
+            // }
         } catch (std::exception& ex) {
             LOG(LL_ERR, ex.what());
         }
@@ -272,13 +259,6 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
         LOG_CALL(LL_TRC, ppRenderTargetViews[0]->GetResource(pRTVTexture.GetAddressOf()));
     }
 
-    // ComPtr<ID3D11RenderTargetView> pOldRTV;
-    // pThis->OMGetRenderTargets(1, pOldRTV.GetAddressOf(), NULL);
-    // ComPtr<ID3D11Resource> pOldRTVTexture;
-    // if (pOldRTV) {
-    //     LOG_CALL(LL_TRC, pOldRTV->GetResource(pOldRTVTexture.GetAddressOf()));
-    // }
-
     if (::exportContext != nullptr && ::exportContext->pExportRenderTarget != nullptr &&
         (::exportContext->pExportRenderTarget == pRTVTexture)) {
 
@@ -289,7 +269,6 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
 
             ComPtr<ID3D11Texture2D> pDepthBufferCopy = nullptr;
             ComPtr<ID3D11Texture2D> pBackBufferCopy = nullptr;
-            ComPtr<ID3D11Texture2D> pStencilBufferCopy = nullptr;
 
             if (config::export_openexr) {
                 TRY([&] {
@@ -321,25 +300,9 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                         pThis->CopyResource(pBackBufferCopy.Get(), pGameBackBufferResolved.Get());
                     }
                     {
-                        D3D11_TEXTURE2D_DESC desc;
-                        pStencilTexture->GetDesc(&desc);
-                        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-                        desc.BindFlags = 0;
-                        desc.MiscFlags = 0;
-                        desc.Usage = D3D11_USAGE::D3D11_USAGE_STAGING;
-
-                        REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pStencilBufferCopy.GetAddressOf()),
-                                "Failed to create stencil buffer copy");
-
-                        //pThis->ResolveSubresource(pStencilBufferCopy.Get(), 0, pGameDepthBuffer.Get(), 0,
-                        //                          DXGI_FORMAT::DXGI_FORMAT_R32G8X24_TYPELESS);
-                        pThis->CopyResource(pStencilBufferCopy.Get(), pGameEdgeCopy.Get());
-                    }
-                    {
                         std::lock_guard<std::mutex> sessionLock(mxSession);
                         if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
-                            encodingSession->enqueueEXRImage(pThis, pBackBufferCopy, pDepthBufferCopy,
-                                                             pStencilBufferCopy);
+                            encodingSession->enqueueEXRImage(pThis, pBackBufferCopy, pDepthBufferCopy);
                         }
                     }
                 });
@@ -350,57 +313,17 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                                                            (void**)pSwapChainBuffer.GetAddressOf()),
                     "Failed to get swap chain's buffer");
 
-            // IDXGISwapChainHooks::Present::OriginalFunc(::exportContext->pSwapChain.Get(), 0, 0);
-            // float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-            //::exportContext->pDeviceContext->ClearRenderTargetView((ID3D11RenderTargetView*)pSwapChainBuffer.Get(),
-            //                                                       color);
             LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
                                                                           // effects to be applied to the render target
-            // LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
-            //                      0, 0)); // IMPORTANT: This call makes ENB and ReShade effects to be
-            //  applied to the render target
-            // LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(
-            //                      0, 0)); // IMPORTANT: This call makes ENB and ReShade effects to be
-            //                                              // applied to the render target
 
-            // BEGIN CPU
-            // auto& image_ref = *(::exportContext->capturedImage);
-            // LOG_CALL(LL_DBG,
-            //         DirectX::CaptureTexture(::exportContext->pDevice.Get(), ::exportContext->pDeviceContext.Get(),
-            //                                 pSwapChainBuffer.Get(), image_ref));
-            // if (::exportContext->capturedImage->GetImageCount() == 0) {
-            //    LOG(LL_ERR, "There is no image to capture.");
-            //    throw std::exception();
-            //}
-            // const DirectX::Image* image = ::exportContext->capturedImage->GetImage(0, 0, 0);
-            // NOT_NULL(image, "Could not get current frame.");
-            // NOT_NULL(image->pixels, "Could not get current frame.");
-            // END CPU
-            float current_shutter_position = FLT_MAX;
             if (config::motion_blur_samples != 0) {
-                current_shutter_position = (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
-                                           (float)config::motion_blur_samples;
+                const float current_shutter_position =
+                    (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
+                    (float)(config::motion_blur_samples);
+
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
                     drawAdditive(pDevice, pThis, pSwapChainBuffer);
                 }
-                // D3D11_MAPPED_SUBRESOURCE mapped;
-
-                // LOG_CALL(LL_DBG, pDContext->CopyResource(pSwapBufferCopy.Get(), pSwapChainBuffer.Get()));
-                // REQUIRE(pThis->Map(pSwapBufferCopy.Get(), 0, D3D11_MAP_READ, 0, &mapped),
-                //         "Failed to capture swapbuffer.");
-
-                //{
-                //    std::lock_guard<std::mutex> sessionLock(mxSession);
-                //    if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
-                //        // CPU
-                //        // REQUIRE(encodingSession->enqueueVideoFrame(image->pixels, image->rowPitch,
-                //        // image->slicePitch),
-                //        //        "Failed to enqueue frame.");
-                //        REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
-                //    }
-                //}
-
-                // pThis->Unmap(pSwapBufferCopy.Get(), 0);
             } else {
                 // Trick to use the same buffers for when not using motion blur
                 ::exportContext->accCount = 0;
@@ -417,22 +340,17 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                 D3D11_MAPPED_SUBRESOURCE mapped;
 
                 REQUIRE(pThis->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped), "Failed to capture swapbuffer.");
-
                 {
-                    std::lock_guard<std::mutex> sessionLock(mxSession);
+                    std::lock_guard sessionLock(mxSession);
                     if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
                         REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
                     }
                 }
-
                 pThis->Unmap(result.Get(), 0);
             }
             ::exportContext->totalFrameNum++;
-
-            //::exportContext->capturedImage->Release();
         } catch (std::exception&) {
             LOG(LL_ERR, "Reading video frame from D3D Device failed.");
-            //::exportContext->capturedImage->Release();
             LOG_CALL(LL_DBG, encodingSession.reset());
             LOG_CALL(LL_DBG, ::exportContext.reset());
         }
@@ -446,24 +364,13 @@ static HRESULT ImportHooks::MFCreateSinkWriterFromURL::Implementation(LPCWSTR pw
                                                                       IMFAttributes* pAttributes,
                                                                       IMFSinkWriter** ppSinkWriter) {
     PRE();
-    HRESULT result =
-        ImportHooks::MFCreateSinkWriterFromURL::OriginalFunc(pwszOutputURL, pByteStream, pAttributes, ppSinkWriter);
+    const HRESULT result = OriginalFunc(pwszOutputURL, pByteStream, pAttributes, ppSinkWriter);
     if (SUCCEEDED(result)) {
         try {
             PERFORM_MEMBER_HOOK_REQUIRED(IMFSinkWriter, AddStream, *ppSinkWriter);
             PERFORM_MEMBER_HOOK_REQUIRED(IMFSinkWriter, SetInputMediaType, *ppSinkWriter);
             PERFORM_MEMBER_HOOK_REQUIRED(IMFSinkWriter, WriteSample, *ppSinkWriter);
             PERFORM_MEMBER_HOOK_REQUIRED(IMFSinkWriter, Finalize, *ppSinkWriter);
-            /*REQUIRE(hookVirtualFunction(*ppSinkWriter, 3, &Hook_IMFSinkWriter_AddStream,
-            &oIMFSinkWriter_AddStream, hkIMFSinkWriter_AddStream), "Failed to hook IMFSinkWriter::AddStream");
-            REQUIRE(hookVirtualFunction(*ppSinkWriter, 4, &IMFSinkWriter_SetInputMediaType,
-                                        &oIMFSinkWriter_SetInputMediaType, hkIMFSinkWriter_SetInputMediaType),
-                    "Failed to hook IMFSinkWriter::SetInputMediaType");
-            REQUIRE(hookVirtualFunction(*ppSinkWriter, 6, &Hook_IMFSinkWriter_WriteSample,
-            &oIMFSinkWriter_WriteSample, hkIMFSinkWriter_WriteSample), "Failed to hook IMFSinkWriter::WriteSample");
-            REQUIRE(hookVirtualFunction(*ppSinkWriter, 11, &Hook_IMFSinkWriter_Finalize, &oIMFSinkWriter_Finalize,
-                                        hkIMFSinkWriter_Finalize),
-                    "Failed to hook IMFSinkWriter::Finalize");*/
         } catch (...) {
             LOG(LL_ERR, "Hooking IMFSinkWriter functions failed");
         }
@@ -477,7 +384,7 @@ static HRESULT IMFSinkWriterHooks::AddStream::Implementation(IMFSinkWriter* pThi
     PRE();
     LOG(LL_NFO, "IMFSinkWriter::AddStream: ", GetMediaTypeDescription(pTargetMediaType).c_str());
     POST();
-    return IMFSinkWriterHooks::AddStream::OriginalFunc(pThis, pTargetMediaType, pdwStreamIndex);
+    return OriginalFunc(pThis, pTargetMediaType, pdwStreamIndex);
 }
 
 static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex,
@@ -510,16 +417,9 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                     if (gameFrameRate > 60.0f) {
                         LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
                         LOG(LL_NON, "Audio export will be disabled!!!");
-
-                        //::exportContext->audioSkip = gameFrameRate / 60;
-                        //::exportContext->audioSkipCounter = ::exportContext->audioSkip;
                         ::exportContext->isAudioExportDisabled = true;
                     }
                 }
-
-                // REQUIRE(session->createVideoContext(desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra",
-                // fps_num, fps_den, config::motion_blur_samples,  config::video_fmt, config::video_enc,
-                // config::video_cfg), "Failed to create video context");
 
                 UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
                 GUID subType;
@@ -529,13 +429,6 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 pInputMediaType->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sampleRate);
                 pInputMediaType->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, &bitsPerSample);
                 pInputMediaType->GetGUID(MF_MT_SUBTYPE, &subType);
-
-                /*if (IsEqualGUID(subType, MFAudioFormat_PCM)) {
-                        REQUIRE(session->createAudioContext(numChannels, sampleRate, bitsPerSample, "s16",
-                blockAlignment, config::audio_fmt, config::audio_enc, config::audio_cfg), "Failed to create audio
-                context."); } else { char buffer[64]; GUIDToString(subType, buffer, 64); LOG(LL_ERR, "Unsupported
-                input audio format: ", buffer); throw std::runtime_error("Unsupported input audio format");
-                }*/
 
                 char buffer[128];
                 std::string output_file = config::output_dir;
@@ -555,80 +448,19 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
 
                 LOG(LL_NFO, "Output file: ", filename);
 
-                /*IVoukoder* tmpVoukoder = nullptr;
-                REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
-                                         reinterpret_cast<void**>(&tmpVoukoder)),*/
-                //"Failed to create an instance of IVoukoder interface.");
-                // ComPtr<IVoukoder> pVoukoder = tmpVoukoder;
-                // tmpVoukoder = nullptr;
+                DXGI_SWAP_CHAIN_DESC desc;
+                ::exportContext->pSwapChain->GetDesc(&desc);
 
-                /*REQUIRE(tmpVoukoder->ShowVoukoderDialog(true, true, &isOK, nullptr, nullptr),
-                        "Failed to show Voukoder dialog.");*/
+                const auto exportWidth = desc.BufferDesc.Width;
+                const auto exportHeight = desc.BufferDesc.Height;
 
-                /*ASSERT_RUNTIME(isOK, "Exporting was cancelled.");*/
+                LOG(LL_DBG, "Export Resolution: ", exportWidth, "x", exportHeight);
 
-                // IVoukoder* pVoukoder = nullptr;
-                // VKENCODERCONFIG vkConfig{
-                //    .version = 1,
-                //    .video{.encoder{"libx264"},
-                //           .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
-                //                    "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
-                //                    "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
-                //                    "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
-                //           .filters{""},
-                //           .sidedata{""}},
-                //    .audio{.encoder{"aac"},                                          // @clang-format
-                //           .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
-                //           .filters{""},                                             // @clang-format
-                //           .sidedata{""}},
-                //    .format = {.container{"mp4"}, .faststart = true}};
-
-                // CreateActCtx()
-                // REQUIRE(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Failed to initialize COM.");
-                // REQUIRE(CoCreateInstance(CLSID_CoVoukoder, NULL, CLSCTX_INPROC_SERVER, IID_IVoukoder,
-                //                         reinterpret_cast<void**>(&pVoukoder)),
-                //"Failed to create an instance of IVoukoder interface.");
-                // ComPtr<IVoukoder> pVoukoder = tmpVoukoder;
-                // tmpVoukoder = nullptr;
-
-                // VKENCODERCONFIG vkConfig{
-                //     .version = 1,
-                //     .video{.encoder{"libx264"},
-                //            .options{"_pixelFormat=yuv420p|crf=17.000|opencl=1|preset=medium|rc=crf|"
-                //                     "x264-params=qpmax=22:aq-mode=2:aq-strength=0.700:rc-lookahead=180:"
-                //                     "keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct="
-                //                     "auto:me=umh:merange=32:subme=10:trellis=2:no-fast-pskip=1"},
-                //            .filters{""},
-                //            .sidedata{""}},
-                //     .audio{.encoder{"aac"},                                          // @clang-format
-                //            .options{"_sampleFormat=fltp|b=320000|profile=aac_main"}, // @clang-format
-                //            .filters{""},                                             // @clang-format
-                //            .sidedata{""}},
-                //     .format = {.container{"mp4"}, .faststart = true}};
-                //  REQUIRE(tmpVoukoder->GetConfig(&vkConfig),
-                //  "Failed to get config from
-                //  Voukoder."); tmpVoukoder->Release();
-                //
-                D3D11_TEXTURE2D_DESC desc;
-                ::pGameBackBuffer->GetDesc(&desc);
-
-                LOG(LL_DBG, "Export Resolution: ", desc.Width, "x", desc.Height);
-
-
-
-                REQUIRE(encodingSession->createContext(
-                            config::encoder_config, std::wstring(filename.begin(), filename.end()),
-                            desc.Width, desc.Height, "rgba", fps_num, fps_den, numChannels,
-                            sampleRate, "s16", blockAlignment, config::export_openexr),
+                REQUIRE(encodingSession->createContext(config::encoder_config,
+                                                       std::wstring(filename.begin(), filename.end()), exportWidth,
+                                                       exportHeight, "rgba", fps_num, fps_den, numChannels, sampleRate,
+                                                       "s16", blockAlignment, config::export_openexr),
                         "Failed to create encoding context.");
-
-                /*REQUIRE(encodingSession->createContext(
-                            config::container_format, filename.c_str(), exrOutputPath, config::format_cfg,
-                            desc.BufferDesc.Width, desc.BufferDesc.Height, "bgra", fps_num, fps_den,
-                            config::motion_blur_samples, 1 - config::motion_blur_strength, config::video_fmt,
-                            config::video_enc, config::video_cfg, numChannels, sampleRate, bitsPerSample, "s16",
-                            blockAlignment, config::audio_fmt, config::audio_enc, config::audio_cfg),
-                        "Failed to create encoding context.");*/
             } catch (std::exception& ex) {
                 LOG(LL_ERR, ex.what());
                 LOG_CALL(LL_DBG, encodingSession.reset());
@@ -639,8 +471,7 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
     }
 
     POST();
-    return IMFSinkWriterHooks::SetInputMediaType::OriginalFunc(pThis, dwStreamIndex, pInputMediaType,
-                                                               pEncodingParameters);
+    return OriginalFunc(pThis, dwStreamIndex, pInputMediaType, pEncodingParameters);
 }
 
 static HRESULT IMFSinkWriterHooks::WriteSample::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex,
@@ -671,14 +502,8 @@ static HRESULT IMFSinkWriterHooks::WriteSample::Implementation(IMFSinkWriter* pT
             LOG(LL_ERR, ex.what());
             LOG_CALL(LL_DBG, encodingSession.reset());
             LOG_CALL(LL_DBG, ::exportContext.reset());
-            /*if (pBuffer) {
-                pBuffer->Unlock();
-            }*/
         }
     }
-    /*if (!session) {
-            return E_FAIL;
-    }*/
     return S_OK;
 }
 
@@ -785,49 +610,15 @@ static void ID3D11DeviceContextHooks::DrawIndexed::Implementation(ID3D11DeviceCo
     }
 }
 
-// static void Detour_StepAudio(void* rcx) {
-//	if (::exportContext) {
-//		::exportContext->audioSkipCounter += 1.0f;
-//		if (::exportContext->audioSkipCounter >= ::exportContext->audioSkip) {
-//			oStepAudio(rcx);
-//		}
-//		while (::exportContext->audioSkipCounter >= ::exportContext->audioSkip) {
-//			::exportContext->audioSkipCounter -= ::exportContext->audioSkip;
-//		}
-//	} else {
-//		oStepAudio(rcx);
-//	}
-//	static int x = 0;
-//	if (x == 0) {
-//	}
-//	x = ++x % 2;
-//}
-
 static HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20,
                                                       int32_t rsp28, char* name) {
     PRE();
     void* result = GameHooks::CreateThread::OriginalFunc(pFunc, pParams, r8d, r9d, rsp20, rsp28, name);
     LOG(LL_TRC, "CreateThread:", " pFunc:", pFunc, " pParams:", pParams, " r8d:", Logger::hex(r8d, 4),
         " r9d:", Logger::hex(r9d, 4), " rsp20:", rsp20, " rsp28:", rsp28, " name:", name ? name : "<NULL>");
-
-    // if (name) {
-    //	if (std::string("RageAudioMixThread").compare(name) == 0) {
-    //		threadIdRageAudioMixThread = ::GetThreadId(result);
-    //	}
-    //}
-
     POST();
     return result;
 }
-
-// static float Detour_GetGameSpeedMultiplier(void* rcx) {
-//	float result = oGetGameSpeedMultiplier(rcx);
-//	//if (exportContext) {
-//		std::pair<int32_t, int32_t> fps = config::fps;
-//		result = 60.0f * (float)fps.second / ((float)fps.first * ((float)config::motion_blur_samples + 1));
-//	//}
-//	return result;
-//}
 
 static float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
     PRE();
@@ -840,27 +631,8 @@ static float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
     return result;
 }
 
-// static void Detour_WaitForSingleObject(void* rcx, int32_t edx) {
-//	oWaitForSingleObject(rcx, edx);
-//	while (threadIdRageAudioMixThread && (threadIdRageAudioMixThread == ::GetCurrentThreadId())) {
-//		static int x = 3;
-//		x++;
-//		x %= 4;
-//		ReleaseSemaphore(rcx, 1, NULL);
-//		oWaitForSingleObject(rcx, edx);
-//		if (x == 0) {
-//			break;
-//		}
-//		Sleep(0);
-//	}
-//}
-
-// static uint8_t Detour_AudioUnk01(void* rcx) {
-//	return 1;
-//}
-
-static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint32_t r8d, const uint32_t width,
-                                                      const uint32_t height, const uint32_t format, void* rsp30) {
+static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint32_t r8d, uint32_t width,
+                                                      uint32_t height, const uint32_t format, void* rsp30) {
     void* result = OriginalFunc(rcx, name, r8d, width, height, format, rsp30);
 
     const auto vresult = static_cast<void**>(result);
@@ -988,17 +760,6 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
 
             pGameBackBuffer->GetDesc(&desc);
 
-            // D3D11_TEXTURE2D_DESC swapBufferCopyDesc = desc;
-            // swapBufferCopyDesc.MiscFlags = 0;
-            // swapBufferCopyDesc.BindFlags = 0;
-            // swapBufferCopyDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-            // swapBufferCopyDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-            // swapBufferCopyDesc.Usage = D3D11_USAGE_STAGING;
-
-            // LOG_IF_FAILED(pDevice->CreateTexture2D(&swapBufferCopyDesc, NULL,
-            // pSwapBufferCopy.ReleaseAndGetAddressOf()),
-            //               "Failed to create swap buffer copy texture");
-
             D3D11_TEXTURE2D_DESC accBufDesc = desc;
             accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
             accBufDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -1073,8 +834,6 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
                                                             pSourceSRV.ReleaseAndGetAddressOf()),
                           "Failed to create backbuffer copy SRV.");
 
-            /*ComPtr<ID3D11DeviceContext> pDeviceContext;
-            pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());*/
         } else if ((std::strcmp("BackBuffer_Resolved", name) == 0) || (std::strcmp("BackBufferCopy", name) == 0)) {
             pGameBackBufferResolved = pTexture;
         } else if (std::strcmp("VideoEncode", name) == 0) {
@@ -1113,6 +872,14 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
     }
 
     return result;
+}
+
+static uint8_t GameHooks::CreateExportContext::Implementation(void* pContext, uint32_t width, uint32_t height,
+                                                              void* r9d) {
+    PRE();
+    LOG(LL_DBG, "CreateExportContext:", " pContext:", pContext, " width:", width, " height:", height, " r9d:", r9d);
+    POST();
+    return OriginalFunc(pContext, width, height, r9d);
 }
 
 static void prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext) {

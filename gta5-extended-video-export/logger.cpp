@@ -22,7 +22,6 @@ bool Logger::ensureStream() {
     if (this->filestream.is_open()) {
         return true;
     }
-    //MessageBox(nullptr, (exePath() + "\\EVE\\" TARGET_NAME ".log").c_str(), "Hello!!!", 0);
     this->filestream.open(exePath() + "\\EVE\\" TARGET_NAME ".log");
     if (this->filestream.is_open()) {
         std::lock_guard<std::mutex> guard(mtx);

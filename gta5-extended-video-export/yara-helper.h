@@ -7,18 +7,12 @@
 #include <map>
 #include <mutex>
 
-// extern "C" {
-//#include <yara\libyara.h>
-//#include <yara\rules.h>
-//#include <yara\compiler.h>
-//}
-
 class YaraHelper {
   public:
     void initialize();
     void performScan();
 
-    void addEntry(std::string name, std::string pattern, uint64_t *dest);
+    void addEntry(const std::string& name, std::string pattern, uint64_t *dest);
 
   private:
     struct entry {
@@ -35,7 +29,4 @@ class YaraHelper {
 
     HMODULE moduleHandle;
     MODULEINFO moduleInfo;
-    // std::mutex mxScan;
-    // std::condition_variable cvScan;
-    // bool isScanFinished = false;
 };

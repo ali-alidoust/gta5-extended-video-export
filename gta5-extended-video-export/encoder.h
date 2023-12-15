@@ -122,8 +122,7 @@ class Session {
     HRESULT enqueueVideoFrame(const D3D11_MAPPED_SUBRESOURCE& subresource);
     HRESULT enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContext>& pDeviceContext,
                             const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cRGB,
-                            const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cDepth,
-                            const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cStencil);
+                            const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cDepth);
 
     //void videoEncodingThread();
     //void exrEncodingThread();

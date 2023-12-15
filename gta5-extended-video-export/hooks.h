@@ -7,10 +7,10 @@
 #include "logger.h"
 
 // #include <polyhook2/ADisassembler.hpp>
-#include <polyhook2/ZydisDisassembler.hpp>
 #include <polyhook2/Detour/x64Detour.hpp>
 #include <polyhook2/PE/IatHook.hpp>
 #include <polyhook2/Virtuals/VFuncSwapHook.hpp>
+#include <polyhook2/ZydisDisassembler.hpp>
 
 #include <d3d11.h>
 
@@ -315,3 +315,9 @@ DEFINE_X64_HOOK(CreateThread, HANDLE, //
                 void* rsp20,          //
                 int32_t rsp28,        //
                 char* name);          //
+
+DEFINE_X64_HOOK(CreateExportContext, uint8_t, //
+                void* pContext,               //
+                uint32_t width,               //
+                uint32_t height,              //
+                void* r9d);                   //

@@ -3,7 +3,6 @@
 
 #define NOMINMAX
 #include <Windows.h>
-#include <exception>
 #include <fstream>
 #include <functional>
 #include <iomanip>
@@ -21,8 +20,8 @@ class Logger {
     template <class T> void writeLine(const T& value) {
         if (this->ensureStream()) {
             {
-                std::lock_guard<std::mutex> guard(mtx);
-                filestream << value << std::endl;
+                std::lock_guard guard(mtx);
+                filestream << value << "\n";
             }
         }
     }
@@ -30,7 +29,7 @@ class Logger {
     template <typename... Targs> void write(const Targs&... args) {
         if (this->ensureStream()) {
             {
-                std::lock_guard<std::mutex> guard(mtx);
+                std::lock_guard guard(mtx);
                 this->_write(args...);
             }
         }
@@ -61,7 +60,6 @@ class Logger {
   private:
     template <typename T, typename... Targs> void _write(const T& value, const Targs&... args) {
         if (this->ensureStream()) {
-            // std::lock_guard<std::mutex> guard(mtx);
             filestream << value;
             this->_write(args...);
         }
@@ -69,7 +67,6 @@ class Logger {
 
     template <typename T> void _write(const T& value) {
         if (this->ensureStream()) {
-            // std::lock_guard<std::mutex> guard(mtx);
             filestream << value;
         }
     }
@@ -91,7 +88,7 @@ class Logger {
     if (ll <= Logger::instance().level) {                                                                              \
         Logger::instance().write(Logger::instance().getTimestamp(), " ", Logger::instance().getLogLevelString(ll),     \
                                  " ", Logger::instance().getThreadId(), " ", __CUSTOM_FILENAME__, " (line ", __LINE__, \
-                                 "): ", __VA_ARGS__, std::endl<char, std::char_traits<char>>);                         \
+                                 "): ", __VA_ARGS__, "\n");                         \
     }                                                                                                                  \
     REQUIRE_SEMICOLON
 #endif // ! LOG // Logger::instance().write(__LINE__); Logger::instance().writeLine(x);

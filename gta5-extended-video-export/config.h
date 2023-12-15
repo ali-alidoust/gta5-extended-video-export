@@ -50,7 +50,6 @@ class config {
     static bool is_mod_enabled;
     static bool auto_reload_config;
     static bool export_openexr;
-    //	static std::pair<uint32_t, uint32_t>   resolution;
     static std::string output_dir;
     static LogLevel log_level;
     static std::pair<uint32_t, uint32_t> fps;
@@ -60,7 +59,6 @@ class config {
 
     static void reload() {
         config_parser = std::make_shared<INIReader>(exePath() + "\\" INI_FILE_NAME);
-        // preset_parser = std::make_shared<INIReader>(PRESET_FILE_NAME);
 
         is_mod_enabled = parse_lossless_export();
         auto_reload_config = parse_auto_reload_config();
@@ -156,13 +154,13 @@ class config {
     static std::shared_ptr<INIReader> preset_parser;
 
     static std::string getTrimmed(const std::shared_ptr<INIReader>& parser, const std::string& config_name) {
-        std::string orig_str = parser->GetString("", config_name, "");
+        const std::string orig_str = parser->GetString("", config_name, "");
         return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
     }
 
     static std::string getTrimmed(const std::shared_ptr<INIReader>& parser, const std::string& config_name,
                                   const std::string& section) {
-        std::string orig_str = parser->GetString(section, config_name, "");
+        const std::string orig_str = parser->GetString(section, config_name, "");
         return std::regex_replace(orig_str, std::regex("(^\\s*)|(\\s*$)"), "");
     }
 
@@ -172,7 +170,7 @@ class config {
         RET_IF_FAILED((SHGetKnownFolderPath(FOLDERID_Videos, 0, nullptr, &vidPath) != S_OK),
                       "Failed to get Videos directory for the current user.", E_FAIL);
 
-        int pathlen = lstrlenW(vidPath);
+        const int pathlen = lstrlenW(vidPath);
 
         int buflen = WideCharToMultiByte(CP_UTF8, 0, vidPath, pathlen, nullptr, 0, nullptr, nullptr);
         if (buflen <= 0) {
@@ -190,12 +188,12 @@ class config {
 
     static std::string toLower(const std::string& input) {
         std::string result = input;
-        std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+        std::ranges::transform(result, result.begin(), ::tolower);
         return result;
     }
 
     static bool stringToBoolean(std::string booleanString) {
-        std::transform(booleanString.begin(), booleanString.end(), booleanString.begin(), ::tolower);
+        std::ranges::transform(booleanString, booleanString.begin(), ::tolower);
 
         bool value;
         std::istringstream(booleanString) >> std::boolalpha >> value;
@@ -227,7 +225,7 @@ class config {
     }
 
     static bool parse_lossless_export() {
-        std::string string = config_parser->GetString("", CFG_ENABLE_XVX, "");
+        const std::string string = config_parser->GetString("", CFG_ENABLE_XVX, "");
 
         try {
             return succeeded(CFG_ENABLE_XVX, stringToBoolean(string));
@@ -239,7 +237,7 @@ class config {
     }
 
     static bool parse_auto_reload_config() {
-        std::string string = config_parser->GetString("", CFG_AUTO_RELOAD_CONFIG, "");
+        const std::string string = config_parser->GetString("", CFG_AUTO_RELOAD_CONFIG, "");
 
         try {
             return succeeded(CFG_AUTO_RELOAD_CONFIG,
@@ -252,7 +250,7 @@ class config {
     }
 
     static bool parse_export_openexr() {
-        std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_OPENEXR, "");
+        const std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_OPENEXR, "");
 
         try {
             return succeeded(CFG_EXPORT_OPENEXR, stringToBoolean(string));
@@ -282,7 +280,7 @@ class config {
     }
 
     static std::string parse_format_cfg() {
-        std::string string = getTrimmed(preset_parser, CFG_FORMAT_CFG, CFG_FORMAT_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_FORMAT_CFG, CFG_FORMAT_SECTION);
         try {
             return succeeded(CFG_FORMAT_CFG, string);
         } catch (std::exception& ex) {
@@ -293,7 +291,7 @@ class config {
     }
 
     static std::string parse_format_ext() {
-        std::string string = getTrimmed(preset_parser, CFG_FORMAT_EXT, CFG_FORMAT_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_FORMAT_EXT, CFG_FORMAT_SECTION);
         try {
             return succeeded(CFG_FORMAT_EXT, string);
         } catch (std::exception& ex) {
@@ -304,8 +302,7 @@ class config {
     }
 
     static std::string parse_video_enc() {
-        std::string string;
-        string = getTrimmed(preset_parser, CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_VIDEO_ENC, CFG_VIDEO_SECTION);
         try {
             if (!string.empty()) {
                 return succeeded(CFG_VIDEO_ENC, string);
@@ -320,7 +317,7 @@ class config {
     }
 
     static std::string parse_video_fmt() {
-        std::string string = getTrimmed(preset_parser, CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_VIDEO_FMT, CFG_VIDEO_SECTION);
         try {
             if (!string.empty()) {
                 return succeeded(CFG_VIDEO_FMT, string);
@@ -333,7 +330,7 @@ class config {
     }
 
     static std::string parse_video_cfg() {
-        std::string string = getTrimmed(preset_parser, CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_VIDEO_CFG, CFG_VIDEO_SECTION);
         try {
             if (!string.empty()) {
                 return succeeded(CFG_VIDEO_CFG, string);
@@ -346,7 +343,7 @@ class config {
     }
 
     static std::string parse_audio_enc() {
-        std::string string = getTrimmed(preset_parser, CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_AUDIO_ENC, CFG_AUDIO_SECTION);
         try {
             if (!string.empty()) {
                 return succeeded(CFG_AUDIO_ENC, string);
@@ -361,7 +358,7 @@ class config {
     }
 
     static std::string parse_audio_cfg() {
-        std::string string = getTrimmed(preset_parser, CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_AUDIO_CFG, CFG_AUDIO_SECTION);
         try {
             if (!string.empty()) {
                 return succeeded(CFG_AUDIO_CFG, string);
@@ -374,7 +371,7 @@ class config {
     }
 
     static std::string parse_audio_fmt() {
-        std::string string = getTrimmed(preset_parser, CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
+        const std::string string = getTrimmed(preset_parser, CFG_AUDIO_FMT, CFG_AUDIO_SECTION);
         try {
             if (!string.empty()) {
                 return succeeded(CFG_AUDIO_FMT, string);
@@ -387,7 +384,7 @@ class config {
     }
 
     static LogLevel parse_log_level() {
-        std::string string = toLower(getTrimmed(config_parser, CFG_LOG_LEVEL));
+        const std::string string = toLower(getTrimmed(config_parser, CFG_LOG_LEVEL));
         try {
             if (string == "error") {
                 return succeeded(CFG_LOG_LEVEL, LL_ERR);
@@ -409,22 +406,21 @@ class config {
 
     static uint8_t parse_motion_blur_samples() {
         std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_MB_SAMPLES, "");
-        ;
         string = std::regex_replace(string, std::regex("\\s+"), "");
         try {
-            uint64_t value = std::stoul(string);
+            const uint64_t value = std::stoul(string);
             if (value > 255) {
                 LOG(LL_NON, "Specified motion blur samples exceed 255");
                 LOG(LL_NON, "Using maximum value of 255");
                 return 255;
             } else {
-                return (uint8_t)succeeded(CFG_EXPORT_MB_SAMPLES, value);
+                return static_cast<uint8_t>(succeeded(CFG_EXPORT_MB_SAMPLES, value));
             }
         } catch (std::exception& ex) {
             LOG(LL_NON, ex.what());
         }
 
-        return failed(CFG_EXPORT_MB_SAMPLES, string, 0);
+        return failed(CFG_EXPORT_MB_SAMPLES, string, static_cast<uint8_t>(0));
     }
 
     static std::string parse_container_format() {
@@ -453,8 +449,8 @@ class config {
 
             match = std::smatch();
             if (std::regex_match(string, match, std::regex(R"(^\d+(\.\d+)?$)"))) {
-                float value = std::stof(string);
-                auto num = (int32_t)(value * 1000);
+                const float value = std::stof(string);
+                auto num = static_cast<int32_t>(value * 1000);
                 int32_t den = 1000;
                 return succeeded(CFG_EXPORT_FPS, std::make_pair(num, den));
             }
@@ -466,7 +462,7 @@ class config {
     }
 
     static float parse_motion_blur_strength() {
-        std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_MB_STRENGTH, "");
+        const std::string string = config_parser->GetString(CFG_EXPORT_SECTION, CFG_EXPORT_MB_STRENGTH, "");
         try {
             float value = std::stof(string);
             if (value < 0) {
