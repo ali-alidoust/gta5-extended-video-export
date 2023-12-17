@@ -1,4 +1,3 @@
-// dllmain.cpp : Defines the entry point for the DLL application.
 #include "encoder.h"
 #include "logger.h"
 #include "script.h"

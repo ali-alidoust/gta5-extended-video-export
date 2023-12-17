@@ -109,7 +109,7 @@ std::shared_ptr<YaraHelper> pYaraHelper;
 void onPresent(IDXGISwapChain* swapChain) {
 
     // For some unknown reason, we need this lock to prevent black exports
-    std::lock_guard<std::mutex> asyncQueueLock(mxOnPresent);
+    std::lock_guard<std::mutex> onPresentLock(mxOnPresent);
     mainSwapChain = swapChain;
     static bool initialized = false;
     if (!initialized) {
@@ -407,19 +407,19 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 GUID pixelFormat;
                 ::exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
-                if (isCustomFrameRateSupported) {
-                    auto fps = config::fps;
-                    fps_num = fps.first;
-                    fps_den = fps.second;
+                //if (isCustomFrameRateSupported) {
+                //    auto fps = config::fps;
+                //    fps_num = fps.first;
+                //    fps_den = fps.second;
 
-                    float gameFrameRate =
-                        ((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second);
-                    if (gameFrameRate > 60.0f) {
-                        LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
-                        LOG(LL_NON, "Audio export will be disabled!!!");
-                        ::exportContext->isAudioExportDisabled = true;
-                    }
-                }
+                //    float gameFrameRate =
+                //        ((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second);
+                //    if (gameFrameRate > 60.0f) {
+                //        LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
+                //        LOG(LL_NON, "Audio export will be disabled!!!");
+                //        ::exportContext->isAudioExportDisabled = true;
+                //    }
+                //}
 
                 UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
                 GUID subType;

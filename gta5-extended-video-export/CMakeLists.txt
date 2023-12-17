@@ -143,39 +143,20 @@ if (MSVC)
             )
     target_link_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
-            /DELAYLOAD:Iex-3_1_d.dll;
-            /DELAYLOAD:IlmThread-3_1_d.dll;
-            /DELAYLOAD:Imath-3_1_d.dll;
             /DELAYLOAD:OpenEXR-3_1_d.dll;
-            /DELAYLOAD:zlibd1.dll;
             /DEBUG:FULL
             >
             $<$<CONFIG:MinSizeRel>:
-            /DELAYLOAD:Iex-3_1.dll;
-            /DELAYLOAD:IlmThread-3_1.dll;
-            /DELAYLOAD:Imath-3_1.dll;
             /DELAYLOAD:OpenEXR-3_1.dll;
-            /DELAYLOAD:zlib1.dll;
             >
             $<$<CONFIG:Release>:
-            /DELAYLOAD:Iex-3_1.dll;
-            /DELAYLOAD:IlmThread-3_1.dll;
-            /DELAYLOAD:Imath-3_1.dll;
             /DELAYLOAD:OpenEXR-3_1.dll;
-            /DELAYLOAD:zlib1.dll;
             >
             $<$<CONFIG:RelWithDebInfo>:
-            /DELAYLOAD:Iex-3_1.dll;
-            /DELAYLOAD:IlmThread-3_1.dll;
-            /DELAYLOAD:Imath-3_1.dll;
             /DELAYLOAD:OpenEXR-3_1.dll;
-            /DELAYLOAD:zlib1.dll;
             /DEBUG:FULL
             >
-            /DELAYLOAD:asmjit.dll;
-            /DELAYLOAD:asmtk.dll;
             /DELAYLOAD:PolyHook_2.dll;
-            /DELAYLOAD:Zydis.dll;
             /NODEFAULTLIB:libcmt.lib;
             /SUBSYSTEM:WINDOWS
             )
@@ -203,6 +184,8 @@ add_custom_command_if(
         COMMAND $<CONFIG:MinSizeRel> xcopy /y /E "$<SHELL_PATH:${CMAKE_CURRENT_SOURCE_DIR}/>deploy\\*" "$<SHELL_PATH:${OUTPUT_DIRECTORY}>"
         COMMAND $<CONFIG:Release> del /F /Q "$<SHELL_PATH:${OUTPUT_DIRECTORY}>EVE"
         COMMAND $<CONFIG:Release> xcopy /y /E "$<SHELL_PATH:${CMAKE_CURRENT_SOURCE_DIR}/>deploy\\*" "$<SHELL_PATH:${OUTPUT_DIRECTORY}>"
+        COMMAND $<CONFIG:Release> if not exist "$<SHELL_PATH:${OUTPUT_DIRECTORY}/>EVE\\dlls" mkdir "$<SHELL_PATH:${OUTPUT_DIRECTORY}/>EVE\\dlls"
+        COMMAND $<CONFIG:Release> move /Y "$<SHELL_PATH:${OUTPUT_DIRECTORY}>\\*.dll" "$<SHELL_PATH:${OUTPUT_DIRECTORY}/>EVE\\dlls"
         COMMAND $<CONFIG:RelWithDebInfo> xcopy /y /E "$<SHELL_PATH:${CMAKE_CURRENT_SOURCE_DIR}/>deploy\\*" "$<SHELL_PATH:${OUTPUT_DIRECTORY}>"
 )
 

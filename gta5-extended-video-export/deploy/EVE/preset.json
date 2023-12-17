@@ -1,0 +1,19 @@
+{
+    "audio": {
+        "encoder": "aac",
+        "filters": "",
+        "options": "_sampleFormat=fltp|b=320000|profile=aac_low",
+        "sidedata": ""
+    },
+    "format": {
+        "container": "mp4",
+        "faststart": true
+    },
+    "version": 1,
+    "video": {
+        "encoder": "libx264",
+        "filters": "",
+        "options": "_pixelFormat=yuv420p|crf=17.000|noise_reduction=8|opencl=1|preset=medium|rc=crf|x264-params=qpmax=24:chroma-qp-offset=-2:aq-mode=3:aq-strength=0.800:rc-lookahead=110:keyint=480:min-keyint=3:bframes=11:b-adapt=2:ref=3:deblock=0:0:direct=auto:no-weightb=0:me=umh:merange=32:subme=10:psy-rd=0.77:0.22:no-chroma-me=1:trellis=2:no-fast-pskip=1",
+        "sidedata": ""
+    }
+}

@@ -1,4 +1,5 @@
 #pragma once
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 #include <dxgi.h>
 #include <string>
@@ -213,7 +214,7 @@ inline std::wstring utf8_decode(const std::string& str) {
 
 inline std::string exePath() {
     wchar_t buffer[MAX_PATH];
-    GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    GetModuleFileNameW(reinterpret_cast<HINSTANCE>(&__ImageBase), buffer, MAX_PATH);
     const std::wstring::size_type pos = std::wstring(buffer).find_last_of(L"\\/");
     return utf8_encode(std::wstring(buffer).substr(0, pos));
 }
