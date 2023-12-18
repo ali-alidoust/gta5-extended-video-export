@@ -72,7 +72,7 @@ ComPtr<ID3D11BlendState> pAccBlendState;
 
 struct PSConstantBuffer {
     XMFLOAT4 floats;
-} cb;
+};
 
 struct ExportContext {
 
@@ -85,6 +85,18 @@ struct ExportContext {
         PRE();
         POST();
     }
+
+    // Disable copy constructor
+    ExportContext(const ExportContext& other) = delete;
+
+    // Disable copy assignment operator
+    ExportContext& operator=(const ExportContext& other) = delete;
+
+    // Disable move constructor
+    ExportContext(ExportContext&& other) = delete;
+
+    // Disable move assignment operator
+    ExportContext& operator=(ExportContext&& other) = delete;
 
     bool isAudioExportDisabled = false;
 
@@ -106,11 +118,11 @@ std::shared_ptr<YaraHelper> pYaraHelper;
 
 } // namespace
 
-void onPresent(IDXGISwapChain* swapChain) {
+void eve::OnPresent(IDXGISwapChain* swap_chain) {
 
     // For some unknown reason, we need this lock to prevent black exports
-    std::lock_guard<std::mutex> onPresentLock(mxOnPresent);
-    mainSwapChain = swapChain;
+    std::lock_guard onPresentLock(mxOnPresent);
+    mainSwapChain = swap_chain;
     static bool initialized = false;
     if (!initialized) {
         initialized = true;
@@ -120,13 +132,13 @@ void onPresent(IDXGISwapChain* swapChain) {
             ComPtr<ID3D11Texture2D> texture;
             DXGI_SWAP_CHAIN_DESC desc;
 
-            REQUIRE(swapChain->GetDesc(&desc), "Failed to get swap chain descriptor");
+            REQUIRE(swap_chain->GetDesc(&desc), "Failed to get swap chain descriptor");
 
             LOG(LL_NFO, "BUFFER COUNT: ", desc.BufferCount);
             REQUIRE(
-                swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(texture.GetAddressOf())),
+                swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(texture.GetAddressOf())),
                 "Failed to get the texture buffer");
-            REQUIRE(swapChain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(pDevice.GetAddressOf())),
+            REQUIRE(swap_chain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(pDevice.GetAddressOf())),
                     "Failed to get the D3D11 device");
             pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
             NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context");
@@ -146,7 +158,7 @@ void onPresent(IDXGISwapChain* swapChain) {
                 pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(pDXGIFactory.GetAddressOf())),
                 "Failed to get IDXGIFactory");
 
-            prepareDeferredContext(pDevice, pDeviceContext);
+            eve::prepareDeferredContext(pDevice, pDeviceContext);
 
         } catch (std::exception& ex) {
             LOG(LL_ERR, ex.what());
@@ -154,14 +166,14 @@ void onPresent(IDXGISwapChain* swapChain) {
     }
 }
 
-static HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
+HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
     if (!mainSwapChain) {
-        onPresent(pThis);
+        eve::OnPresent(pThis);
     }
     return OriginalFunc(pThis, SyncInterval, Flags);
 }
 
-void initialize() {
+void eve::initialize() {
     PRE();
 
     try {
@@ -225,7 +237,7 @@ void initialize() {
     POST();
 }
 
-void ScriptMain() {
+void eve::ScriptMain() {
     PRE();
     LOG(LL_NFO, "Starting main loop");
     while (true) {
@@ -233,10 +245,9 @@ void ScriptMain() {
     }
 }
 
-static void
-ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext* pThis, UINT NumViews,
-                                                             ID3D11RenderTargetView* const* ppRenderTargetViews,
-                                                             ID3D11DepthStencilView* pDepthStencilView) {
+void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext* pThis, UINT NumViews,
+                                                                  ID3D11RenderTargetView* const* ppRenderTargetViews,
+                                                                  ID3D11DepthStencilView* pDepthStencilView) {
     PRE();
     if (::exportContext) {
         for (uint32_t i = 0; i < NumViews; i++) {
@@ -322,19 +333,19 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
                     (float)(config::motion_blur_samples);
 
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
-                    drawAdditive(pDevice, pThis, pSwapChainBuffer);
+                    eve::drawAdditive(pDevice, pThis, pSwapChainBuffer);
                 }
             } else {
                 // Trick to use the same buffers for when not using motion blur
                 ::exportContext->accCount = 0;
-                drawAdditive(pDevice, pThis, pSwapChainBuffer);
+                eve::drawAdditive(pDevice, pThis, pSwapChainBuffer);
                 ::exportContext->accCount = 1;
                 ::exportContext->totalFrameNum = 1;
             }
 
             if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) == config::motion_blur_samples) {
 
-                const ComPtr<ID3D11Texture2D> result = divideBuffer(pDevice, pThis, ::exportContext->accCount);
+                const ComPtr<ID3D11Texture2D> result = eve::divideBuffer(pDevice, pThis, ::exportContext->accCount);
                 ::exportContext->accCount = 0;
 
                 D3D11_MAPPED_SUBRESOURCE mapped;
@@ -360,9 +371,9 @@ ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext
     POST();
 }
 
-static HRESULT ImportHooks::MFCreateSinkWriterFromURL::Implementation(LPCWSTR pwszOutputURL, IMFByteStream* pByteStream,
-                                                                      IMFAttributes* pAttributes,
-                                                                      IMFSinkWriter** ppSinkWriter) {
+HRESULT ImportHooks::MFCreateSinkWriterFromURL::Implementation(LPCWSTR pwszOutputURL, IMFByteStream* pByteStream,
+                                                               IMFAttributes* pAttributes,
+                                                               IMFSinkWriter** ppSinkWriter) {
     PRE();
     const HRESULT result = OriginalFunc(pwszOutputURL, pByteStream, pAttributes, ppSinkWriter);
     if (SUCCEEDED(result)) {
@@ -379,17 +390,17 @@ static HRESULT ImportHooks::MFCreateSinkWriterFromURL::Implementation(LPCWSTR pw
     return result;
 }
 
-static HRESULT IMFSinkWriterHooks::AddStream::Implementation(IMFSinkWriter* pThis, IMFMediaType* pTargetMediaType,
-                                                             DWORD* pdwStreamIndex) {
+HRESULT IMFSinkWriterHooks::AddStream::Implementation(IMFSinkWriter* pThis, IMFMediaType* pTargetMediaType,
+                                                      DWORD* pdwStreamIndex) {
     PRE();
     LOG(LL_NFO, "IMFSinkWriter::AddStream: ", GetMediaTypeDescription(pTargetMediaType).c_str());
     POST();
     return OriginalFunc(pThis, pTargetMediaType, pdwStreamIndex);
 }
 
-static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex,
-                                                                     IMFMediaType* pInputMediaType,
-                                                                     IMFAttributes* pEncodingParameters) {
+HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex,
+                                                              IMFMediaType* pInputMediaType,
+                                                              IMFAttributes* pEncodingParameters) {
     PRE();
     LOG(LL_NFO, "IMFSinkWriter::SetInputMediaType: ", GetMediaTypeDescription(pInputMediaType).c_str());
 
@@ -407,10 +418,10 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
                 GUID pixelFormat;
                 ::exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
-                //if (isCustomFrameRateSupported) {
-                //    auto fps = config::fps;
-                //    fps_num = fps.first;
-                //    fps_den = fps.second;
+                // if (isCustomFrameRateSupported) {
+                //     auto fps = config::fps;
+                //     fps_num = fps.first;
+                //     fps_den = fps.second;
 
                 //    float gameFrameRate =
                 //        ((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second);
@@ -474,8 +485,7 @@ static HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWrit
     return OriginalFunc(pThis, dwStreamIndex, pInputMediaType, pEncodingParameters);
 }
 
-static HRESULT IMFSinkWriterHooks::WriteSample::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex,
-                                                               IMFSample* pSample) {
+HRESULT IMFSinkWriterHooks::WriteSample::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex, IMFSample* pSample) {
     std::lock_guard sessionLock(mxSession);
 
     if ((encodingSession) && (dwStreamIndex == 1) && (!::exportContext->isAudioExportDisabled)) {
@@ -507,7 +517,7 @@ static HRESULT IMFSinkWriterHooks::WriteSample::Implementation(IMFSinkWriter* pT
     return S_OK;
 }
 
-static HRESULT IMFSinkWriterHooks::Finalize::Implementation(IMFSinkWriter* pThis) {
+HRESULT IMFSinkWriterHooks::Finalize::Implementation(IMFSinkWriter* pThis) {
     PRE();
     std::lock_guard<std::mutex> sessionLock(mxSession);
     try {
@@ -526,14 +536,14 @@ static HRESULT IMFSinkWriterHooks::Finalize::Implementation(IMFSinkWriter* pThis
     return S_OK;
 }
 
-void finalize() {
+void eve::finalize() {
     PRE();
     POST();
 }
 
-static void ID3D11DeviceContextHooks::Draw::Implementation(ID3D11DeviceContext* pThis, //
-                                                           UINT VertexCount,           //
-                                                           UINT StartVertexLocation) {
+void ID3D11DeviceContextHooks::Draw::Implementation(ID3D11DeviceContext* pThis, //
+                                                    UINT VertexCount,           //
+                                                    UINT StartVertexLocation) {
     OriginalFunc(pThis, VertexCount, StartVertexLocation);
     if (pCtxLinearizeBuffer == pThis) {
         pCtxLinearizeBuffer = nullptr;
@@ -570,10 +580,10 @@ static void ID3D11DeviceContextHooks::Draw::Implementation(ID3D11DeviceContext* 
     }
 }
 
-static void ID3D11DeviceContextHooks::DrawIndexed::Implementation(ID3D11DeviceContext* pThis, //
-                                                                  UINT IndexCount,            //
-                                                                  UINT StartIndexLocation,    //
-                                                                  INT BaseVertexLocation) {
+void ID3D11DeviceContextHooks::DrawIndexed::Implementation(ID3D11DeviceContext* pThis, //
+                                                           UINT IndexCount,            //
+                                                           UINT StartIndexLocation,    //
+                                                           INT BaseVertexLocation) {
     OriginalFunc(pThis, IndexCount, StartIndexLocation, BaseVertexLocation);
     if (pCtxLinearizeBuffer == pThis) {
         pCtxLinearizeBuffer = nullptr;
@@ -610,8 +620,8 @@ static void ID3D11DeviceContextHooks::DrawIndexed::Implementation(ID3D11DeviceCo
     }
 }
 
-static HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20,
-                                                      int32_t rsp28, char* name) {
+HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20,
+                                               int32_t rsp28, char* name) {
     PRE();
     void* result = GameHooks::CreateThread::OriginalFunc(pFunc, pParams, r8d, r9d, rsp20, rsp28, name);
     LOG(LL_TRC, "CreateThread:", " pFunc:", pFunc, " pParams:", pParams, " r8d:", Logger::hex(r8d, 4),
@@ -620,7 +630,7 @@ static HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams
     return result;
 }
 
-static float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
+float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
     PRE();
     const std::pair<int32_t, int32_t> fps = config::fps;
     const float result = 1000.0f * static_cast<float>(fps.second) /
@@ -631,8 +641,8 @@ static float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
     return result;
 }
 
-static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint32_t r8d, uint32_t width,
-                                                      uint32_t height, const uint32_t format, void* rsp30) {
+void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint32_t r8d, uint32_t width,
+                                               uint32_t height, const uint32_t format, void* rsp30) {
     void* result = OriginalFunc(rcx, name, r8d, width, height, format, rsp30);
 
     const auto vresult = static_cast<void**>(result);
@@ -874,15 +884,7 @@ static void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, con
     return result;
 }
 
-static uint8_t GameHooks::CreateExportContext::Implementation(void* pContext, uint32_t width, uint32_t height,
-                                                              void* r9d) {
-    PRE();
-    LOG(LL_DBG, "CreateExportContext:", " pContext:", pContext, " width:", width, " height:", height, " r9d:", r9d);
-    POST();
-    return OriginalFunc(pContext, width, height, r9d);
-}
-
-static void prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext) {
+void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext) {
     REQUIRE(pDevice->CreateDeferredContext(0, pDContext.GetAddressOf()), "Failed to create deferred context");
     REQUIRE(pDevice->CreateVertexShader(VSFullScreen::g_main, sizeof(VSFullScreen::g_main), NULL,
                                         pVSFullScreen.GetAddressOf()),
@@ -947,8 +949,8 @@ static void prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11De
             "Failed to create accumulation blend state");
 }
 
-static void drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,
-                         ComPtr<ID3D11Texture2D> pSource) {
+void eve::drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,
+                       ComPtr<ID3D11Texture2D> pSource) {
     D3D11_TEXTURE2D_DESC desc;
     pSource->GetDesc(&desc);
 
@@ -993,8 +995,8 @@ static void drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContex
     ::exportContext->accCount++;
 }
 
-static ComPtr<ID3D11Texture2D> divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,
-                                            uint32_t k) {
+ComPtr<ID3D11Texture2D> eve::divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,
+                                          uint32_t k) {
 
     D3D11_TEXTURE2D_DESC desc;
     pMotionBlurFinalBuffer->GetDesc(&desc);

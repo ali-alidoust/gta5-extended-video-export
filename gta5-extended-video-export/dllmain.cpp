@@ -18,17 +18,17 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
             LOG(LL_NON, "Extended Video Export mod is enabled. Initializing...");
         }
         Logger::instance().level = config::log_level;
-        LOG_CALL(LL_DBG, initialize());
+        LOG_CALL(LL_DBG, eve::initialize());
         LOG(LL_NFO, "Registering script...");
         //LOG_CALL(LL_DBG, keyboardHandlerRegister(onKeyboardMessage));
         //LOG_CALL(LL_DBG, presentCallbackRegister((void (*)(void*))onPresent));
-        LOG_CALL(LL_DBG, scriptRegister(hModule, ScriptMain));
+        LOG_CALL(LL_DBG, scriptRegister(hModule, eve::ScriptMain));
         break;
     case DLL_PROCESS_DETACH:
         LOG(LL_NFO, "Unregistering DXGI callback");
         LOG_CALL(LL_DBG, scriptUnregister(hModule));
         //LOG_CALL(LL_DBG, presentCallbackUnregister((void (*)(void*))onPresent));
-        LOG_CALL(LL_DBG, finalize());
+        LOG_CALL(LL_DBG, eve::finalize());
         break;
     }
     return TRUE;
