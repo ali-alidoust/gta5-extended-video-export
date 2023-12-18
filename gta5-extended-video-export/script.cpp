@@ -3,7 +3,7 @@
 #include "script.h"
 #include "MFUtility.h"
 #include "encoder.h"
-#include "hooks.h"
+#include "hookdefs.h"
 #include "logger.h"
 #include "stdafx.h"
 #include "util.h"
@@ -245,20 +245,20 @@ void eve::ScriptMain() {
     }
 }
 
-void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext* pThis, UINT NumViews,
-                                                                  ID3D11RenderTargetView* const* ppRenderTargetViews,
-                                                                  ID3D11DepthStencilView* pDepthStencilView) {
+void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext* p_this, UINT num_views,
+                                                                  ID3D11RenderTargetView* const* pp_render_target_views,
+                                                                  ID3D11DepthStencilView* p_depth_stencil_view) {
     PRE();
     if (::exportContext) {
-        for (uint32_t i = 0; i < NumViews; i++) {
-            if (ppRenderTargetViews[i]) {
+        for (uint32_t i = 0; i < num_views; i++) {
+            if (pp_render_target_views[i]) {
                 ComPtr<ID3D11Resource> pResource;
                 ComPtr<ID3D11Texture2D> pTexture2D;
-                ppRenderTargetViews[i]->GetResource(pResource.GetAddressOf());
+                pp_render_target_views[i]->GetResource(pResource.GetAddressOf());
                 if (SUCCEEDED(pResource.As(&pTexture2D))) {
                     if (pTexture2D.Get() == pGameDepthBufferQuarterLinear.Get()) {
-                        LOG(LL_DBG, " i:", i, " num:", NumViews, " dsv:", static_cast<void*>(pDepthStencilView));
-                        pCtxLinearizeBuffer = pThis;
+                        LOG(LL_DBG, " i:", i, " num:", num_views, " dsv:", static_cast<void*>(p_depth_stencil_view));
+                        pCtxLinearizeBuffer = p_this;
                     }
                 }
             }
@@ -266,8 +266,8 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
     }
 
     ComPtr<ID3D11Resource> pRTVTexture;
-    if ((ppRenderTargetViews) && (ppRenderTargetViews[0])) {
-        LOG_CALL(LL_TRC, ppRenderTargetViews[0]->GetResource(pRTVTexture.GetAddressOf()));
+    if ((pp_render_target_views) && (pp_render_target_views[0])) {
+        LOG_CALL(LL_TRC, pp_render_target_views[0]->GetResource(pRTVTexture.GetAddressOf()));
     }
 
     if (::exportContext != nullptr && ::exportContext->pExportRenderTarget != nullptr &&
@@ -276,7 +276,7 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
         // Time to capture rendered frame
         try {
             ComPtr<ID3D11Device> pDevice;
-            pThis->GetDevice(pDevice.GetAddressOf());
+            p_this->GetDevice(pDevice.GetAddressOf());
 
             ComPtr<ID3D11Texture2D> pDepthBufferCopy = nullptr;
             ComPtr<ID3D11Texture2D> pBackBufferCopy = nullptr;
@@ -295,7 +295,7 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                         REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pDepthBufferCopy.GetAddressOf()),
                                 "Failed to create depth buffer copy texture");
 
-                        pThis->CopyResource(pDepthBufferCopy.Get(), pLinearDepthTexture.Get());
+                        p_this->CopyResource(pDepthBufferCopy.Get(), pLinearDepthTexture.Get());
                     }
                     {
                         D3D11_TEXTURE2D_DESC desc;
@@ -308,12 +308,12 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                         REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pBackBufferCopy.GetAddressOf()),
                                 "Failed to create back buffer copy texture");
 
-                        pThis->CopyResource(pBackBufferCopy.Get(), pGameBackBufferResolved.Get());
+                        p_this->CopyResource(pBackBufferCopy.Get(), pGameBackBufferResolved.Get());
                     }
                     {
                         std::lock_guard<std::mutex> sessionLock(mxSession);
                         if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
-                            encodingSession->enqueueEXRImage(pThis, pBackBufferCopy, pDepthBufferCopy);
+                            encodingSession->enqueueEXRImage(p_this, pBackBufferCopy, pDepthBufferCopy);
                         }
                     }
                 });
@@ -333,31 +333,31 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                     (float)(config::motion_blur_samples);
 
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
-                    eve::drawAdditive(pDevice, pThis, pSwapChainBuffer);
+                    eve::drawAdditive(pDevice, p_this, pSwapChainBuffer);
                 }
             } else {
                 // Trick to use the same buffers for when not using motion blur
                 ::exportContext->accCount = 0;
-                eve::drawAdditive(pDevice, pThis, pSwapChainBuffer);
+                eve::drawAdditive(pDevice, p_this, pSwapChainBuffer);
                 ::exportContext->accCount = 1;
                 ::exportContext->totalFrameNum = 1;
             }
 
             if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) == config::motion_blur_samples) {
 
-                const ComPtr<ID3D11Texture2D> result = eve::divideBuffer(pDevice, pThis, ::exportContext->accCount);
+                const ComPtr<ID3D11Texture2D> result = eve::divideBuffer(pDevice, p_this, ::exportContext->accCount);
                 ::exportContext->accCount = 0;
 
                 D3D11_MAPPED_SUBRESOURCE mapped;
 
-                REQUIRE(pThis->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped), "Failed to capture swapbuffer.");
+                REQUIRE(p_this->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped), "Failed to capture swapbuffer.");
                 {
                     std::lock_guard sessionLock(mxSession);
                     if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
                         REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
                     }
                 }
-                pThis->Unmap(result.Get(), 0);
+                p_this->Unmap(result.Get(), 0);
             }
             ::exportContext->totalFrameNum++;
         } catch (std::exception&) {
@@ -366,8 +366,8 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
             LOG_CALL(LL_DBG, ::exportContext.reset());
         }
     }
-    LOG_CALL(LL_TRC, ID3D11DeviceContextHooks::OMSetRenderTargets::OriginalFunc(pThis, NumViews, ppRenderTargetViews,
-                                                                                pDepthStencilView));
+    LOG_CALL(LL_TRC, ID3D11DeviceContextHooks::OMSetRenderTargets::OriginalFunc(p_this, num_views, pp_render_target_views,
+                                                                                p_depth_stencil_view));
     POST();
 }
 

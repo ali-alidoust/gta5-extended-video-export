@@ -24,7 +24,8 @@ set(Header_Files
         "util.h"
         "yara-helper.h"
         "yara-patterns.h"
-        "hooks.h")
+        "hooks.h"
+        "hookdefs.h")
 
 set(Source_Files
         "config.cpp"
@@ -129,38 +130,36 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 ################################################################################
 # Compile and link options
 ################################################################################
-if (MSVC)
-    target_link_libraries(${PROJECT_NAME} PRIVATE delayimp)
-    target_compile_options(${PROJECT_NAME} PRIVATE
-            $<$<CONFIG:MinSizeRel>:
-            /Y-
-            >
-            $<$<CONFIG:Release>:
-            /Y-
-            >
-            ${DEFAULT_CXX_DEBUG_INFORMATION_FORMAT};
-            ${DEFAULT_CXX_EXCEPTION_HANDLING}
-            )
-    target_link_options(${PROJECT_NAME} PRIVATE
-            $<$<CONFIG:Debug>:
-            /DELAYLOAD:OpenEXR-3_1_d.dll;
-            /DEBUG:FULL
-            >
-            $<$<CONFIG:MinSizeRel>:
-            /DELAYLOAD:OpenEXR-3_1.dll;
-            >
-            $<$<CONFIG:Release>:
-            /DELAYLOAD:OpenEXR-3_1.dll;
-            >
-            $<$<CONFIG:RelWithDebInfo>:
-            /DELAYLOAD:OpenEXR-3_1.dll;
-            /DEBUG:FULL
-            >
-            /DELAYLOAD:PolyHook_2.dll;
-            /NODEFAULTLIB:libcmt.lib;
-            /SUBSYSTEM:WINDOWS
-            )
-endif ()
+target_link_libraries(${PROJECT_NAME} PRIVATE delayimp)
+target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:MinSizeRel>:
+        /Y-
+        >
+        $<$<CONFIG:Release>:
+        /Y-
+        >
+        ${DEFAULT_CXX_DEBUG_INFORMATION_FORMAT};
+        ${DEFAULT_CXX_EXCEPTION_HANDLING}
+        )
+target_link_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Debug>:
+        /DELAYLOAD:OpenEXR-3_1_d.dll;
+        /DEBUG:FULL
+        >
+        $<$<CONFIG:MinSizeRel>:
+        /DELAYLOAD:OpenEXR-3_1.dll;
+        >
+        $<$<CONFIG:Release>:
+        /DELAYLOAD:OpenEXR-3_1.dll;
+        >
+        $<$<CONFIG:RelWithDebInfo>:
+        /DELAYLOAD:OpenEXR-3_1.dll;
+        /DEBUG:FULL
+        >
+        /DELAYLOAD:PolyHook_2.dll;
+        /NODEFAULTLIB:libcmt.lib;
+        /SUBSYSTEM:WINDOWS
+        )
 
 ################################################################################
 # Pre build events

@@ -1,20 +1,12 @@
 // ReSharper disable CppInconsistentNaming
 // ReSharper disable CppClangTidyCppcoreguidelinesMacroUsage
 #pragma once
-#define NOMINMAX
-#include <Windows.h>
-
 #include "logger.h"
 
 #include <polyhook2/Detour/x64Detour.hpp>
 #include <polyhook2/PE/IatHook.hpp>
 #include <polyhook2/Virtuals/VFuncSwapHook.hpp>
 #include <polyhook2/ZydisDisassembler.hpp>
-
-#include <d3d11.h>
-
-#include <mfapi.h>
-#include <mfreadwrite.h>
 
 struct MemberHookInfoStruct {
     explicit MemberHookInfoStruct(const uint16_t index) : index(index) {}
@@ -74,7 +66,8 @@ HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
 
     static PLH::ZydisDisassembler Disassembler(PLH::Mode::x64);
 
-    const auto newHook = new PLH::x64Detour(func, reinterpret_cast<uint64_t>(hookFunc), reinterpret_cast<uint64_t*>(originalFunc));
+    const auto newHook =
+        new PLH::x64Detour(func, reinterpret_cast<uint64_t>(hookFunc), reinterpret_cast<uint64_t*>(originalFunc));
 
     if (!newHook->hook()) {
         *originalFunc = nullptr;
@@ -90,7 +83,7 @@ HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
 #define DEFINE_MEMBER_HOOK(BASE_CLASS, METHOD_NAME, VFUNC_INDEX, RETURN_TYPE, ...)                                     \
     namespace BASE_CLASS##Hooks {                                                                                      \
         namespace METHOD_NAME {                                                                                        \
-        RETURN_TYPE Implementation(BASE_CLASS* pThis, __VA_ARGS__);                                             \
+        RETURN_TYPE Implementation(BASE_CLASS* pThis, __VA_ARGS__);                                                    \
         typedef RETURN_TYPE (*##Type)(BASE_CLASS * pThis, __VA_ARGS__);                                                \
         Type OriginalFunc = nullptr;                                                                                   \
         MemberHookInfoStruct Info(VFUNC_INDEX);                                                                        \
@@ -100,7 +93,7 @@ HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
 #define DEFINE_NAMED_IMPORT_HOOK(DLL_NAME_STRING, FUNCTION_NAME, RETURN_TYPE, ...)                                     \
     namespace Import##Hooks {                                                                                          \
         namespace FUNCTION_NAME {                                                                                      \
-        RETURN_TYPE Implementation(__VA_ARGS__);                                                                \
+        RETURN_TYPE Implementation(__VA_ARGS__);                                                                       \
         typedef RETURN_TYPE (*##Type)(__VA_ARGS__);                                                                    \
         Type OriginalFunc = nullptr;                                                                                   \
         std::shared_ptr<PLH::IatHook> Hook;                                                                            \
@@ -110,7 +103,7 @@ HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
 #define DEFINE_X64_HOOK(FUNCTION_NAME, RETURN_TYPE, ...)                                                               \
     namespace Game##Hooks {                                                                                            \
         namespace FUNCTION_NAME {                                                                                      \
-        RETURN_TYPE Implementation(__VA_ARGS__);                                                                \
+        RETURN_TYPE Implementation(__VA_ARGS__);                                                                       \
         typedef RETURN_TYPE (*##Type)(__VA_ARGS__);                                                                    \
         Type OriginalFunc = nullptr;                                                                                   \
         std::shared_ptr<PLH::x64Detour> Hook;                                                                          \
@@ -131,70 +124,3 @@ HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
     REQUIRE(hookX64Function(ADDRESS, GameHooks::FUNCTION_NAME::Implementation,                                         \
                             &GameHooks::FUNCTION_NAME::OriginalFunc, GameHooks::FUNCTION_NAME::Hook),                  \
             "Failed to hook " #FUNCTION_NAME)
-
-DEFINE_MEMBER_HOOK(ID3D11DeviceContext, Draw, 13, void, //
-                   UINT VertexCount,                    //
-                   UINT StartVertexLocation);           //
-
-DEFINE_MEMBER_HOOK(ID3D11DeviceContext, DrawIndexed, 12, void, //
-                   UINT IndexCount,                            //
-                   UINT StartIndexLocation,                    //
-                   INT BaseVertexLocation);
-
-DEFINE_MEMBER_HOOK(IDXGISwapChain, Present, 8, HRESULT, //
-                   UINT SyncInterval,                   //
-                   UINT Flags);                         //
-
-DEFINE_MEMBER_HOOK(ID3D11DeviceContext, OMSetRenderTargets, 33, void,  //
-                   UINT NumViews,                                      //
-                   ID3D11RenderTargetView* const* ppRenderTargetViews, //
-                   ID3D11DepthStencilView* pDepthStencilView);         //
-
-DEFINE_MEMBER_HOOK(IMFSinkWriter, AddStream, 3, HRESULT, //
-                   IMFMediaType* pTargetMediaType,       //
-                   DWORD* pdwStreamIndex);               //
-
-DEFINE_MEMBER_HOOK(IMFSinkWriter, SetInputMediaType, 4, HRESULT, //
-                   DWORD dwStreamIndex,                          //
-                   IMFMediaType* pInputMediaType,                //
-                   IMFAttributes* pEncodingParameters);          //
-
-DEFINE_MEMBER_HOOK(IMFSinkWriter, WriteSample, 6, HRESULT, //
-                   DWORD dwStreamIndex,                    //
-                   IMFSample* pSample);                    //
-
-DEFINE_MEMBER_HOOK(IMFSinkWriter, Finalize, 11, HRESULT);
-
-DEFINE_NAMED_IMPORT_HOOK("mfreadwrite.dll", MFCreateSinkWriterFromURL,
-                         HRESULT,                       //
-                         LPCWSTR pwszOutputURL,         //
-                         IMFByteStream* pByteStream,    //
-                         IMFAttributes* pAttributes,    //
-                         IMFSinkWriter** ppSinkWriter); //
-
-DEFINE_X64_HOOK(GetRenderTimeBase, float, //
-                int64_t choice);          //
-
-DEFINE_X64_HOOK(CreateTexture, void*, //
-                void* rcx,            //
-                char* name,           //
-                uint32_t r8d,         //
-                uint32_t width,       //
-                uint32_t height,      //
-                uint32_t format,      //
-                void* rsp30);         //
-
-DEFINE_X64_HOOK(CreateThread, HANDLE, //
-                void* pFunc,          //
-                void* pParams,        //
-                int32_t r8d,          //
-                int32_t r9d,          //
-                void* rsp20,          //
-                int32_t rsp28,        //
-                char* name);          //
-
-DEFINE_X64_HOOK(CreateExportContext, uint8_t, //
-                void* pContext,               //
-                uint32_t width,               //
-                uint32_t height,              //
-                void* r9d);                   //
