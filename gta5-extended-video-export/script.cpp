@@ -143,8 +143,13 @@ void eve::OnPresent(IDXGISwapChain* swap_chain) {
 
 HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
     if (!mainSwapChain) {
-        eve::OnPresent(pThis);
+        if (Flags & DXGI_PRESENT_TEST) {
+            LOG(LL_TRC, "DXGI_PRESENT_TEST!");
+        } else {
+            eve::OnPresent(pThis);
+        }
     }
+
     return OriginalFunc(pThis, SyncInterval, Flags);
 }
 
@@ -296,8 +301,12 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
 
             ComPtr<ID3D11Texture2D> pSwapChainBuffer;
             REQUIRE(::exportContext->p_swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D),
-                                                             (void**)pSwapChainBuffer.GetAddressOf()),
+                                                             reinterpret_cast<void**>(pSwapChainBuffer.GetAddressOf())),
                     "Failed to get swap chain's buffer");
+
+            LOG_CALL(LL_DBG,
+                     ::exportContext->p_swap_chain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
+                                                                    // effects to be applied to the render target
 
             LOG_CALL(LL_DBG,
                      ::exportContext->p_swap_chain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
@@ -306,7 +315,7 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
             if (config::motion_blur_samples != 0) {
                 const float current_shutter_position =
                     (::exportContext->total_frame_num % (config::motion_blur_samples + 1)) /
-                    (float)(config::motion_blur_samples);
+                    static_cast<float>(config::motion_blur_samples);
 
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
                     eve::drawAdditive(pDevice, p_this, pSwapChainBuffer);
