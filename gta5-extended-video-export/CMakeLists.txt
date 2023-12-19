@@ -211,35 +211,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE unofficial::inih::inireader)
 find_package(PolyHook_2 CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE PolyHook_2::PolyHook_2)
 
-# FFMPEG (libavcodec)
-# find_package(FFMPEG REQUIRED)
-# target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
-# target_link_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARY_DIRS})
-# target_link_libraries(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARIES})
-
 # OpenEXR
-# find_package(IlmBase CONFIG REQUIRED)
 find_package(OpenEXR CONFIG REQUIRED)
-# target_link_libraries(${PROJECT_NAME} PRIVATE IlmBase::Iex IlmBase::Half IlmBase::Imath IlmBase::IexMath)
-# target_link_libraries(${PROJECT_NAME} PRIVATE OpenEXR::IlmImf OpenEXR::IlmImfUtil OpenEXR::IlmImfConfig)
 target_link_libraries(${PROJECT_NAME} PRIVATE OpenEXR::OpenEXR)
-
-# DirectX Headers
-# find_package(DirectX-Headers CONFIG REQUIRED)
-# target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectX-Headers)
-
-# DirectX Math
-find_package(directxmath CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectXMath)
-
-# DirectXTex
-find_package(directxtex CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectXTex)
 
 # Voukoder
 find_path(VOUKODER_INCLUDE_DIR VoukoderTypeLib_h.h REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../voukoder")
 target_include_directories(${PROJECT_NAME} PRIVATE ${VOUKODER_INCLUDE_DIR})
-
-# RPC
-find_library(RPC_LIBRARY RpcRT4 REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${RPC_LIBRARY})

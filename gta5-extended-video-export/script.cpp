@@ -39,82 +39,57 @@ ComPtr<ID3D11Texture2D> pGameGBuffer0;
 ComPtr<ID3D11Texture2D> pGameEdgeCopy;
 ComPtr<ID3D11Texture2D> pLinearDepthTexture;
 ComPtr<ID3D11Texture2D> pStencilTexture;
-
 void* pCtxLinearizeBuffer = nullptr;
 bool isCustomFrameRateSupported = false;
-
 std::unique_ptr<Encoder::Session> encodingSession;
 std::mutex mxSession;
-
+std::mutex mxOnPresent;
 std::thread::id mainThreadId;
 ComPtr<IDXGISwapChain> mainSwapChain;
-
-ComPtr<IDXGIFactory> pDXGIFactory;
-
-std::mutex mxOnPresent;
-
+ComPtr<IDXGIFactory> pDxgiFactory;
 ComPtr<ID3D11DeviceContext> pDContext;
-
 ComPtr<ID3D11Texture2D> pMotionBlurAccBuffer;
 ComPtr<ID3D11Texture2D> pMotionBlurFinalBuffer;
-ComPtr<ID3D11VertexShader> pVSFullScreen;
-ComPtr<ID3D11PixelShader> pPSAccumulate;
-ComPtr<ID3D11PixelShader> pPSDivide;
+ComPtr<ID3D11VertexShader> pVsFullScreen;
+ComPtr<ID3D11PixelShader> pPsAccumulate;
+ComPtr<ID3D11PixelShader> pPsDivide;
 ComPtr<ID3D11Buffer> pDivideConstantBuffer;
 ComPtr<ID3D11RasterizerState> pRasterState;
-ComPtr<ID3D11SamplerState> pPSSampler;
-ComPtr<ID3D11RenderTargetView> pRTVAccBuffer;
-ComPtr<ID3D11RenderTargetView> pRTVBlurBuffer;
-ComPtr<ID3D11ShaderResourceView> pSRVAccBuffer;
-ComPtr<ID3D11Texture2D> pSourceSRVTexture;
-ComPtr<ID3D11ShaderResourceView> pSourceSRV;
+ComPtr<ID3D11SamplerState> pPsSampler;
+ComPtr<ID3D11RenderTargetView> pRtvAccBuffer;
+ComPtr<ID3D11RenderTargetView> pRtvBlurBuffer;
+ComPtr<ID3D11ShaderResourceView> pSrvAccBuffer;
+ComPtr<ID3D11Texture2D> pSourceSrvTexture;
+ComPtr<ID3D11ShaderResourceView> pSourceSrv;
 ComPtr<ID3D11BlendState> pAccBlendState;
 
-struct PSConstantBuffer {
-    XMFLOAT4 floats;
-};
-
 struct ExportContext {
-
     ExportContext() {
         PRE();
         POST();
     }
-
     ~ExportContext() {
         PRE();
         POST();
     }
 
-    // Disable copy constructor
     ExportContext(const ExportContext& other) = delete;
-
-    // Disable copy assignment operator
     ExportContext& operator=(const ExportContext& other) = delete;
-
-    // Disable move constructor
     ExportContext(ExportContext&& other) = delete;
-
-    // Disable move assignment operator
     ExportContext& operator=(ExportContext&& other) = delete;
 
-    bool isAudioExportDisabled = false;
-
-    ComPtr<ID3D11Texture2D> pExportRenderTarget;
-    ComPtr<ID3D11DeviceContext> pDeviceContext;
-    ComPtr<ID3D11Device> pDevice;
-    ComPtr<IDXGIFactory> pDXGIFactory;
-    ComPtr<IDXGISwapChain> pSwapChain;
-
-    ComPtr<IMFMediaType> videoMediaType;
-
-    int accCount = 0;
-    int totalFrameNum = 0;
+    bool is_audio_export_disabled = false;
+    ComPtr<ID3D11Texture2D> p_export_render_target;
+    ComPtr<ID3D11DeviceContext> p_device_context;
+    ComPtr<ID3D11Device> p_device;
+    ComPtr<IDXGISwapChain> p_swap_chain;
+    ComPtr<IMFMediaType> video_media_type;
+    int acc_count = 0;
+    int total_frame_num = 0;
 };
 
-std::shared_ptr<ExportContext> exportContext;
-
-std::shared_ptr<YaraHelper> pYaraHelper;
+std::unique_ptr<ExportContext> exportContext;
+std::unique_ptr<YaraHelper> pYaraHelper;
 
 } // namespace
 
@@ -155,7 +130,7 @@ void eve::OnPresent(IDXGISwapChain* swap_chain) {
                 pDXGIDevice->GetParent(__uuidof(IDXGIAdapter), reinterpret_cast<void**>(pDXGIAdapter.GetAddressOf())),
                 "Failed to get IDXGIAdapter");
             REQUIRE(
-                pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(pDXGIFactory.GetAddressOf())),
+                pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(pDxgiFactory.GetAddressOf())),
                 "Failed to get IDXGIFactory");
 
             eve::prepareDeferredContext(pDevice, pDeviceContext);
@@ -270,8 +245,8 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
         LOG_CALL(LL_TRC, pp_render_target_views[0]->GetResource(pRTVTexture.GetAddressOf()));
     }
 
-    if (::exportContext != nullptr && ::exportContext->pExportRenderTarget != nullptr &&
-        (::exportContext->pExportRenderTarget == pRTVTexture)) {
+    if (::exportContext != nullptr && ::exportContext->p_export_render_target != nullptr &&
+        (::exportContext->p_export_render_target == pRTVTexture)) {
 
         // Time to capture rendered frame
         try {
@@ -320,16 +295,17 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
             }
 
             ComPtr<ID3D11Texture2D> pSwapChainBuffer;
-            REQUIRE(::exportContext->pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
-                                                           (void**)pSwapChainBuffer.GetAddressOf()),
+            REQUIRE(::exportContext->p_swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D),
+                                                             (void**)pSwapChainBuffer.GetAddressOf()),
                     "Failed to get swap chain's buffer");
 
-            LOG_CALL(LL_DBG, ::exportContext->pSwapChain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
-                                                                          // effects to be applied to the render target
+            LOG_CALL(LL_DBG,
+                     ::exportContext->p_swap_chain->Present(1, 0)); // IMPORTANT: This call makes ENB and ReShade
+                                                                    // effects to be applied to the render target
 
             if (config::motion_blur_samples != 0) {
                 const float current_shutter_position =
-                    (::exportContext->totalFrameNum % (config::motion_blur_samples + 1)) /
+                    (::exportContext->total_frame_num % (config::motion_blur_samples + 1)) /
                     (float)(config::motion_blur_samples);
 
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
@@ -337,16 +313,17 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                 }
             } else {
                 // Trick to use the same buffers for when not using motion blur
-                ::exportContext->accCount = 0;
+                ::exportContext->acc_count = 0;
                 eve::drawAdditive(pDevice, p_this, pSwapChainBuffer);
-                ::exportContext->accCount = 1;
-                ::exportContext->totalFrameNum = 1;
+                ::exportContext->acc_count = 1;
+                ::exportContext->total_frame_num = 1;
             }
 
-            if ((::exportContext->totalFrameNum % (::config::motion_blur_samples + 1)) == config::motion_blur_samples) {
+            if ((::exportContext->total_frame_num % (::config::motion_blur_samples + 1)) ==
+                config::motion_blur_samples) {
 
-                const ComPtr<ID3D11Texture2D> result = eve::divideBuffer(pDevice, p_this, ::exportContext->accCount);
-                ::exportContext->accCount = 0;
+                const ComPtr<ID3D11Texture2D> result = eve::divideBuffer(pDevice, p_this, ::exportContext->acc_count);
+                ::exportContext->acc_count = 0;
 
                 D3D11_MAPPED_SUBRESOURCE mapped;
 
@@ -359,15 +336,15 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                 }
                 p_this->Unmap(result.Get(), 0);
             }
-            ::exportContext->totalFrameNum++;
+            ::exportContext->total_frame_num++;
         } catch (std::exception&) {
             LOG(LL_ERR, "Reading video frame from D3D Device failed.");
             LOG_CALL(LL_DBG, encodingSession.reset());
             LOG_CALL(LL_DBG, ::exportContext.reset());
         }
     }
-    LOG_CALL(LL_TRC, ID3D11DeviceContextHooks::OMSetRenderTargets::OriginalFunc(p_this, num_views, pp_render_target_views,
-                                                                                p_depth_stencil_view));
+    LOG_CALL(LL_TRC, ID3D11DeviceContextHooks::OMSetRenderTargets::OriginalFunc(
+                         p_this, num_views, pp_render_target_views, p_depth_stencil_view));
     POST();
 }
 
@@ -407,16 +384,17 @@ HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pTh
     GUID majorType;
     if (SUCCEEDED(pInputMediaType->GetMajorType(&majorType))) {
         if (IsEqualGUID(majorType, MFMediaType_Video)) {
-            ::exportContext->videoMediaType = pInputMediaType;
+            ::exportContext->video_media_type = pInputMediaType;
         } else if (IsEqualGUID(majorType, MFMediaType_Audio)) {
             try {
                 std::lock_guard<std::mutex> sessionLock(mxSession);
                 UINT width, height, fps_num, fps_den;
-                MFGetAttribute2UINT32asUINT64(::exportContext->videoMediaType.Get(), MF_MT_FRAME_SIZE, &width, &height);
-                MFGetAttributeRatio(::exportContext->videoMediaType.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
+                MFGetAttribute2UINT32asUINT64(::exportContext->video_media_type.Get(), MF_MT_FRAME_SIZE, &width,
+                                              &height);
+                MFGetAttributeRatio(::exportContext->video_media_type.Get(), MF_MT_FRAME_RATE, &fps_num, &fps_den);
 
                 GUID pixelFormat;
-                ::exportContext->videoMediaType->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
+                ::exportContext->video_media_type->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
                 // if (isCustomFrameRateSupported) {
                 //     auto fps = config::fps;
@@ -460,7 +438,7 @@ HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pTh
                 LOG(LL_NFO, "Output file: ", filename);
 
                 DXGI_SWAP_CHAIN_DESC desc;
-                ::exportContext->pSwapChain->GetDesc(&desc);
+                ::exportContext->p_swap_chain->GetDesc(&desc);
 
                 const auto exportWidth = desc.BufferDesc.Width;
                 const auto exportHeight = desc.BufferDesc.Height;
@@ -488,7 +466,7 @@ HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pTh
 HRESULT IMFSinkWriterHooks::WriteSample::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex, IMFSample* pSample) {
     std::lock_guard sessionLock(mxSession);
 
-    if ((encodingSession) && (dwStreamIndex == 1) && (!::exportContext->isAudioExportDisabled)) {
+    if ((encodingSession) && (dwStreamIndex == 1) && (!::exportContext->is_audio_export_disabled)) {
 
         ComPtr<IMFMediaBuffer> pBuffer = nullptr;
         try {
@@ -798,7 +776,7 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
             accBufRTVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 
             LOG_IF_FAILED(pDevice->CreateRenderTargetView(pMotionBlurAccBuffer.Get(), &accBufRTVDesc,
-                                                          pRTVAccBuffer.ReleaseAndGetAddressOf()),
+                                                          pRtvAccBuffer.ReleaseAndGetAddressOf()),
                           "Failed to create acc buffer RTV.");
 
             D3D11_RENDER_TARGET_VIEW_DESC mbBufferRTVDesc;
@@ -807,7 +785,7 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
             mbBufferRTVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
             LOG_IF_FAILED(pDevice->CreateRenderTargetView(pMotionBlurFinalBuffer.Get(), &mbBufferRTVDesc,
-                                                          pRTVBlurBuffer.ReleaseAndGetAddressOf()),
+                                                          pRtvBlurBuffer.ReleaseAndGetAddressOf()),
                           "Failed to create blur buffer RTV.");
 
             D3D11_SHADER_RESOURCE_VIEW_DESC accBufSRVDesc;
@@ -817,7 +795,7 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
             accBufSRVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 
             LOG_IF_FAILED(pDevice->CreateShaderResourceView(pMotionBlurAccBuffer.Get(), &accBufSRVDesc,
-                                                            pSRVAccBuffer.ReleaseAndGetAddressOf()),
+                                                            pSrvAccBuffer.ReleaseAndGetAddressOf()),
                           "Failed to create blur buffer SRV.");
 
             D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
@@ -831,7 +809,7 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
             sourceSRVTextureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
             sourceSRVTextureDesc.MipLevels = 1;
 
-            REQUIRE(pDevice->CreateTexture2D(&sourceSRVTextureDesc, NULL, pSourceSRVTexture.ReleaseAndGetAddressOf()),
+            REQUIRE(pDevice->CreateTexture2D(&sourceSRVTextureDesc, NULL, pSourceSrvTexture.ReleaseAndGetAddressOf()),
                     "Failed to create back buffer copy texture");
 
             D3D11_SHADER_RESOURCE_VIEW_DESC sourceSRVDesc;
@@ -840,8 +818,8 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
             sourceSRVDesc.Texture2D.MostDetailedMip = 0;
             sourceSRVDesc.Format = sourceSRVTextureDesc.Format;
 
-            LOG_IF_FAILED(pDevice->CreateShaderResourceView(pSourceSRVTexture.Get(), &sourceSRVDesc,
-                                                            pSourceSRV.ReleaseAndGetAddressOf()),
+            LOG_IF_FAILED(pDevice->CreateShaderResourceView(pSourceSrvTexture.Get(), &sourceSRVDesc,
+                                                            pSourceSrv.ReleaseAndGetAddressOf()),
                           "Failed to create backbuffer copy SRV.");
 
         } else if ((std::strcmp("BackBuffer_Resolved", name) == 0) || (std::strcmp("BackBufferCopy", name) == 0)) {
@@ -868,11 +846,11 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
                 NOT_NULL(encodingSession, "Could not create the session");
                 ::exportContext.reset(new ExportContext());
                 NOT_NULL(::exportContext, "Could not create export context");
-                ::exportContext->pSwapChain = mainSwapChain;
-                ::exportContext->pExportRenderTarget = pExportTexture;
+                ::exportContext->p_swap_chain = mainSwapChain;
+                ::exportContext->p_export_render_target = pExportTexture;
 
-                pExportTexture->GetDevice(::exportContext->pDevice.GetAddressOf());
-                ::exportContext->pDevice->GetImmediateContext(::exportContext->pDeviceContext.GetAddressOf());
+                pExportTexture->GetDevice(::exportContext->p_device.GetAddressOf());
+                ::exportContext->p_device->GetImmediateContext(::exportContext->p_device_context.GetAddressOf());
             } catch (std::exception& ex) {
                 LOG(LL_ERR, ex.what());
                 LOG_CALL(LL_DBG, encodingSession.reset());
@@ -887,17 +865,17 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
 void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext) {
     REQUIRE(pDevice->CreateDeferredContext(0, pDContext.GetAddressOf()), "Failed to create deferred context");
     REQUIRE(pDevice->CreateVertexShader(VSFullScreen::g_main, sizeof(VSFullScreen::g_main), NULL,
-                                        pVSFullScreen.GetAddressOf()),
+                                        pVsFullScreen.GetAddressOf()),
             "Failed to create g_VSFullScreen vertex shader");
     REQUIRE(pDevice->CreatePixelShader(PSAccumulate::g_main, sizeof(PSAccumulate::g_main), NULL,
-                                       pPSAccumulate.GetAddressOf()),
+                                       pPsAccumulate.GetAddressOf()),
             "Failed to create pixel shader");
-    REQUIRE(pDevice->CreatePixelShader(PSDivide::g_main, sizeof(PSDivide::g_main), NULL, pPSDivide.GetAddressOf()),
+    REQUIRE(pDevice->CreatePixelShader(PSDivide::g_main, sizeof(PSDivide::g_main), NULL, pPsDivide.GetAddressOf()),
             "Failed to create pixel shader");
 
     D3D11_BUFFER_DESC clipBufDesc;
     clipBufDesc.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_CONSTANT_BUFFER;
-    clipBufDesc.ByteWidth = sizeof(PSConstantBuffer);
+    clipBufDesc.ByteWidth = sizeof(XMFLOAT4);
     clipBufDesc.CPUAccessFlags = D3D11_CPU_ACCESS_FLAG::D3D11_CPU_ACCESS_WRITE;
     clipBufDesc.MiscFlags = 0;
     clipBufDesc.StructureByteStride = 0;
@@ -921,7 +899,7 @@ void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11Devi
     samplerDesc.MinLOD = -FLT_MAX;
     samplerDesc.MaxLOD = FLT_MAX;
 
-    REQUIRE(pDevice->CreateSamplerState(&samplerDesc, pPSSampler.GetAddressOf()), "Failed to create sampler state");
+    REQUIRE(pDevice->CreateSamplerState(&samplerDesc, pPsSampler.GetAddressOf()), "Failed to create sampler state");
 
     D3D11_RASTERIZER_DESC rasterStateDesc;
     rasterStateDesc.AntialiasedLineEnable = FALSE;
@@ -959,9 +937,9 @@ void eve::drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext>
     LOG_CALL(LL_DBG, pDContext->IASetInputLayout(NULL));
     LOG_CALL(LL_DBG, pDContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP));
 
-    LOG_CALL(LL_DBG, pDContext->VSSetShader(pVSFullScreen.Get(), NULL, 0));
-    LOG_CALL(LL_DBG, pDContext->PSSetSamplers(0, 1, pPSSampler.GetAddressOf()));
-    LOG_CALL(LL_DBG, pDContext->PSSetShader(pPSAccumulate.Get(), NULL, 0));
+    LOG_CALL(LL_DBG, pDContext->VSSetShader(pVsFullScreen.Get(), NULL, 0));
+    LOG_CALL(LL_DBG, pDContext->PSSetSamplers(0, 1, pPsSampler.GetAddressOf()));
+    LOG_CALL(LL_DBG, pDContext->PSSetShader(pPsAccumulate.Get(), NULL, 0));
     LOG_CALL(LL_DBG, pDContext->RSSetState(pRasterState.Get()));
 
     float factors[4] = {0, 0, 0, 0};
@@ -977,13 +955,13 @@ void eve::drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext>
     viewport.MaxDepth = 1;
     LOG_CALL(LL_DBG, pDContext->RSSetViewports(1, &viewport));
 
-    LOG_CALL(LL_DBG, pDContext->CopyResource(pSourceSRVTexture.Get(), pSource.Get()));
+    LOG_CALL(LL_DBG, pDContext->CopyResource(pSourceSrvTexture.Get(), pSource.Get()));
 
-    LOG_CALL(LL_DBG, pDContext->PSSetShaderResources(0, 1, pSourceSRV.GetAddressOf()));
-    LOG_CALL(LL_DBG, pDContext->OMSetRenderTargets(1, pRTVAccBuffer.GetAddressOf(), nullptr));
-    if (::exportContext->accCount == 0) {
+    LOG_CALL(LL_DBG, pDContext->PSSetShaderResources(0, 1, pSourceSrv.GetAddressOf()));
+    LOG_CALL(LL_DBG, pDContext->OMSetRenderTargets(1, pRtvAccBuffer.GetAddressOf(), nullptr));
+    if (::exportContext->acc_count == 0) {
         float color[4] = {0, 0, 0, 1};
-        LOG_CALL(LL_DBG, pDContext->ClearRenderTargetView(pRTVAccBuffer.Get(), color));
+        LOG_CALL(LL_DBG, pDContext->ClearRenderTargetView(pRtvAccBuffer.Get(), color));
     }
 
     LOG_CALL(LL_DBG, pDContext->Draw(4, 0));
@@ -992,7 +970,7 @@ void eve::drawAdditive(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext>
     LOG_CALL(LL_DBG, pDContext->FinishCommandList(FALSE, pCmdList.GetAddressOf()));
     LOG_CALL(LL_DBG, pContext->ExecuteCommandList(pCmdList.Get(), TRUE));
 
-    ::exportContext->accCount++;
+    ::exportContext->acc_count++;
 }
 
 ComPtr<ID3D11Texture2D> eve::divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,
@@ -1006,8 +984,8 @@ ComPtr<ID3D11Texture2D> eve::divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<I
     LOG_CALL(LL_DBG, pDContext->IASetInputLayout(NULL));
     LOG_CALL(LL_DBG, pDContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP));
 
-    LOG_CALL(LL_DBG, pDContext->VSSetShader(pVSFullScreen.Get(), NULL, 0));
-    LOG_CALL(LL_DBG, pDContext->PSSetShader(pPSDivide.Get(), NULL, 0));
+    LOG_CALL(LL_DBG, pDContext->VSSetShader(pVsFullScreen.Get(), NULL, 0));
+    LOG_CALL(LL_DBG, pDContext->PSSetShader(pPsDivide.Get(), NULL, 0));
 
     D3D11_MAPPED_SUBRESOURCE mapped;
     REQUIRE(pDContext->Map(pDivideConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped),
@@ -1019,7 +997,7 @@ ComPtr<ID3D11Texture2D> eve::divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<I
     LOG_CALL(LL_DBG, pDContext->Unmap(pDivideConstantBuffer.Get(), 0));
 
     LOG_CALL(LL_DBG, pDContext->PSSetConstantBuffers(0, 1, pDivideConstantBuffer.GetAddressOf()));
-    LOG_CALL(LL_DBG, pDContext->PSSetShaderResources(0, 1, pSRVAccBuffer.GetAddressOf()));
+    LOG_CALL(LL_DBG, pDContext->PSSetShaderResources(0, 1, pSrvAccBuffer.GetAddressOf()));
     LOG_CALL(LL_DBG, pDContext->RSSetState(pRasterState.Get()));
 
     D3D11_VIEWPORT viewport;
@@ -1031,9 +1009,9 @@ ComPtr<ID3D11Texture2D> eve::divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<I
     viewport.MaxDepth = 1;
     LOG_CALL(LL_DBG, pDContext->RSSetViewports(1, &viewport));
 
-    LOG_CALL(LL_DBG, pDContext->OMSetRenderTargets(1, pRTVBlurBuffer.GetAddressOf(), NULL));
+    LOG_CALL(LL_DBG, pDContext->OMSetRenderTargets(1, pRtvBlurBuffer.GetAddressOf(), NULL));
     constexpr float color[4] = {0, 0, 0, 1};
-    LOG_CALL(LL_DBG, pDContext->ClearRenderTargetView(pRTVBlurBuffer.Get(), color));
+    LOG_CALL(LL_DBG, pDContext->ClearRenderTargetView(pRtvBlurBuffer.Get(), color));
 
     LOG_CALL(LL_DBG, pDContext->Draw(4, 0));
 
