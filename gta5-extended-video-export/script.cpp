@@ -628,6 +628,94 @@ float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
     return result;
 }
 
+void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC const& desc) {
+    D3D11_TEXTURE2D_DESC accBufDesc = desc;
+    accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    accBufDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    accBufDesc.CPUAccessFlags = 0;
+    accBufDesc.MiscFlags = 0;
+    accBufDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
+    accBufDesc.MipLevels = 1;
+    accBufDesc.ArraySize = 1;
+    accBufDesc.SampleDesc.Count = 1;
+    accBufDesc.SampleDesc.Quality = 0;
+
+    LOG_IF_FAILED(p_device->CreateTexture2D(&accBufDesc, NULL, pMotionBlurAccBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create accumulation buffer texture");
+
+    D3D11_TEXTURE2D_DESC mbBufferDesc = accBufDesc;
+    mbBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+    mbBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    LOG_IF_FAILED(p_device->CreateTexture2D(&mbBufferDesc, NULL, pMotionBlurFinalBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create motion blur buffer texture");
+
+    D3D11_RENDER_TARGET_VIEW_DESC accBufRTVDesc;
+    accBufRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    accBufRTVDesc.Texture2D.MipSlice = 0;
+    accBufRTVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+    LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurAccBuffer.Get(), &accBufRTVDesc,
+                                                  pRtvAccBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create acc buffer RTV.");
+
+    D3D11_RENDER_TARGET_VIEW_DESC mbBufferRTVDesc;
+    mbBufferRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    mbBufferRTVDesc.Texture2D.MipSlice = 0;
+    mbBufferRTVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurFinalBuffer.Get(), &mbBufferRTVDesc,
+                                                  pRtvBlurBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create blur buffer RTV.");
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC accBufSRVDesc;
+    accBufSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    accBufSRVDesc.Texture2D.MipLevels = 1;
+    accBufSRVDesc.Texture2D.MostDetailedMip = 0;
+    accBufSRVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+    LOG_IF_FAILED(p_device->CreateShaderResourceView(pMotionBlurAccBuffer.Get(), &accBufSRVDesc,
+                                                    pSrvAccBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create blur buffer SRV.");
+
+    D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
+    sourceSRVTextureDesc.CPUAccessFlags = 0;
+    sourceSRVTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    sourceSRVTextureDesc.MiscFlags = 0;
+    sourceSRVTextureDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
+    sourceSRVTextureDesc.ArraySize = 1;
+    sourceSRVTextureDesc.SampleDesc.Count = 1;
+    sourceSRVTextureDesc.SampleDesc.Quality = 0;
+    sourceSRVTextureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    sourceSRVTextureDesc.MipLevels = 1;
+
+    REQUIRE(p_device->CreateTexture2D(&sourceSRVTextureDesc, NULL, pSourceSrvTexture.ReleaseAndGetAddressOf()),
+            "Failed to create back buffer copy texture");
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC sourceSRVDesc;
+    sourceSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    sourceSRVDesc.Texture2D.MipLevels = 1;
+    sourceSRVDesc.Texture2D.MostDetailedMip = 0;
+    sourceSRVDesc.Format = sourceSRVTextureDesc.Format;
+
+    LOG_IF_FAILED(
+        p_device->CreateShaderResourceView(pSourceSrvTexture.Get(), &sourceSRVDesc, pSourceSrv.ReleaseAndGetAddressOf()),
+        "Failed to create backbuffer copy SRV.");
+}
+
+void AutoReloadConfig() {
+    if (config::auto_reload_config) {
+        LOG_CALL(LL_DBG, config::reload());
+    }
+}
+
+void CreateNewExportContext() {
+    encodingSession.reset(new Encoder::Session());
+    NOT_NULL(encodingSession, "Could not create the session");
+    ::exportContext.reset(new ExportContext());
+    NOT_NULL(::exportContext, "Could not create export context");
+}
+
 void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint32_t r8d, uint32_t width,
                                                uint32_t height, const uint32_t format, void* rsp30) {
     void* result = OriginalFunc(rcx, name, r8d, width, height, format, rsp30);
@@ -663,14 +751,14 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
             pTexture->GetDevice(&pTempDevice);
 
             IDXGIDevice* pDXGIDevice = nullptr;
-            REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), (void**)&pDXGIDevice),
+            REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&pDXGIDevice)),
                     "Failed to get IDXGIDevice");
 
             IDXGIAdapter* pDXGIAdapter = nullptr;
             REQUIRE(pDXGIDevice->GetAdapter(&pDXGIAdapter), "Failed to get IDXGIAdapter");
 
             IDXGIFactory* pDXGIFactory = nullptr;
-            REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&pDXGIFactory),
+            REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&pDXGIFactory)),
                     "Failed to get IDXGIFactory");
 
             DXGI_SWAP_CHAIN_DESC tempDesc{0};
@@ -753,108 +841,23 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
 
             pGameBackBuffer = pTexture;
 
-            D3D11_TEXTURE2D_DESC desc;
-
-            pGameBackBuffer->GetDesc(&desc);
-
-            D3D11_TEXTURE2D_DESC accBufDesc = desc;
-            accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-            accBufDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-            accBufDesc.CPUAccessFlags = 0;
-            accBufDesc.MiscFlags = 0;
-            accBufDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
-            accBufDesc.MipLevels = 1;
-            accBufDesc.ArraySize = 1;
-            accBufDesc.SampleDesc.Count = 1;
-            accBufDesc.SampleDesc.Quality = 0;
-
-            LOG_IF_FAILED(pDevice->CreateTexture2D(&accBufDesc, NULL, pMotionBlurAccBuffer.ReleaseAndGetAddressOf()),
-                          "Failed to create accumulation buffer texture");
-
-            D3D11_TEXTURE2D_DESC mbBufferDesc = accBufDesc;
-            mbBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
-            mbBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-            LOG_IF_FAILED(
-                pDevice->CreateTexture2D(&mbBufferDesc, NULL, pMotionBlurFinalBuffer.ReleaseAndGetAddressOf()),
-                "Failed to create motion blur buffer texture");
-
-            D3D11_RENDER_TARGET_VIEW_DESC accBufRTVDesc;
-            accBufRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-            accBufRTVDesc.Texture2D.MipSlice = 0;
-            accBufRTVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-
-            LOG_IF_FAILED(pDevice->CreateRenderTargetView(pMotionBlurAccBuffer.Get(), &accBufRTVDesc,
-                                                          pRtvAccBuffer.ReleaseAndGetAddressOf()),
-                          "Failed to create acc buffer RTV.");
-
-            D3D11_RENDER_TARGET_VIEW_DESC mbBufferRTVDesc;
-            mbBufferRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-            mbBufferRTVDesc.Texture2D.MipSlice = 0;
-            mbBufferRTVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-            LOG_IF_FAILED(pDevice->CreateRenderTargetView(pMotionBlurFinalBuffer.Get(), &mbBufferRTVDesc,
-                                                          pRtvBlurBuffer.ReleaseAndGetAddressOf()),
-                          "Failed to create blur buffer RTV.");
-
-            D3D11_SHADER_RESOURCE_VIEW_DESC accBufSRVDesc;
-            accBufSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-            accBufSRVDesc.Texture2D.MipLevels = 1;
-            accBufSRVDesc.Texture2D.MostDetailedMip = 0;
-            accBufSRVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-
-            LOG_IF_FAILED(pDevice->CreateShaderResourceView(pMotionBlurAccBuffer.Get(), &accBufSRVDesc,
-                                                            pSrvAccBuffer.ReleaseAndGetAddressOf()),
-                          "Failed to create blur buffer SRV.");
-
-            D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
-            sourceSRVTextureDesc.CPUAccessFlags = 0;
-            sourceSRVTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-            sourceSRVTextureDesc.MiscFlags = 0;
-            sourceSRVTextureDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
-            sourceSRVTextureDesc.ArraySize = 1;
-            sourceSRVTextureDesc.SampleDesc.Count = 1;
-            sourceSRVTextureDesc.SampleDesc.Quality = 0;
-            sourceSRVTextureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-            sourceSRVTextureDesc.MipLevels = 1;
-
-            REQUIRE(pDevice->CreateTexture2D(&sourceSRVTextureDesc, NULL, pSourceSrvTexture.ReleaseAndGetAddressOf()),
-                    "Failed to create back buffer copy texture");
-
-            D3D11_SHADER_RESOURCE_VIEW_DESC sourceSRVDesc;
-            sourceSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-            sourceSRVDesc.Texture2D.MipLevels = 1;
-            sourceSRVDesc.Texture2D.MostDetailedMip = 0;
-            sourceSRVDesc.Format = sourceSRVTextureDesc.Format;
-
-            LOG_IF_FAILED(pDevice->CreateShaderResourceView(pSourceSrvTexture.Get(), &sourceSRVDesc,
-                                                            pSourceSrv.ReleaseAndGetAddressOf()),
-                          "Failed to create backbuffer copy SRV.");
-
         } else if ((std::strcmp("BackBuffer_Resolved", name) == 0) || (std::strcmp("BackBufferCopy", name) == 0)) {
             pGameBackBufferResolved = pTexture;
         } else if (std::strcmp("VideoEncode", name) == 0) {
+            std::lock_guard<std::mutex> sessionLock(mxSession);
             const ComPtr<ID3D11Texture2D>& pExportTexture = pTexture;
 
             D3D11_TEXTURE2D_DESC desc;
             pExportTexture->GetDesc(&desc);
 
-            LOG(LL_NFO, "Detour_CreateTexture: fmt:", conv_dxgi_format_to_string(desc.Format), " w:", desc.Width,
-                " h:", desc.Height);
-            std::lock_guard<std::mutex> sessionLock(mxSession);
             LOG_CALL(LL_DBG, ::exportContext.reset());
             LOG_CALL(LL_DBG, encodingSession.reset());
             try {
                 LOG(LL_NFO, "Creating session...");
 
-                if (config::auto_reload_config) {
-                    LOG_CALL(LL_DBG, config::reload());
-                }
-
-                encodingSession.reset(new Encoder::Session());
-                NOT_NULL(encodingSession, "Could not create the session");
-                ::exportContext.reset(new ExportContext());
-                NOT_NULL(::exportContext, "Could not create export context");
+                CreateMotionBlurBuffers(pDevice, desc);
+                AutoReloadConfig();
+                CreateNewExportContext();
                 ::exportContext->p_swap_chain = mainSwapChain;
                 ::exportContext->p_export_render_target = pExportTexture;
 
