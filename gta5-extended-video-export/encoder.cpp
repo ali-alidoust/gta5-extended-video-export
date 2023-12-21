@@ -33,17 +33,20 @@ Session::~Session() {
     POST();
 }
 
-HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring& inFilename, uint32_t inWidth,
-                               uint32_t inHeight, const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den,
-                               uint32_t inputChannels, uint32_t inputSampleRate, const std::string& inputSampleFormat,
-                               uint32_t inputAlign, bool inExportOpenExr) {
+HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring& in_filename, uint32_t in_width,
+                               uint32_t in_height, const std::string& input_pixel_fmt, uint32_t fps_num,
+                               uint32_t fps_den, uint32_t input_channels, uint32_t input_sample_rate,
+                               const std::string& input_sample_format, uint32_t input_align, bool in_export_open_exr,
+                               uint32_t in_open_exr_width, uint32_t in_open_exr_height) {
     PRE();
 
-    this->width = static_cast<int32_t>(inWidth);
-    this->height = static_cast<int32_t>(inHeight);
+    this->width = static_cast<int32_t>(in_width);
+    this->height = static_cast<int32_t>(in_height);
+    open_exr_width = static_cast<int32_t>(in_open_exr_width);
+    open_exr_height = static_cast<int32_t>(in_open_exr_height);
 
-    ASSERT_RUNTIME(inFilename.length() < sizeof(VKENCODERINFO::filename) / sizeof(wchar_t), "File name too long.");
-    ASSERT_RUNTIME(inputChannels == 1 || inputChannels == 2 || inputChannels == 6,
+    ASSERT_RUNTIME(in_filename.length() < sizeof(VKENCODERINFO::filename) / sizeof(wchar_t), "File name too long.");
+    ASSERT_RUNTIME(input_channels == 1 || input_channels == 2 || input_channels == 6,
                    "Invalid number of audio channels, only 1, 2 and 6 (5.1) are supported.");
 
     Microsoft::WRL::ComPtr<IVoukoder> m_pVoukoder = nullptr;
@@ -58,18 +61,18 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         .application = L"Extended Video Export",
         .video{
             .enabled = true,
-            .width = static_cast<int>(inWidth),
-            .height = static_cast<int>(inHeight),
+            .width = static_cast<int>(in_width),
+            .height = static_cast<int>(in_height),
             .timebase = {static_cast<int>(fps_den), static_cast<int>(fps_num)},
             .aspectratio{1, 1},
             .fieldorder = FieldOrder::Progressive, // TODO
         },
         .audio{
             .enabled = true,
-            .samplerate = static_cast<int>(inputSampleRate),
+            .samplerate = static_cast<int>(input_sample_rate),
             .channellayout =
-                [inputChannels] {
-                    switch (inputChannels) {
+                [input_channels] {
+                    switch (input_channels) {
                     case 1:
                         return ChannelLayout::Mono;
                     case 2:
@@ -78,13 +81,13 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
                         return ChannelLayout::FivePointOne;
                     }
                 }(),
-            .numberChannels = static_cast<int>(inputChannels),
+            .numberChannels = static_cast<int>(input_channels),
         },
     };
-    inFilename.copy(vkInfo.filename, std::size(vkInfo.filename));
-    this->exportExr = inExportOpenExr;
+    in_filename.copy(vkInfo.filename, std::size(vkInfo.filename));
+    this->exportExr = in_export_open_exr;
     if (this->exportExr) {
-        this->exrOutputPath = utf8_encode(inFilename) + ".OpenEXR";
+        this->exrOutputPath = utf8_encode(in_filename) + ".OpenEXR";
         std::filesystem::create_directories(this->exrOutputPath);
     }
 
@@ -95,21 +98,21 @@ HRESULT Session::createContext(const VKENCODERCONFIG& config, const std::wstring
         .buffer = new byte*[1], // We'll set this in writeVideoFrame() function
         .rowsize = new int[1],  // We'll set this in writeVideoFrame() function
         .planes = 1,
-        .width = static_cast<int>(inWidth),
-        .height = static_cast<int>(inHeight),
+        .width = static_cast<int>(in_width),
+        .height = static_cast<int>(in_height),
         .pass = 1,
     };
-    inputPixelFmt.copy(videoFrame.format, std::size(videoFrame.format));
+    input_pixel_fmt.copy(videoFrame.format, std::size(videoFrame.format));
 
     audioChunk = {
         .buffer = new byte*[1], // We'll set this in writeAudioFrame() function
         .samples = 0,           // We'll set this in writeAudioFrame() function
-        .blockSize = static_cast<int>(inputAlign),
+        .blockSize = static_cast<int>(input_align),
         .planes = 1,
-        .sampleRate = static_cast<int>(inputSampleRate),
+        .sampleRate = static_cast<int>(input_sample_rate),
         .layout = vkInfo.audio.channellayout,
     };
-    inputSampleFormat.copy(audioChunk.format, std::size(audioChunk.format));
+    input_sample_format.copy(audioChunk.format, std::size(audioChunk.format));
 
     pVoukoder = std::move(m_pVoukoder);
 
@@ -153,7 +156,7 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
         float depth;
     };
 
-    Imf::Header header(this->width, this->height);
+    Imf::Header header(open_exr_width, open_exr_height);
     Imf::FrameBuffer framebuffer;
 
     if (mHDR.pData != nullptr) {
@@ -164,16 +167,17 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
         const auto mHDRArray = static_cast<RGBA*>(mHDR.pData);
 
         LOG_CALL(LL_DBG, framebuffer.insert("R", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].R),
-                                                            sizeof(RGBA), sizeof(RGBA) * this->width)));
+                                                            sizeof(RGBA), sizeof(RGBA) * open_exr_width)));
 
         LOG_CALL(LL_DBG, framebuffer.insert("G", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].G),
-                                                            sizeof(RGBA), sizeof(RGBA) * this->width)));
+                                                            sizeof(RGBA), sizeof(RGBA) * open_exr_width)));
 
         LOG_CALL(LL_DBG, framebuffer.insert("B", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].B),
-                                                            sizeof(RGBA), sizeof(RGBA) * this->width)));
+                                                            sizeof(RGBA), sizeof(RGBA) * open_exr_width)));
 
-        LOG_CALL(LL_DBG, framebuffer.insert("SubsurfaceScatter", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].A),
-                                                              sizeof(RGBA), sizeof(RGBA) * this->width)));
+        LOG_CALL(LL_DBG,
+                 framebuffer.insert("SubsurfaceScatter", Imf::Slice(Imf::HALF, reinterpret_cast<char*>(&mHDRArray[0].A),
+                                                                    sizeof(RGBA), sizeof(RGBA) * open_exr_width)));
     }
 
     if (mDepth.pData != nullptr) {
@@ -182,14 +186,14 @@ HRESULT Session::enqueueEXRImage(const Microsoft::WRL::ComPtr<ID3D11DeviceContex
 
         LOG_CALL(LL_DBG,
                  framebuffer.insert("depth.Z", Imf::Slice(Imf::FLOAT, reinterpret_cast<char*>(&mDSArray[0].depth),
-                                                          sizeof(Depth), sizeof(Depth) * this->width)));
+                                                          sizeof(Depth), sizeof(Depth) * open_exr_width)));
     }
 
     std::stringstream sstream;
     sstream << std::setw(5) << std::setfill('0') << this->exrPTS++;
     Imf::OutputFile file((this->exrOutputPath + "\\frame." + sstream.str() + ".exr").c_str(), header);
     LOG_CALL(LL_DBG, file.setFrameBuffer(framebuffer));
-    LOG_CALL(LL_DBG, file.writePixels(this->height));
+    LOG_CALL(LL_DBG, file.writePixels(open_exr_height));
     //}
 
     if (cRGB) {

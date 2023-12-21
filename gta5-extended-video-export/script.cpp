@@ -452,12 +452,18 @@ HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pTh
                 const auto exportWidth = desc.BufferDesc.Width;
                 const auto exportHeight = desc.BufferDesc.Height;
 
+                // Get pBackBufferResolved dimensions for OpenEXR export
+                D3D11_TEXTURE2D_DESC backBufferCopyDesc;
+                pGameBackBufferResolved->GetDesc(&backBufferCopyDesc);
+                const auto openExrWidth = backBufferCopyDesc.Width;
+                const auto openExrHeight = backBufferCopyDesc.Height;
+
                 LOG(LL_DBG, "Export Resolution: ", exportWidth, "x", exportHeight);
 
-                REQUIRE(encodingSession->createContext(config::encoder_config,
-                                                       std::wstring(filename.begin(), filename.end()), exportWidth,
-                                                       exportHeight, "rgba", fps_num, fps_den, numChannels, sampleRate,
-                                                       "s16", blockAlignment, config::export_openexr),
+                REQUIRE(encodingSession->createContext(
+                            config::encoder_config, std::wstring(filename.begin(), filename.end()), exportWidth,
+                            exportHeight, "rgba", fps_num, fps_den, numChannels, sampleRate, "s16", blockAlignment,
+                            config::export_openexr, openExrWidth, openExrHeight),
                         "Failed to create encoding context.");
             } catch (std::exception& ex) {
                 LOG(LL_ERR, ex.what());
@@ -656,7 +662,7 @@ void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC
     accBufRTVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 
     LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurAccBuffer.Get(), &accBufRTVDesc,
-                                                  pRtvAccBuffer.ReleaseAndGetAddressOf()),
+                                                   pRtvAccBuffer.ReleaseAndGetAddressOf()),
                   "Failed to create acc buffer RTV.");
 
     D3D11_RENDER_TARGET_VIEW_DESC mbBufferRTVDesc;
@@ -665,7 +671,7 @@ void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC
     mbBufferRTVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
     LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurFinalBuffer.Get(), &mbBufferRTVDesc,
-                                                  pRtvBlurBuffer.ReleaseAndGetAddressOf()),
+                                                   pRtvBlurBuffer.ReleaseAndGetAddressOf()),
                   "Failed to create blur buffer RTV.");
 
     D3D11_SHADER_RESOURCE_VIEW_DESC accBufSRVDesc;
@@ -675,7 +681,7 @@ void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC
     accBufSRVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 
     LOG_IF_FAILED(p_device->CreateShaderResourceView(pMotionBlurAccBuffer.Get(), &accBufSRVDesc,
-                                                    pSrvAccBuffer.ReleaseAndGetAddressOf()),
+                                                     pSrvAccBuffer.ReleaseAndGetAddressOf()),
                   "Failed to create blur buffer SRV.");
 
     D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
@@ -698,9 +704,9 @@ void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC
     sourceSRVDesc.Texture2D.MostDetailedMip = 0;
     sourceSRVDesc.Format = sourceSRVTextureDesc.Format;
 
-    LOG_IF_FAILED(
-        p_device->CreateShaderResourceView(pSourceSrvTexture.Get(), &sourceSRVDesc, pSourceSrv.ReleaseAndGetAddressOf()),
-        "Failed to create backbuffer copy SRV.");
+    LOG_IF_FAILED(p_device->CreateShaderResourceView(pSourceSrvTexture.Get(), &sourceSRVDesc,
+                                                     pSourceSrv.ReleaseAndGetAddressOf()),
+                  "Failed to create backbuffer copy SRV.");
 }
 
 void AutoReloadConfig() {

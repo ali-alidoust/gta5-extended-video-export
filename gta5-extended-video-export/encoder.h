@@ -71,10 +71,10 @@ class Session {
     SafeQueue<frameQueueItem> videoFrameQueue;
     SafeQueue<exr_queue_item> exrImageQueue;
 
-    //bool isEncodingThreadFinished = false;
-    //std::condition_variable cvEncodingThreadFinished;
-    //std::mutex mxEncodingThread;
-    //std::thread thread_video_encoder;
+    // bool isEncodingThreadFinished = false;
+    // std::condition_variable cvEncodingThreadFinished;
+    // std::mutex mxEncodingThread;
+    // std::thread thread_video_encoder;
     std::valarray<uint16_t> motionBlurAccBuffer;
     std::valarray<uint16_t> motionBlurTempBuffer;
     std::valarray<uint8_t> motionBlurDestBuffer;
@@ -89,6 +89,8 @@ class Session {
 
     int32_t width{};
     int32_t height{};
+    int32_t open_exr_width;
+    int32_t open_exr_height;
     int32_t framerate{};
     uint8_t motionBlurSamples{};
     int32_t audioBlockAlign{};
@@ -114,9 +116,11 @@ class Session {
                           std::string inputSampleFmt, uint32_t inputAlign, std::string outputSampleFmt,
                           std::string acodec, std::string aoptions);*/
 
-    HRESULT createContext(const VKENCODERCONFIG& config, const std::wstring& inFilename, uint32_t inWidth, uint32_t inHeight,
-                          const std::string& inputPixelFmt, uint32_t fps_num, uint32_t fps_den, uint32_t inputChannels,
-                          uint32_t inputSampleRate, const std::string& inputSampleFormat, uint32_t inputAlign, bool inExportOpenExr);
+    HRESULT createContext(const VKENCODERCONFIG& config, const std::wstring& in_filename, uint32_t in_width,
+                          uint32_t in_height, const std::string& input_pixel_fmt, uint32_t fps_num, uint32_t fps_den,
+                          uint32_t input_channels, uint32_t input_sample_rate, const std::string& input_sample_format,
+                          uint32_t input_align, bool in_export_open_exr, uint32_t in_open_exr_width,
+                          uint32_t in_open_exr_height);
 
     // HRESULT enqueueVideoFrame(BYTE* pData, int length);
     HRESULT enqueueVideoFrame(const D3D11_MAPPED_SUBRESOURCE& subresource);
@@ -124,8 +128,8 @@ class Session {
                             const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cRGB,
                             const Microsoft::WRL::ComPtr<ID3D11Texture2D>& cDepth);
 
-    //void videoEncodingThread();
-    //void exrEncodingThread();
+    // void videoEncodingThread();
+    // void exrEncodingThread();
 
     HRESULT writeVideoFrame(BYTE* pData, const int32_t length, const int rowPitch, const LONGLONG sampleTime);
     HRESULT writeAudioFrame(BYTE* pData, int32_t length, LONGLONG sampleTime);
@@ -134,6 +138,5 @@ class Session {
     HRESULT finishAudio();
 
     HRESULT endSession();
-
 };
 } // namespace Encoder
