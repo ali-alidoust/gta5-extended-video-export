@@ -35,6 +35,7 @@ set(Source_Files
         "script.cpp"
         "yara-helper.cpp"
         "resource.rc"
+        "util.cpp"
         )
 
 set(VK_Source_Files

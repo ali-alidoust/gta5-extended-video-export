@@ -10,7 +10,9 @@
 #include "yara-helper.h"
 #include <mferror.h>
 
+#include "yara-patterns.h"
 #include <DirectXTex.h>
+#include <cwctype>
 #include <variant>
 
 namespace PSAccumulate {
@@ -93,11 +95,11 @@ std::unique_ptr<YaraHelper> pYaraHelper;
 
 } // namespace
 
-void eve::OnPresent(IDXGISwapChain* swap_chain) {
+void eve::OnPresent(IDXGISwapChain* p_swap_chain) {
 
     // For some unknown reason, we need this lock to prevent black exports
     std::lock_guard onPresentLock(mxOnPresent);
-    mainSwapChain = swap_chain;
+    mainSwapChain = p_swap_chain;
     static bool initialized = false;
     if (!initialized) {
         initialized = true;
@@ -107,23 +109,47 @@ void eve::OnPresent(IDXGISwapChain* swap_chain) {
             ComPtr<ID3D11Texture2D> texture;
             DXGI_SWAP_CHAIN_DESC desc;
 
-            REQUIRE(swap_chain->GetDesc(&desc), "Failed to get swap chain descriptor");
+            REQUIRE(p_swap_chain->GetDesc(&desc), "Failed to get swap chain descriptor");
 
             LOG(LL_NFO, "BUFFER COUNT: ", desc.BufferCount);
-            REQUIRE(
-                swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(texture.GetAddressOf())),
-                "Failed to get the texture buffer");
-            REQUIRE(swap_chain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(pDevice.GetAddressOf())),
-                    "Failed to get the D3D11 device");
-            pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
-            NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context");
+            // REQUIRE(
+            //     p_swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D),
+            //     reinterpret_cast<void**>(texture.GetAddressOf())), "Failed to get the texture buffer");
+            // REQUIRE(p_swap_chain->GetDevice(__uuidof(ID3D11Device),
+            // reinterpret_cast<void**>(pDevice.GetAddressOf())),
+            //         "Failed to get the D3D11 device");
+            // pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
+            // NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context");
 
-            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, Draw, pDeviceContext.Get());
-            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, DrawIndexed, pDeviceContext.Get());
-            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, OMSetRenderTargets, pDeviceContext.Get());
+            // PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, Draw, pDeviceContext.Get());
+            // PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, DrawIndexed, pDeviceContext.Get());
+            // PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, OMSetRenderTargets, pDeviceContext.Get());
+
+        } catch (std::exception& ex) {
+            LOG(LL_ERR, ex.what());
+        }
+    }
+}
+
+HRESULT ExportHooks::D3D11CreateDeviceAndSwapChain::Implementation(
+    IDXGIAdapter* p_adapter, D3D_DRIVER_TYPE driver_type, HMODULE software, UINT flags,
+    const D3D_FEATURE_LEVEL* p_feature_levels, UINT feature_levels, UINT sdk_version,
+    const DXGI_SWAP_CHAIN_DESC* p_swap_chain_desc, IDXGISwapChain** pp_swap_chain, ID3D11Device** pp_device,
+    D3D_FEATURE_LEVEL* p_feature_level, ID3D11DeviceContext** pp_immediate_context) {
+    PRE();
+    const HRESULT result =
+        OriginalFunc(p_adapter, driver_type, software, flags, p_feature_levels, feature_levels, sdk_version,
+                     p_swap_chain_desc, pp_swap_chain, pp_device, p_feature_level, pp_immediate_context);
+    if (SUCCEEDED(result) && pp_swap_chain) {
+        try {
+            PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, *pp_swap_chain);
+            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, Draw, *pp_immediate_context);
+            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, DrawIndexed, *pp_immediate_context);
+            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, OMSetRenderTargets, *pp_immediate_context);
 
             ComPtr<IDXGIDevice> pDXGIDevice;
-            REQUIRE(pDevice.As(&pDXGIDevice), "Failed to get IDXGIDevice from ID3D11Device");
+            REQUIRE((*pp_device)->QueryInterface(pDXGIDevice.GetAddressOf()),
+                    "Failed to get IDXGIDevice from ID3D11Device");
 
             ComPtr<IDXGIAdapter> pDXGIAdapter;
             REQUIRE(
@@ -133,12 +159,13 @@ void eve::OnPresent(IDXGISwapChain* swap_chain) {
                 pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(pDxgiFactory.GetAddressOf())),
                 "Failed to get IDXGIFactory");
 
-            eve::prepareDeferredContext(pDevice, pDeviceContext);
-
-        } catch (std::exception& ex) {
-            LOG(LL_ERR, ex.what());
+            eve::prepareDeferredContext(*pp_device, *pp_immediate_context);
+        } catch (...) {
+            LOG(LL_ERR, "Hooking IDXGISwapChain functions failed");
         }
     }
+    POST();
+    return result;
 }
 
 HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
@@ -159,26 +186,26 @@ void eve::initialize() {
     try {
         mainThreadId = std::this_thread::get_id();
 
+        LOG(LL_NFO, "Initializing Media Foundation hook");
         PERFORM_NAMED_IMPORT_HOOK_REQUIRED("mfreadwrite.dll", MFCreateSinkWriterFromURL);
+        LOG(LL_NFO, "Initializing LoadLibrary hook");
+        PERFORM_NAMED_IMPORT_HOOK_REQUIRED("kernel32.dll", LoadLibraryA);
+        PERFORM_NAMED_IMPORT_HOOK_REQUIRED("kernel32.dll", LoadLibraryW);
 
         pYaraHelper.reset(new YaraHelper());
-        pYaraHelper->initialize();
+        pYaraHelper->Initialize();
 
         MODULEINFO info;
-        GetModuleInformation(GetCurrentProcess(), GetModuleHandle(NULL), &info, sizeof(info));
+        GetModuleInformation(GetCurrentProcess(), GetModuleHandle(nullptr), &info, sizeof(info));
         LOG(LL_NFO, "Image base:", ((void*)info.lpBaseOfDll));
 
         uint64_t pGetRenderTimeBase = NULL;
         uint64_t pCreateTexture = NULL;
         uint64_t pCreateThread = NULL;
-        uint64_t pCreateExportContext = 0;
-        pYaraHelper->addEntry("yara_get_render_time_base_function", yara_get_render_time_base_function,
-                              &pGetRenderTimeBase);
-        pYaraHelper->addEntry("yara_create_thread_function", yara_create_thread_function, &pCreateThread);
-        pYaraHelper->addEntry("yara_create_texture_function", yara_create_texture_function, &pCreateTexture);
-        // pYaraHelper->addEntry("yara_create_export_context_function", yara_create_export_context_function,
-        //&pCreateExportContext);
-        pYaraHelper->performScan();
+        pYaraHelper->AddEntry("get_render_time_base_function", yara_get_render_time_base_function, &pGetRenderTimeBase);
+        pYaraHelper->AddEntry("create_thread_function", yara_create_thread_function, &pCreateThread);
+        pYaraHelper->AddEntry("create_texture_function", yara_create_texture_function, &pCreateTexture);
+        pYaraHelper->PerformScan();
 
         try {
             if (pGetRenderTimeBase) {
@@ -200,12 +227,6 @@ void eve::initialize() {
             } else {
                 LOG(LL_ERR, "Could not find the address for CreateThread function.");
             }
-
-            // if (pCreateExportContext) {
-            //     PERFORM_X64_HOOK_REQUIRED(CreateExportContext, pCreateExportContext);
-            // } else {
-            //     LOG(LL_ERR, "Could not find the address for CreateExportContext function.");
-            // }
         } catch (std::exception& ex) {
             LOG(LL_ERR, ex.what());
         }
@@ -223,6 +244,48 @@ void eve::ScriptMain() {
     while (true) {
         WAIT(0);
     }
+}
+
+HMODULE ImportHooks::LoadLibraryW::Implementation(LPCWSTR lp_lib_file_name) {
+    PRE();
+    const HMODULE result = OriginalFunc(lp_lib_file_name);
+
+    // Create std::wstring from lp_lib_file_name and convert it to lowercase
+    std::wstring libFileName(lp_lib_file_name);
+    std::ranges::transform(libFileName, libFileName.begin(), std::towlower);
+
+    if (result != nullptr) {
+        try {
+            if (std::wstring(L"d3d11.dll") == libFileName) {
+                PERFORM_NAMED_EXPORT_HOOK_REQUIRED(L"d3d11.dll", D3D11CreateDeviceAndSwapChain);
+            }
+        } catch (...) {
+            LOG(LL_ERR, "Hooking functions failed");
+        }
+    }
+    POST();
+    return result;
+}
+
+HMODULE ImportHooks::LoadLibraryA::Implementation(LPCSTR lp_lib_file_name) {
+    PRE();
+    const HMODULE result = OriginalFunc(lp_lib_file_name);
+
+    if (result != nullptr) {
+        try {
+            // Compare lp_lib_file_name with "d3d11.dll" (case insensitive)
+            std::string libFileName(lp_lib_file_name);
+            std::ranges::transform(libFileName, libFileName.begin(), [](const char c) { return std::tolower(c); });
+
+            if (std::string("d3d11.dll") == libFileName) {
+                PERFORM_NAMED_EXPORT_HOOK_REQUIRED(L"d3d11.dll", D3D11CreateDeviceAndSwapChain);
+            }
+        } catch (...) {
+            LOG(LL_ERR, "Hooking functions failed");
+        }
+    }
+    POST();
+    return result;
 }
 
 void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext* p_this, UINT num_views,
@@ -384,6 +447,81 @@ HRESULT IMFSinkWriterHooks::AddStream::Implementation(IMFSinkWriter* pThis, IMFM
     return OriginalFunc(pThis, pTargetMediaType, pdwStreamIndex);
 }
 
+void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC const& desc) {
+    D3D11_TEXTURE2D_DESC accBufDesc = desc;
+    accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    accBufDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    accBufDesc.CPUAccessFlags = 0;
+    accBufDesc.MiscFlags = 0;
+    accBufDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
+    accBufDesc.MipLevels = 1;
+    accBufDesc.ArraySize = 1;
+    accBufDesc.SampleDesc.Count = 1;
+    accBufDesc.SampleDesc.Quality = 0;
+
+    LOG_IF_FAILED(p_device->CreateTexture2D(&accBufDesc, NULL, pMotionBlurAccBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create accumulation buffer texture");
+
+    D3D11_TEXTURE2D_DESC mbBufferDesc = accBufDesc;
+    mbBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+    mbBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    LOG_IF_FAILED(p_device->CreateTexture2D(&mbBufferDesc, NULL, pMotionBlurFinalBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create motion blur buffer texture");
+
+    D3D11_RENDER_TARGET_VIEW_DESC accBufRTVDesc;
+    accBufRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    accBufRTVDesc.Texture2D.MipSlice = 0;
+    accBufRTVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+    LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurAccBuffer.Get(), &accBufRTVDesc,
+                                                   pRtvAccBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create acc buffer RTV.");
+
+    D3D11_RENDER_TARGET_VIEW_DESC mbBufferRTVDesc;
+    mbBufferRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    mbBufferRTVDesc.Texture2D.MipSlice = 0;
+    mbBufferRTVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurFinalBuffer.Get(), &mbBufferRTVDesc,
+                                                   pRtvBlurBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create blur buffer RTV.");
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC accBufSRVDesc;
+    accBufSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    accBufSRVDesc.Texture2D.MipLevels = 1;
+    accBufSRVDesc.Texture2D.MostDetailedMip = 0;
+    accBufSRVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+    LOG_IF_FAILED(p_device->CreateShaderResourceView(pMotionBlurAccBuffer.Get(), &accBufSRVDesc,
+                                                     pSrvAccBuffer.ReleaseAndGetAddressOf()),
+                  "Failed to create blur buffer SRV.");
+
+    D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
+    sourceSRVTextureDesc.CPUAccessFlags = 0;
+    sourceSRVTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    sourceSRVTextureDesc.MiscFlags = 0;
+    sourceSRVTextureDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
+    sourceSRVTextureDesc.ArraySize = 1;
+    sourceSRVTextureDesc.SampleDesc.Count = 1;
+    sourceSRVTextureDesc.SampleDesc.Quality = 0;
+    sourceSRVTextureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    sourceSRVTextureDesc.MipLevels = 1;
+
+    REQUIRE(p_device->CreateTexture2D(&sourceSRVTextureDesc, NULL, pSourceSrvTexture.ReleaseAndGetAddressOf()),
+            "Failed to create back buffer copy texture");
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC sourceSRVDesc;
+    sourceSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    sourceSRVDesc.Texture2D.MipLevels = 1;
+    sourceSRVDesc.Texture2D.MostDetailedMip = 0;
+    sourceSRVDesc.Format = sourceSRVTextureDesc.Format;
+
+    LOG_IF_FAILED(p_device->CreateShaderResourceView(pSourceSrvTexture.Get(), &sourceSRVDesc,
+                                                     pSourceSrv.ReleaseAndGetAddressOf()),
+                  "Failed to create backbuffer copy SRV.");
+}
+
 HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pThis, DWORD dwStreamIndex,
                                                               IMFMediaType* pInputMediaType,
                                                               IMFAttributes* pEncodingParameters) {
@@ -405,19 +543,20 @@ HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pTh
                 GUID pixelFormat;
                 ::exportContext->video_media_type->GetGUID(MF_MT_SUBTYPE, &pixelFormat);
 
-                // if (isCustomFrameRateSupported) {
-                //     auto fps = config::fps;
-                //     fps_num = fps.first;
-                //     fps_den = fps.second;
+                if (isCustomFrameRateSupported) {
+                    auto fps = config::fps;
+                    fps_num = fps.first;
+                    fps_den = fps.second;
 
-                //    float gameFrameRate =
-                //        ((float)fps.first * ((float)config::motion_blur_samples + 1) / (float)fps.second);
-                //    if (gameFrameRate > 60.0f) {
-                //        LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
-                //        LOG(LL_NON, "Audio export will be disabled!!!");
-                //        ::exportContext->isAudioExportDisabled = true;
-                //    }
-                //}
+                    float gameFrameRate =
+                        (static_cast<float>(fps.first) * (static_cast<float>(config::motion_blur_samples) + 1) /
+                         static_cast<float>(fps.second));
+                    if (gameFrameRate > 60.0f) {
+                        LOG(LL_NON, "fps * (motion_blur_samples + 1) > 60.0!!!");
+                        LOG(LL_NON, "Audio export will be disabled!!!");
+                        ::exportContext->is_audio_export_disabled = true;
+                    }
+                }
 
                 UINT32 blockAlignment, numChannels, sampleRate, bitsPerSample;
                 GUID subType;
@@ -458,7 +597,23 @@ HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pTh
                 const auto openExrWidth = backBufferCopyDesc.Width;
                 const auto openExrHeight = backBufferCopyDesc.Height;
 
-                LOG(LL_DBG, "Export Resolution: ", exportWidth, "x", exportHeight);
+                LOG(LL_DBG, "Video Export Resolution: ", exportWidth, "x", exportHeight);
+                LOG(LL_DBG, "OpenEXR Export Resolution: ", openExrWidth, "x", openExrHeight);
+
+                D3D11_TEXTURE2D_DESC motionBlurBufferDesc;
+                motionBlurBufferDesc.Width = exportWidth;
+                motionBlurBufferDesc.Height = exportHeight;
+                motionBlurBufferDesc.MipLevels = 1;
+                motionBlurBufferDesc.ArraySize = 1;
+                motionBlurBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                motionBlurBufferDesc.SampleDesc.Count = 1;
+                motionBlurBufferDesc.SampleDesc.Quality = 0;
+                motionBlurBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+                motionBlurBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+                motionBlurBufferDesc.CPUAccessFlags = 0;
+                motionBlurBufferDesc.MiscFlags = 0;
+
+                CreateMotionBlurBuffers(::exportContext->p_device, motionBlurBufferDesc);
 
                 REQUIRE(encodingSession->createContext(
                             config::encoder_config, std::wstring(filename.begin(), filename.end()), exportWidth,
@@ -634,81 +789,6 @@ float GameHooks::GetRenderTimeBase::Implementation(int64_t choice) {
     return result;
 }
 
-void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC const& desc) {
-    D3D11_TEXTURE2D_DESC accBufDesc = desc;
-    accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-    accBufDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-    accBufDesc.CPUAccessFlags = 0;
-    accBufDesc.MiscFlags = 0;
-    accBufDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
-    accBufDesc.MipLevels = 1;
-    accBufDesc.ArraySize = 1;
-    accBufDesc.SampleDesc.Count = 1;
-    accBufDesc.SampleDesc.Quality = 0;
-
-    LOG_IF_FAILED(p_device->CreateTexture2D(&accBufDesc, NULL, pMotionBlurAccBuffer.ReleaseAndGetAddressOf()),
-                  "Failed to create accumulation buffer texture");
-
-    D3D11_TEXTURE2D_DESC mbBufferDesc = accBufDesc;
-    mbBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
-    mbBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    LOG_IF_FAILED(p_device->CreateTexture2D(&mbBufferDesc, NULL, pMotionBlurFinalBuffer.ReleaseAndGetAddressOf()),
-                  "Failed to create motion blur buffer texture");
-
-    D3D11_RENDER_TARGET_VIEW_DESC accBufRTVDesc;
-    accBufRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    accBufRTVDesc.Texture2D.MipSlice = 0;
-    accBufRTVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-
-    LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurAccBuffer.Get(), &accBufRTVDesc,
-                                                   pRtvAccBuffer.ReleaseAndGetAddressOf()),
-                  "Failed to create acc buffer RTV.");
-
-    D3D11_RENDER_TARGET_VIEW_DESC mbBufferRTVDesc;
-    mbBufferRTVDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    mbBufferRTVDesc.Texture2D.MipSlice = 0;
-    mbBufferRTVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    LOG_IF_FAILED(p_device->CreateRenderTargetView(pMotionBlurFinalBuffer.Get(), &mbBufferRTVDesc,
-                                                   pRtvBlurBuffer.ReleaseAndGetAddressOf()),
-                  "Failed to create blur buffer RTV.");
-
-    D3D11_SHADER_RESOURCE_VIEW_DESC accBufSRVDesc;
-    accBufSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    accBufSRVDesc.Texture2D.MipLevels = 1;
-    accBufSRVDesc.Texture2D.MostDetailedMip = 0;
-    accBufSRVDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-
-    LOG_IF_FAILED(p_device->CreateShaderResourceView(pMotionBlurAccBuffer.Get(), &accBufSRVDesc,
-                                                     pSrvAccBuffer.ReleaseAndGetAddressOf()),
-                  "Failed to create blur buffer SRV.");
-
-    D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
-    sourceSRVTextureDesc.CPUAccessFlags = 0;
-    sourceSRVTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    sourceSRVTextureDesc.MiscFlags = 0;
-    sourceSRVTextureDesc.Usage = D3D11_USAGE::D3D11_USAGE_DEFAULT;
-    sourceSRVTextureDesc.ArraySize = 1;
-    sourceSRVTextureDesc.SampleDesc.Count = 1;
-    sourceSRVTextureDesc.SampleDesc.Quality = 0;
-    sourceSRVTextureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    sourceSRVTextureDesc.MipLevels = 1;
-
-    REQUIRE(p_device->CreateTexture2D(&sourceSRVTextureDesc, NULL, pSourceSrvTexture.ReleaseAndGetAddressOf()),
-            "Failed to create back buffer copy texture");
-
-    D3D11_SHADER_RESOURCE_VIEW_DESC sourceSRVDesc;
-    sourceSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    sourceSRVDesc.Texture2D.MipLevels = 1;
-    sourceSRVDesc.Texture2D.MostDetailedMip = 0;
-    sourceSRVDesc.Format = sourceSRVTextureDesc.Format;
-
-    LOG_IF_FAILED(p_device->CreateShaderResourceView(pSourceSrvTexture.Get(), &sourceSRVDesc,
-                                                     pSourceSrv.ReleaseAndGetAddressOf()),
-                  "Failed to create backbuffer copy SRV.");
-}
-
 void AutoReloadConfig() {
     if (config::auto_reload_config) {
         LOG_CALL(LL_DBG, config::reload());
@@ -752,52 +832,54 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
 
     static bool presentHooked = false;
     if (!presentHooked && pTexture && !mainSwapChain) {
-        if (auto foregroundWindow = GetForegroundWindow()) {
-            ID3D11Device* pTempDevice = nullptr;
-            pTexture->GetDevice(&pTempDevice);
+        // if (auto foregroundWindow = GetForegroundWindow()) {
+        //     ID3D11Device* pTempDevice = nullptr;
+        //     pTexture->GetDevice(&pTempDevice);
 
-            IDXGIDevice* pDXGIDevice = nullptr;
-            REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&pDXGIDevice)),
-                    "Failed to get IDXGIDevice");
+        //    IDXGIDevice* pDXGIDevice = nullptr;
+        //    REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&pDXGIDevice)),
+        //            "Failed to get IDXGIDevice");
 
-            IDXGIAdapter* pDXGIAdapter = nullptr;
-            REQUIRE(pDXGIDevice->GetAdapter(&pDXGIAdapter), "Failed to get IDXGIAdapter");
+        //    IDXGIAdapter* pDXGIAdapter = nullptr;
+        //    REQUIRE(pDXGIDevice->GetAdapter(&pDXGIAdapter), "Failed to get IDXGIAdapter");
 
-            IDXGIFactory* pDXGIFactory = nullptr;
-            REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&pDXGIFactory)),
-                    "Failed to get IDXGIFactory");
+        //    IDXGIFactory* pDXGIFactory = nullptr;
+        //    REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&pDXGIFactory)),
+        //            "Failed to get IDXGIFactory");
 
-            DXGI_SWAP_CHAIN_DESC tempDesc{0};
-            tempDesc.BufferCount = 1;
-            tempDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-            tempDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            tempDesc.BufferDesc.Width = 800;
-            tempDesc.BufferDesc.Height = 600;
-            tempDesc.BufferDesc.RefreshRate = {30, 1};
-            tempDesc.OutputWindow = foregroundWindow;
-            tempDesc.Windowed = true;
-            tempDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-            tempDesc.SampleDesc.Count = 1;
-            tempDesc.SampleDesc.Quality = 0;
+        //    DXGI_SWAP_CHAIN_DESC tempDesc{0};
+        //    tempDesc.BufferCount = 1;
+        //    tempDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        //    tempDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        //    tempDesc.BufferDesc.Width = 800;
+        //    tempDesc.BufferDesc.Height = 600;
+        //    tempDesc.BufferDesc.RefreshRate = {30, 1};
+        //    tempDesc.OutputWindow = foregroundWindow;
+        //    tempDesc.Windowed = true;
+        //    tempDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        //    tempDesc.SampleDesc.Count = 1;
+        //    tempDesc.SampleDesc.Quality = 0;
 
-            bool windowedSwapChainCreated = false;
+        //    bool windowedSwapChainCreated = false;
 
-            ComPtr<IDXGISwapChain> pTempSwapChain;
-            TRY([&]() {
-                REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc, pTempSwapChain.ReleaseAndGetAddressOf()),
-                        "Failed to create temporary swapchain in windowed mode. Trying in fullscreen mode.");
-                windowedSwapChainCreated = true;
-            });
+        //    ComPtr<IDXGISwapChain> pTempSwapChain;
+        //    TRY([&]() {
+        //        REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc,
+        //        pTempSwapChain.ReleaseAndGetAddressOf()),
+        //                "Failed to create temporary swapchain in windowed mode. Trying in fullscreen mode.");
+        //        windowedSwapChainCreated = true;
+        //    });
 
-            if (!windowedSwapChainCreated) {
-                tempDesc.Windowed = false;
-                REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc, pTempSwapChain.ReleaseAndGetAddressOf()),
-                        "Failed to create temporary swapchain");
-            }
+        //    if (!windowedSwapChainCreated) {
+        //        tempDesc.Windowed = false;
+        //        REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc,
+        //        pTempSwapChain.ReleaseAndGetAddressOf()),
+        //                "Failed to create temporary swapchain");
+        //    }
 
-            PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, pTempSwapChain.Get());
-            presentHooked = true;
-        }
+        // PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, pTempSwapChain.Get());
+        presentHooked = true;
+        //}
     }
 
     if (pTexture && name) {
@@ -861,7 +943,6 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
             try {
                 LOG(LL_NFO, "Creating session...");
 
-                CreateMotionBlurBuffers(pDevice, desc);
                 AutoReloadConfig();
                 CreateNewExportContext();
                 ::exportContext->p_swap_chain = mainSwapChain;

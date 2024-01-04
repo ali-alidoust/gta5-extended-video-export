@@ -22,7 +22,7 @@ bool Logger::ensureStream() {
     if (this->filestream.is_open()) {
         return true;
     }
-    this->filestream.open(exePath() + "\\EVE\\" TARGET_NAME ".log");
+    this->filestream.open(AsiPath() + "\\EVE\\" TARGET_NAME ".log");
     if (this->filestream.is_open()) {
         std::lock_guard<std::mutex> guard(mtx);
         filestream << "Logger initialized." << "\r\n";
@@ -35,6 +35,7 @@ void Logger::writeLine() {
     if (this->ensureStream()) {
         std::lock_guard<std::mutex> guard(mtx);
         filestream << "\r\n";
+        filestream.flush();
     }
 }
 

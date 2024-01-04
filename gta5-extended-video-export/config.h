@@ -58,7 +58,7 @@ class config {
     static VKENCODERCONFIG encoder_config;
 
     static void reload() {
-        config_parser = std::make_shared<INIReader>(exePath() + "\\" INI_FILE_NAME);
+        config_parser = std::make_shared<INIReader>(AsiPath() + "\\" INI_FILE_NAME);
 
         is_mod_enabled = parse_lossless_export();
         auto_reload_config = parse_auto_reload_config();
@@ -74,7 +74,7 @@ class config {
 
     static void readEncoderConfig() {
         try {
-            std::ifstream ifs(exePath() + "\\" PRESET_FILE_NAME);
+            std::ifstream ifs(AsiPath() + "\\" PRESET_FILE_NAME);
 
             nlohmann::json j = nlohmann::json::parse(ifs);
 
@@ -144,7 +144,7 @@ class config {
         j["audio"]["filters"] = encoder_config.audio.filters;
         j["audio"]["sidedata"] = encoder_config.audio.sidedata;
 
-        std::ofstream ofs(exePath() + "\\" PRESET_FILE_NAME);
+        std::ofstream ofs(AsiPath() + "\\" PRESET_FILE_NAME);
         ofs << j;
         ofs.flush();
     }

@@ -62,6 +62,7 @@ class Logger {
         if (this->ensureStream()) {
             filestream << value;
             this->_write(args...);
+            filestream.flush();
         }
     }
 
@@ -85,9 +86,9 @@ class Logger {
 
 #ifndef LOG
 #define LOG(ll, ...)                                                                                                   \
-    if (ll <= Logger::instance().level) {                                                                              \
-        Logger::instance().write(Logger::instance().getTimestamp(), " ", Logger::instance().getLogLevelString(ll),     \
-                                 " ", Logger::instance().getThreadId(), " ", __CUSTOM_FILENAME__, " (line ", __LINE__, \
+    if (ll <= ::Logger::instance().level) {                                                                              \
+        ::Logger::instance().write(::Logger::instance().getTimestamp(), " ", ::Logger::instance().getLogLevelString(ll),     \
+                                 " ", ::Logger::instance().getThreadId(), " ", __CUSTOM_FILENAME__, " (line ", __LINE__, \
                                  "): ", __VA_ARGS__, "\n");                         \
     }                                                                                                                  \
     REQUIRE_SEMICOLON

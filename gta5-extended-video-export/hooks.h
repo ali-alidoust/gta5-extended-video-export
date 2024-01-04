@@ -4,6 +4,7 @@
 #include "logger.h"
 
 #include <polyhook2/Detour/x64Detour.hpp>
+#include <polyhook2/PE/EatHook.hpp>
 #include <polyhook2/PE/IatHook.hpp>
 #include <polyhook2/Virtuals/VFuncSwapHook.hpp>
 #include <polyhook2/ZydisDisassembler.hpp>
@@ -58,6 +59,27 @@ HRESULT hookNamedFunction(const std::string& dllName, const std::string& apiName
 }
 
 template <class FUNC_TYPE>
+HRESULT hookNamedExportFunction(const std::wstring& dllName, const std::string& apiName, LPVOID hookFunc,
+                                FUNC_TYPE* originalFunc, std::shared_ptr<PLH::EatHook>& EatHook) {
+
+    if (EatHook.get() != nullptr) {
+        return S_OK;
+    }
+
+    const auto newHook = new PLH::EatHook(apiName, dllName, reinterpret_cast<uint64_t>(hookFunc),
+                                          reinterpret_cast<uint64_t*>(originalFunc));
+    if (!newHook->hook()) {
+        *originalFunc = nullptr;
+        delete newHook;
+        LOG(LL_ERR, "Failed to hook function!");
+        return E_FAIL;
+    }
+
+    EatHook.reset(newHook);
+    return S_OK;
+}
+
+template <class FUNC_TYPE>
 HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
                         std::shared_ptr<PLH::x64Detour>& x64Detour) {
     if (x64Detour.get() != nullptr) {
@@ -100,6 +122,16 @@ HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
         }                                                                                                              \
     }
 
+#define DEFINE_NAMED_EXPORT_HOOK(DLL_NAME_STRING, FUNCTION_NAME, RETURN_TYPE, ...)                                     \
+    namespace Export##Hooks {                                                                                          \
+        namespace FUNCTION_NAME {                                                                                      \
+        RETURN_TYPE Implementation(__VA_ARGS__);                                                                       \
+        typedef RETURN_TYPE (*##Type)(__VA_ARGS__);                                                                    \
+        Type OriginalFunc = nullptr;                                                                                   \
+        std::shared_ptr<PLH::EatHook> Hook;                                                                            \
+        }                                                                                                              \
+    }
+
 #define DEFINE_X64_HOOK(FUNCTION_NAME, RETURN_TYPE, ...)                                                               \
     namespace Game##Hooks {                                                                                            \
         namespace FUNCTION_NAME {                                                                                      \
@@ -119,6 +151,11 @@ HRESULT hookX64Function(uint64_t func, void* hookFunc, FUNC_TYPE* originalFunc,
     REQUIRE(hookNamedFunction(DLL_NAME_STRING, #FUNCTION_NAME, ImportHooks::FUNCTION_NAME::Implementation,             \
                               &ImportHooks::FUNCTION_NAME::OriginalFunc, ImportHooks::FUNCTION_NAME::Hook),            \
             "Failed to hook " #FUNCTION_NAME "in " DLL_NAME_STRING)
+
+#define PERFORM_NAMED_EXPORT_HOOK_REQUIRED(DLL_NAME_STRING, FUNCTION_NAME)                                             \
+    REQUIRE(hookNamedExportFunction(DLL_NAME_STRING, #FUNCTION_NAME, ExportHooks::FUNCTION_NAME::Implementation,       \
+                                    &ExportHooks::FUNCTION_NAME::OriginalFunc, ExportHooks::FUNCTION_NAME::Hook),      \
+            "Failed to hook " #FUNCTION_NAME)
 
 #define PERFORM_X64_HOOK_REQUIRED(FUNCTION_NAME, ADDRESS)                                                              \
     REQUIRE(hookX64Function(ADDRESS, GameHooks::FUNCTION_NAME::Implementation,                                         \

@@ -1,32 +1,26 @@
 #pragma once
 
-#include "yara-patterns.h"
 #define NOMINMAX
 #include <Windows.h>
-#include <Psapi.h>
 #include <map>
-#include <mutex>
+#include <string>
+
+// Must be included after <Windows.h>
+#include <Psapi.h>
 
 class YaraHelper {
   public:
-    void initialize();
-    void performScan();
-
-    void addEntry(const std::string& name, std::string pattern, uint64_t *dest);
+    void Initialize();
+    void PerformScan();
+    void AddEntry(std::string const& name, std::string const& pattern, uint64_t* dest);
 
   private:
-    struct entry {
-        entry(std::string name, std::string pattern, uint64_t *dest) : name(name), pattern(pattern), dest(dest) {}
-
-        entry() {}
-
-        std::string name;
+    struct Entry {
         std::string pattern;
-        uint64_t *dest;
+        uint64_t* dest;
     };
 
-    std::map<std::string, entry> entries;
-
-    HMODULE moduleHandle;
-    MODULEINFO moduleInfo;
+    std::map<std::string, Entry> entries_{};
+    HMODULE module_handle_{nullptr};
+    MODULEINFO module_info_{};
 };

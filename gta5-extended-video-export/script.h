@@ -29,7 +29,7 @@ template <class B, class A> B ForceCast(A a) {
 namespace eve {
 void initialize();
 void ScriptMain();
-void OnPresent(IDXGISwapChain* swapChain);
+void OnPresent(IDXGISwapChain* p_swap_chain);
 void finalize();
 static void prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext);
 static ComPtr<ID3D11Texture2D> divideBuffer(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext,

@@ -47,6 +47,26 @@ DEFINE_NAMED_IMPORT_HOOK("mfreadwrite.dll", MFCreateSinkWriterFromURL, HRESULT, 
                          IMFAttributes* p_attributes,                           //
                          IMFSinkWriter** pp_sink_writer);                       //
 
+DEFINE_NAMED_EXPORT_HOOK("d3d11.dll", D3D11CreateDeviceAndSwapChain, HRESULT, //
+                         IDXGIAdapter* p_adapter,                             //
+                         D3D_DRIVER_TYPE driver_type,                         //
+                         HMODULE software,                                    //
+                         UINT flags,                                          //
+                         const D3D_FEATURE_LEVEL* p_feature_levels,           //
+                         UINT feature_levels,                                 //
+                         UINT sdk_version,                                    //
+                         const DXGI_SWAP_CHAIN_DESC* p_swap_chain_desc,       //
+                         IDXGISwapChain** pp_swap_chain,                      //
+                         ID3D11Device** pp_device,                            //
+                         D3D_FEATURE_LEVEL* p_feature_level,                  //
+                         ID3D11DeviceContext** pp_immediate_context);         //
+
+DEFINE_NAMED_IMPORT_HOOK("kernel32.dll", LoadLibraryW, HMODULE, //
+                         LPCWSTR lp_lib_file_name);             //
+
+DEFINE_NAMED_IMPORT_HOOK("kernel32.dll", LoadLibraryA, HMODULE, //
+                         LPCSTR lp_lib_file_name);              //
+
 DEFINE_X64_HOOK(GetRenderTimeBase, float, //
                 int64_t choice);          //
 
