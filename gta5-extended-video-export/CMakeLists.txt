@@ -200,6 +200,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/shaders"
 find_library(SCRIPT_HOOK_V_LIBRARY ScriptHookV REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../ScriptHookV/lib")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${SCRIPT_HOOK_V_LIBRARY})
 
+# reshade
+find_path(RESHADE_INCLUDE_DIR reshade.hpp REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../reshade/include")
+target_include_directories(${PROJECT_NAME} PRIVATE ${RESHADE_INCLUDE_DIR})
+
 # inih
 find_path(INIH_INCLUDE_DIR ini.h REQUIRED)
 find_library(INIH_LIBRARY inih REQUIRED)
@@ -219,3 +223,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE OpenEXR::OpenEXR)
 # Voukoder
 find_path(VOUKODER_INCLUDE_DIR VoukoderTypeLib_h.h REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../voukoder")
 target_include_directories(${PROJECT_NAME} PRIVATE ${VOUKODER_INCLUDE_DIR})
+
+# DirectXTex
+find_package(directxtex CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectXTex)

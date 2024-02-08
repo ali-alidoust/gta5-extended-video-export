@@ -1,10 +1,13 @@
 // script.cpp : Defines the exported functions for the DLL application.
-//
+
+#pragma comment(lib, "d3d11.lib")
+
 #include "script.h"
 #include "MFUtility.h"
 #include "encoder.h"
 #include "hookdefs.h"
 #include "logger.h"
+#include "reshade.hpp"
 #include "stdafx.h"
 #include "util.h"
 #include "yara-helper.h"
@@ -95,90 +98,149 @@ std::unique_ptr<YaraHelper> pYaraHelper;
 
 } // namespace
 
-void eve::OnPresent(IDXGISwapChain* p_swap_chain) {
-
-    // For some unknown reason, we need this lock to prevent black exports
-    std::lock_guard onPresentLock(mxOnPresent);
-    mainSwapChain = p_swap_chain;
-    static bool initialized = false;
-    if (!initialized) {
-        initialized = true;
-        try {
-            ComPtr<ID3D11Device> pDevice;
-            ComPtr<ID3D11DeviceContext> pDeviceContext;
-            ComPtr<ID3D11Texture2D> texture;
-            DXGI_SWAP_CHAIN_DESC desc;
-
-            REQUIRE(p_swap_chain->GetDesc(&desc), "Failed to get swap chain descriptor");
-
-            LOG(LL_NFO, "BUFFER COUNT: ", desc.BufferCount);
-            // REQUIRE(
-            //     p_swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D),
-            //     reinterpret_cast<void**>(texture.GetAddressOf())), "Failed to get the texture buffer");
-            // REQUIRE(p_swap_chain->GetDevice(__uuidof(ID3D11Device),
-            // reinterpret_cast<void**>(pDevice.GetAddressOf())),
-            //         "Failed to get the D3D11 device");
-            // pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
-            // NOT_NULL(pDeviceContext.Get(), "Failed to get D3D11 device context");
-
-            // PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, Draw, pDeviceContext.Get());
-            // PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, DrawIndexed, pDeviceContext.Get());
-            // PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, OMSetRenderTargets, pDeviceContext.Get());
-
-        } catch (std::exception& ex) {
-            LOG(LL_ERR, ex.what());
-        }
+void eve::OnInitDevice(reshade::api::device* device) {
+    static bool deferredContextPrepared = false;
+    if (!deferredContextPrepared) {
+        eve::PrepareDeferredContext(reinterpret_cast<ID3D11Device*>(device->get_native()));
+        deferredContextPrepared = true;
     }
 }
 
-HRESULT ExportHooks::D3D11CreateDeviceAndSwapChain::Implementation(
-    IDXGIAdapter* p_adapter, D3D_DRIVER_TYPE driver_type, HMODULE software, UINT flags,
-    const D3D_FEATURE_LEVEL* p_feature_levels, UINT feature_levels, UINT sdk_version,
-    const DXGI_SWAP_CHAIN_DESC* p_swap_chain_desc, IDXGISwapChain** pp_swap_chain, ID3D11Device** pp_device,
-    D3D_FEATURE_LEVEL* p_feature_level, ID3D11DeviceContext** pp_immediate_context) {
-    PRE();
-    const HRESULT result =
-        OriginalFunc(p_adapter, driver_type, software, flags, p_feature_levels, feature_levels, sdk_version,
-                     p_swap_chain_desc, pp_swap_chain, pp_device, p_feature_level, pp_immediate_context);
-    if (SUCCEEDED(result) && pp_swap_chain) {
-        try {
-            PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, *pp_swap_chain);
-            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, Draw, *pp_immediate_context);
-            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, DrawIndexed, *pp_immediate_context);
-            PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, OMSetRenderTargets, *pp_immediate_context);
-
-            ComPtr<IDXGIDevice> pDXGIDevice;
-            REQUIRE((*pp_device)->QueryInterface(pDXGIDevice.GetAddressOf()),
-                    "Failed to get IDXGIDevice from ID3D11Device");
-
-            ComPtr<IDXGIAdapter> pDXGIAdapter;
-            REQUIRE(
-                pDXGIDevice->GetParent(__uuidof(IDXGIAdapter), reinterpret_cast<void**>(pDXGIAdapter.GetAddressOf())),
-                "Failed to get IDXGIAdapter");
-            REQUIRE(
-                pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(pDxgiFactory.GetAddressOf())),
-                "Failed to get IDXGIFactory");
-
-            eve::prepareDeferredContext(*pp_device, *pp_immediate_context);
-        } catch (...) {
-            LOG(LL_ERR, "Hooking IDXGISwapChain functions failed");
-        }
-    }
-    POST();
-    return result;
-}
-
-HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
+void eve::OnInitSwapChain(reshade::api::swapchain* swapchain) {
     if (!mainSwapChain) {
-        if (Flags & DXGI_PRESENT_TEST) {
-            LOG(LL_TRC, "DXGI_PRESENT_TEST!");
-        } else {
-            eve::OnPresent(pThis);
-        }
+        std::lock_guard onPresentLock(mxOnPresent);
+        mainSwapChain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
     }
-
-    return OriginalFunc(pThis, SyncInterval, Flags);
 }
+
+void eve::OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain,
+                    const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect,
+                    uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+    // if (!mainSwapChain) {
+    //     std::lock_guard onPresentLock(mxOnPresent);
+    //     mainSwapChain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+    // }
+}
+
+// HRESULT ExportHooks::D3D11CreateDeviceAndSwapChain::Implementation(
+//     IDXGIAdapter* p_adapter, D3D_DRIVER_TYPE driver_type, HMODULE software, UINT flags,
+//     const D3D_FEATURE_LEVEL* p_feature_levels, UINT feature_levels, UINT sdk_version,
+//     const DXGI_SWAP_CHAIN_DESC* p_swap_chain_desc, IDXGISwapChain** pp_swap_chain, ID3D11Device** pp_device,
+//     D3D_FEATURE_LEVEL* p_feature_level, ID3D11DeviceContext** pp_immediate_context) {
+//     PRE();
+//     const HRESULT result =
+//         OriginalFunc(p_adapter, driver_type, software, flags, p_feature_levels, feature_levels, sdk_version,
+//                      p_swap_chain_desc, pp_swap_chain, pp_device, p_feature_level, pp_immediate_context);
+//     // if (SUCCEEDED(result) && pp_swap_chain && *pp_swap_chain) {
+//     //     try {
+//     //         // mainSwapChain = *pp_swap_chain;
+//     //         PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, *pp_swap_chain);
+//     //         PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, Draw, *pp_immediate_context);
+//     //         PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, DrawIndexed, *pp_immediate_context);
+//     //         PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, OMSetRenderTargets, *pp_immediate_context);
+//     //     } catch (...) {
+//     //         LOG(LL_ERR, "Hooking IDXGISwapChain functions failed");
+//     //     }
+//     // }
+//     POST();
+//     return result;
+// }
+
+// HRESULT IDXGISwapChainHooks::Present::Implementation(IDXGISwapChain* pThis, UINT SyncInterval, UINT Flags) {
+//
+//     ID3D11Device* pDevice;
+//     pThis->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&pDevice));
+//
+//     ComPtr<ID3D11DeviceContext> pDeviceContext;
+//     pDevice->GetImmediateContext(pDeviceContext.GetAddressOf());
+//
+//     PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, Draw, pDeviceContext.Get());
+//     PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, DrawIndexed, pDeviceContext.Get());
+//     PERFORM_MEMBER_HOOK_REQUIRED(ID3D11DeviceContext, OMSetRenderTargets, pDeviceContext.Get());
+//
+//     return OriginalFunc(pThis, SyncInterval, Flags);
+// }
+
+// void PerformD3D11Hooks() {
+//     WNDCLASSEX windowClass;
+//     windowClass.cbSize = sizeof(WNDCLASSEX);
+//     windowClass.style = CS_HREDRAW | CS_VREDRAW;
+//     windowClass.lpfnWndProc = DefWindowProc;
+//     windowClass.cbClsExtra = 0;
+//     windowClass.cbWndExtra = 0;
+//     windowClass.hInstance = GetModuleHandle(NULL);
+//     windowClass.hIcon = NULL;
+//     windowClass.hCursor = NULL;
+//     windowClass.hbrBackground = NULL;
+//     windowClass.lpszMenuName = NULL;
+//     windowClass.lpszClassName = "EVE";
+//     windowClass.hIconSm = NULL;
+//
+//     ::RegisterClassEx(&windowClass);
+//
+//     HWND window = ::CreateWindow(windowClass.lpszClassName, "EVE Hook Window", WS_OVERLAPPED, 0, 0, 100, 100, NULL,
+//                                  NULL, windowClass.hInstance, NULL);
+//
+//     NOT_NULL(window, "Failed to create window");
+//
+//     // Create D3D11 Device and SwapChain
+//     D3D_FEATURE_LEVEL featureLevel;
+//     const D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0};
+//
+//     DXGI_RATIONAL refreshRate;
+//     refreshRate.Numerator = 60;
+//     refreshRate.Denominator = 1;
+//
+//     DXGI_MODE_DESC bufferDesc;
+//     bufferDesc.Width = 100;
+//     bufferDesc.Height = 100;
+//     bufferDesc.RefreshRate = refreshRate;
+//     bufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+//     bufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+//     bufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+//
+//     DXGI_SAMPLE_DESC sampleDesc;
+//     sampleDesc.Count = 1;
+//     sampleDesc.Quality = 0;
+//
+//     DXGI_SWAP_CHAIN_DESC swapChainDesc;
+//     swapChainDesc.BufferDesc = bufferDesc;
+//     swapChainDesc.SampleDesc = sampleDesc;
+//     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+//     swapChainDesc.BufferCount = 1;
+//     swapChainDesc.OutputWindow = window;
+//     swapChainDesc.Windowed = 1;
+//     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+//     swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+//
+//     ComPtr<IDXGISwapChain> pSwapChain;
+//     ComPtr<ID3D11Device> pDevice;
+//     ComPtr<ID3D11DeviceContext> pDeviceContext;
+//
+//     REQUIRE(D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels,
+//                                           ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, &swapChainDesc,
+//                                           pSwapChain.GetAddressOf(), pDevice.GetAddressOf(), &featureLevel,
+//                                           pDeviceContext.GetAddressOf()),
+//             "Failed to create D3D11 Device and SwapChain");
+//
+//     LOG(LL_NFO, "D3D11 Device and SwapChain created");
+//
+//     if (pSwapChain && pDeviceContext) {
+//         try {
+//             PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, pSwapChain.Get());
+//         } catch (...) {
+//             LOG(LL_ERR, "Hooking IDXGISwapChain functions failed");
+//         }
+//     }
+//
+//     pSwapChain = nullptr;
+//     pDeviceContext = nullptr;
+//     pDevice = nullptr;
+//
+//     DestroyWindow(window);
+// }
+
+// void eve::PresentCallback(void* p_swap_chain) {}
 
 void eve::initialize() {
     PRE();
@@ -188,9 +250,6 @@ void eve::initialize() {
 
         LOG(LL_NFO, "Initializing Media Foundation hook");
         PERFORM_NAMED_IMPORT_HOOK_REQUIRED("mfreadwrite.dll", MFCreateSinkWriterFromURL);
-        LOG(LL_NFO, "Initializing LoadLibrary hook");
-        PERFORM_NAMED_IMPORT_HOOK_REQUIRED("kernel32.dll", LoadLibraryA);
-        PERFORM_NAMED_IMPORT_HOOK_REQUIRED("kernel32.dll", LoadLibraryW);
 
         pYaraHelper.reset(new YaraHelper());
         pYaraHelper->Initialize();
@@ -246,62 +305,22 @@ void eve::ScriptMain() {
     }
 }
 
-HMODULE ImportHooks::LoadLibraryW::Implementation(LPCWSTR lp_lib_file_name) {
-    PRE();
-    const HMODULE result = OriginalFunc(lp_lib_file_name);
+void eve::OnBindRenderTargets(reshade::api::command_list* cmd_list, uint32_t count,
+                              const reshade::api::resource_view* render_targets,
+                              reshade::api::resource_view depth_stencil) {
 
-    // Create std::wstring from lp_lib_file_name and convert it to lowercase
-    std::wstring libFileName(lp_lib_file_name);
-    std::ranges::transform(libFileName, libFileName.begin(), std::towlower);
-
-    if (result != nullptr) {
-        try {
-            if (std::wstring(L"d3d11.dll") == libFileName) {
-                PERFORM_NAMED_EXPORT_HOOK_REQUIRED(L"d3d11.dll", D3D11CreateDeviceAndSwapChain);
-            }
-        } catch (...) {
-            LOG(LL_ERR, "Hooking functions failed");
-        }
-    }
-    POST();
-    return result;
-}
-
-HMODULE ImportHooks::LoadLibraryA::Implementation(LPCSTR lp_lib_file_name) {
-    PRE();
-    const HMODULE result = OriginalFunc(lp_lib_file_name);
-
-    if (result != nullptr) {
-        try {
-            // Compare lp_lib_file_name with "d3d11.dll" (case insensitive)
-            std::string libFileName(lp_lib_file_name);
-            std::ranges::transform(libFileName, libFileName.begin(), [](const char c) { return std::tolower(c); });
-
-            if (std::string("d3d11.dll") == libFileName) {
-                PERFORM_NAMED_EXPORT_HOOK_REQUIRED(L"d3d11.dll", D3D11CreateDeviceAndSwapChain);
-            }
-        } catch (...) {
-            LOG(LL_ERR, "Hooking functions failed");
-        }
-    }
-    POST();
-    return result;
-}
-
-void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceContext* p_this, UINT num_views,
-                                                                  ID3D11RenderTargetView* const* pp_render_target_views,
-                                                                  ID3D11DepthStencilView* p_depth_stencil_view) {
-    PRE();
+    // PRE();
     if (::exportContext) {
-        for (uint32_t i = 0; i < num_views; i++) {
-            if (pp_render_target_views[i]) {
+        for (uint32_t i = 0; i < count; i++) {
+            if (render_targets[i].handle) {
                 ComPtr<ID3D11Resource> pResource;
                 ComPtr<ID3D11Texture2D> pTexture2D;
-                pp_render_target_views[i]->GetResource(pResource.GetAddressOf());
+                reinterpret_cast<ID3D11RenderTargetView*>(render_targets[i].handle)
+                    ->GetResource(pResource.GetAddressOf());
                 if (SUCCEEDED(pResource.As(&pTexture2D))) {
                     if (pTexture2D.Get() == pGameDepthBufferQuarterLinear.Get()) {
-                        LOG(LL_DBG, " i:", i, " num:", num_views, " dsv:", static_cast<void*>(p_depth_stencil_view));
-                        pCtxLinearizeBuffer = p_this;
+                        LOG(LL_DBG, " i:", i, " num:", count, " dsv:", depth_stencil.handle);
+                        pCtxLinearizeBuffer = reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native());
                     }
                 }
             }
@@ -309,17 +328,17 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
     }
 
     ComPtr<ID3D11Resource> pRTVTexture;
-    if ((pp_render_target_views) && (pp_render_target_views[0])) {
-        LOG_CALL(LL_TRC, pp_render_target_views[0]->GetResource(pRTVTexture.GetAddressOf()));
+    if (render_targets && (render_targets[0].handle)) {
+        reinterpret_cast<ID3D11RenderTargetView*>(render_targets[0].handle)->GetResource(pRTVTexture.GetAddressOf());
     }
 
     if (::exportContext != nullptr && ::exportContext->p_export_render_target != nullptr &&
         (::exportContext->p_export_render_target == pRTVTexture)) {
-
-        // Time to capture rendered frame
+        // LOG(LL_DBG, "Exporting frame");
+        //  Time to capture rendered frame
         try {
             ComPtr<ID3D11Device> pDevice;
-            p_this->GetDevice(pDevice.GetAddressOf());
+            reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->GetDevice(pDevice.GetAddressOf());
 
             ComPtr<ID3D11Texture2D> pDepthBufferCopy = nullptr;
             ComPtr<ID3D11Texture2D> pBackBufferCopy = nullptr;
@@ -338,7 +357,8 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                         REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pDepthBufferCopy.GetAddressOf()),
                                 "Failed to create depth buffer copy texture");
 
-                        p_this->CopyResource(pDepthBufferCopy.Get(), pLinearDepthTexture.Get());
+                        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())
+                            ->CopyResource(pDepthBufferCopy.Get(), pLinearDepthTexture.Get());
                     }
                     {
                         D3D11_TEXTURE2D_DESC desc;
@@ -351,12 +371,15 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                         REQUIRE(pDevice->CreateTexture2D(&desc, NULL, pBackBufferCopy.GetAddressOf()),
                                 "Failed to create back buffer copy texture");
 
-                        p_this->CopyResource(pBackBufferCopy.Get(), pGameBackBufferResolved.Get());
+                        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())
+                            ->CopyResource(pBackBufferCopy.Get(), pGameBackBufferResolved.Get());
                     }
                     {
                         std::lock_guard<std::mutex> sessionLock(mxSession);
                         if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
-                            encodingSession->enqueueEXRImage(p_this, pBackBufferCopy, pDepthBufferCopy);
+                            encodingSession->enqueueEXRImage(
+                                reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native()), pBackBufferCopy,
+                                pDepthBufferCopy);
                         }
                     }
                 });
@@ -381,12 +404,14 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
                     static_cast<float>(config::motion_blur_samples);
 
                 if (current_shutter_position >= (1 - config::motion_blur_strength)) {
-                    eve::drawAdditive(pDevice, p_this, pSwapChainBuffer);
+                    eve::drawAdditive(pDevice, reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native()),
+                                      pSwapChainBuffer);
                 }
             } else {
                 // Trick to use the same buffers for when not using motion blur
                 ::exportContext->acc_count = 0;
-                eve::drawAdditive(pDevice, p_this, pSwapChainBuffer);
+                eve::drawAdditive(pDevice, reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native()),
+                                  pSwapChainBuffer);
                 ::exportContext->acc_count = 1;
                 ::exportContext->total_frame_num = 1;
             }
@@ -394,19 +419,34 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
             if ((::exportContext->total_frame_num % (::config::motion_blur_samples + 1)) ==
                 config::motion_blur_samples) {
 
-                const ComPtr<ID3D11Texture2D> result = eve::divideBuffer(pDevice, p_this, ::exportContext->acc_count);
+                const ComPtr<ID3D11Texture2D> result =
+                    eve::divideBuffer(pDevice, reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native()),
+                                      ::exportContext->acc_count);
                 ::exportContext->acc_count = 0;
+
+                // Save image as dds file
+                // ScratchImage image;
+                // if (SUCCEEDED(CaptureTexture(pDevice.Get(),
+                // reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native()), pSwapChainBuffer.Get(), image))) {
+                //    const std::wstring path = L"C:\\ExtendedVideoExport\\test.dds";
+                //    if (FAILED(SaveToDDSFile(image.GetImages(), image.GetImageCount(), image.GetMetadata(),
+                //                             DDS_FLAGS_NONE, path.c_str()))) {
+                //        LOG(LL_ERR, "Failed to save image to PNG file.");
+                //    }
+                //}
 
                 D3D11_MAPPED_SUBRESOURCE mapped;
 
-                REQUIRE(p_this->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped), "Failed to capture swapbuffer.");
+                REQUIRE(reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())
+                            ->Map(result.Get(), 0, D3D11_MAP_READ, 0, &mapped),
+                        "Failed to capture swapbuffer.");
                 {
                     std::lock_guard sessionLock(mxSession);
                     if ((encodingSession != nullptr) && (encodingSession->isCapturing)) {
                         REQUIRE(encodingSession->enqueueVideoFrame(mapped), "Failed to enqueue frame.");
                     }
                 }
-                p_this->Unmap(result.Get(), 0);
+                reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->Unmap(result.Get(), 0);
             }
             ::exportContext->total_frame_num++;
         } catch (std::exception&) {
@@ -415,9 +455,7 @@ void ID3D11DeviceContextHooks::OMSetRenderTargets::Implementation(ID3D11DeviceCo
             LOG_CALL(LL_DBG, ::exportContext.reset());
         }
     }
-    LOG_CALL(LL_TRC, ID3D11DeviceContextHooks::OMSetRenderTargets::OriginalFunc(
-                         p_this, num_views, pp_render_target_views, p_depth_stencil_view));
-    POST();
+    // POST();
 }
 
 HRESULT ImportHooks::MFCreateSinkWriterFromURL::Implementation(LPCWSTR pwszOutputURL, IMFByteStream* pByteStream,
@@ -447,8 +485,21 @@ HRESULT IMFSinkWriterHooks::AddStream::Implementation(IMFSinkWriter* pThis, IMFM
     return OriginalFunc(pThis, pTargetMediaType, pdwStreamIndex);
 }
 
-void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC const& desc) {
-    D3D11_TEXTURE2D_DESC accBufDesc = desc;
+void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, uint32_t width, uint32_t height) {
+    D3D11_TEXTURE2D_DESC motionBlurBufferDesc;
+    motionBlurBufferDesc.Width = width;
+    motionBlurBufferDesc.Height = height;
+    motionBlurBufferDesc.MipLevels = 1;
+    motionBlurBufferDesc.ArraySize = 1;
+    motionBlurBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    motionBlurBufferDesc.SampleDesc.Count = 1;
+    motionBlurBufferDesc.SampleDesc.Quality = 0;
+    motionBlurBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    motionBlurBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    motionBlurBufferDesc.CPUAccessFlags = 0;
+    motionBlurBufferDesc.MiscFlags = 0;
+
+    D3D11_TEXTURE2D_DESC accBufDesc = motionBlurBufferDesc;
     accBufDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
     accBufDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
     accBufDesc.CPUAccessFlags = 0;
@@ -497,7 +548,7 @@ void CreateMotionBlurBuffers(ComPtr<ID3D11Device> p_device, D3D11_TEXTURE2D_DESC
                                                      pSrvAccBuffer.ReleaseAndGetAddressOf()),
                   "Failed to create blur buffer SRV.");
 
-    D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = desc;
+    D3D11_TEXTURE2D_DESC sourceSRVTextureDesc = motionBlurBufferDesc;
     sourceSRVTextureDesc.CPUAccessFlags = 0;
     sourceSRVTextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     sourceSRVTextureDesc.MiscFlags = 0;
@@ -600,20 +651,7 @@ HRESULT IMFSinkWriterHooks::SetInputMediaType::Implementation(IMFSinkWriter* pTh
                 LOG(LL_DBG, "Video Export Resolution: ", exportWidth, "x", exportHeight);
                 LOG(LL_DBG, "OpenEXR Export Resolution: ", openExrWidth, "x", openExrHeight);
 
-                D3D11_TEXTURE2D_DESC motionBlurBufferDesc;
-                motionBlurBufferDesc.Width = exportWidth;
-                motionBlurBufferDesc.Height = exportHeight;
-                motionBlurBufferDesc.MipLevels = 1;
-                motionBlurBufferDesc.ArraySize = 1;
-                motionBlurBufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-                motionBlurBufferDesc.SampleDesc.Count = 1;
-                motionBlurBufferDesc.SampleDesc.Quality = 0;
-                motionBlurBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-                motionBlurBufferDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-                motionBlurBufferDesc.CPUAccessFlags = 0;
-                motionBlurBufferDesc.MiscFlags = 0;
-
-                CreateMotionBlurBuffers(::exportContext->p_device, motionBlurBufferDesc);
+                CreateMotionBlurBuffers(::exportContext->p_device, exportWidth, exportHeight);
 
                 REQUIRE(encodingSession->createContext(
                             config::encoder_config, std::wstring(filename.begin(), filename.end()), exportWidth,
@@ -689,23 +727,29 @@ void eve::finalize() {
     POST();
 }
 
-void ID3D11DeviceContextHooks::Draw::Implementation(ID3D11DeviceContext* pThis, //
-                                                    UINT VertexCount,           //
-                                                    UINT StartVertexLocation) {
-    OriginalFunc(pThis, VertexCount, StartVertexLocation);
-    if (pCtxLinearizeBuffer == pThis) {
+bool eve::OnDraw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count,
+                 uint32_t first_vertex, uint32_t first_instance) {
+    thread_local bool is_recursive_call = false;
+
+    if (is_recursive_call) {
+        return true;
+    }
+
+    if (pCtxLinearizeBuffer == cmd_list) {
         pCtxLinearizeBuffer = nullptr;
 
         ComPtr<ID3D11Device> pDevice;
-        pThis->GetDevice(pDevice.GetAddressOf());
+        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->GetDevice(pDevice.GetAddressOf());
 
         ComPtr<ID3D11RenderTargetView> pCurrentRTV;
-        LOG_CALL(LL_DBG, pThis->OMGetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
+        LOG_CALL(LL_DBG, reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())
+                             ->OMGetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
         D3D11_RENDER_TARGET_VIEW_DESC rtvDesc;
         pCurrentRTV->GetDesc(&rtvDesc);
         LOG_CALL(LL_DBG, pDevice->CreateRenderTargetView(pLinearDepthTexture.Get(), &rtvDesc,
                                                          pCurrentRTV.ReleaseAndGetAddressOf()));
-        LOG_CALL(LL_DBG, pThis->OMSetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
+        LOG_CALL(LL_DBG, reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())
+                             ->OMSetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
 
         D3D11_TEXTURE2D_DESC ldtDesc;
         pLinearDepthTexture->GetDesc(&ldtDesc);
@@ -717,35 +761,44 @@ void ID3D11DeviceContextHooks::Draw::Implementation(ID3D11DeviceContext* pThis, 
         viewport.TopLeftY = 0;
         viewport.MinDepth = 0;
         viewport.MaxDepth = 1;
-        pThis->RSSetViewports(1, &viewport);
+        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->RSSetViewports(1, &viewport);
         D3D11_RECT rect;
         rect.left = rect.top = 0;
         rect.right = static_cast<LONG>(ldtDesc.Width);
         rect.bottom = static_cast<LONG>(ldtDesc.Height);
-        pThis->RSSetScissorRects(1, &rect);
+        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->RSSetScissorRects(1, &rect);
 
-        LOG_CALL(LL_TRC, OriginalFunc(pThis, VertexCount, StartVertexLocation));
+        is_recursive_call = true;
+        LOG_CALL(LL_TRC, cmd_list->draw(vertex_count, instance_count, first_vertex, first_instance));
+        is_recursive_call = false;
     }
+
+    return true;
 }
 
-void ID3D11DeviceContextHooks::DrawIndexed::Implementation(ID3D11DeviceContext* pThis, //
-                                                           UINT IndexCount,            //
-                                                           UINT StartIndexLocation,    //
-                                                           INT BaseVertexLocation) {
-    OriginalFunc(pThis, IndexCount, StartIndexLocation, BaseVertexLocation);
-    if (pCtxLinearizeBuffer == pThis) {
+bool eve::OnDrawIndexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count,
+                        uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
+    thread_local bool is_recursive_call = false;
+
+    if (is_recursive_call) {
+        return true;
+    }
+
+    if (pCtxLinearizeBuffer == cmd_list) {
         pCtxLinearizeBuffer = nullptr;
 
         ComPtr<ID3D11Device> pDevice;
-        pThis->GetDevice(pDevice.GetAddressOf());
+        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->GetDevice(pDevice.GetAddressOf());
 
         ComPtr<ID3D11RenderTargetView> pCurrentRTV;
-        LOG_CALL(LL_DBG, pThis->OMGetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
+        LOG_CALL(LL_DBG, reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())
+                             ->OMGetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
         D3D11_RENDER_TARGET_VIEW_DESC rtvDesc;
         pCurrentRTV->GetDesc(&rtvDesc);
         LOG_CALL(LL_DBG, pDevice->CreateRenderTargetView(pLinearDepthTexture.Get(), &rtvDesc,
                                                          pCurrentRTV.ReleaseAndGetAddressOf()));
-        LOG_CALL(LL_DBG, pThis->OMSetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
+        LOG_CALL(LL_DBG, reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())
+                             ->OMSetRenderTargets(1, pCurrentRTV.GetAddressOf(), NULL));
 
         D3D11_TEXTURE2D_DESC ldtDesc;
         pLinearDepthTexture->GetDesc(&ldtDesc);
@@ -757,20 +810,30 @@ void ID3D11DeviceContextHooks::DrawIndexed::Implementation(ID3D11DeviceContext* 
         viewport.TopLeftY = 0;
         viewport.MinDepth = 0;
         viewport.MaxDepth = 1;
-        pThis->RSSetViewports(1, &viewport);
+        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->RSSetViewports(1, &viewport);
         D3D11_RECT rect;
         rect.left = rect.top = 0;
         rect.right = static_cast<LONG>(ldtDesc.Width);
         rect.bottom = static_cast<LONG>(ldtDesc.Height);
-        pThis->RSSetScissorRects(1, &rect);
+        reinterpret_cast<ID3D11DeviceContext*>(cmd_list->get_native())->RSSetScissorRects(1, &rect);
 
-        LOG_CALL(LL_TRC, OriginalFunc(pThis, IndexCount, StartIndexLocation, BaseVertexLocation));
+        is_recursive_call = true;
+        LOG_CALL(LL_TRC,
+                 cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance));
+        is_recursive_call = false;
     }
+
+    return true;
 }
 
 HANDLE GameHooks::CreateThread::Implementation(void* pFunc, void* pParams, int32_t r8d, int32_t r9d, void* rsp20,
                                                int32_t rsp28, char* name) {
     PRE();
+    static bool d3dHooked = false;
+    // if (!d3dHooked) {
+    // PerformD3D11Hooks();
+    // d3dHooked = true;
+    //}
     void* result = GameHooks::CreateThread::OriginalFunc(pFunc, pParams, r8d, r9d, rsp20, rsp28, name);
     LOG(LL_TRC, "CreateThread:", " pFunc:", pFunc, " pParams:", pParams, " r8d:", Logger::hex(r8d, 4),
         " r9d:", Logger::hex(r9d, 4), " rsp20:", rsp20, " rsp28:", rsp28, " name:", name ? name : "<NULL>");
@@ -829,58 +892,6 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
         " *r+10:", vresult ? *(vresult + 10) : "<NULL>", " *r+11:", vresult ? *(vresult + 11) : "<NULL>",
         " *r+12:", vresult ? *(vresult + 12) : "<NULL>", " *r+13:", vresult ? *(vresult + 13) : "<NULL>",
         " *r+14:", vresult ? *(vresult + 14) : "<NULL>", " *r+15:", vresult ? *(vresult + 15) : "<NULL>");
-
-    static bool presentHooked = false;
-    if (!presentHooked && pTexture && !mainSwapChain) {
-        // if (auto foregroundWindow = GetForegroundWindow()) {
-        //     ID3D11Device* pTempDevice = nullptr;
-        //     pTexture->GetDevice(&pTempDevice);
-
-        //    IDXGIDevice* pDXGIDevice = nullptr;
-        //    REQUIRE(pTempDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&pDXGIDevice)),
-        //            "Failed to get IDXGIDevice");
-
-        //    IDXGIAdapter* pDXGIAdapter = nullptr;
-        //    REQUIRE(pDXGIDevice->GetAdapter(&pDXGIAdapter), "Failed to get IDXGIAdapter");
-
-        //    IDXGIFactory* pDXGIFactory = nullptr;
-        //    REQUIRE(pDXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&pDXGIFactory)),
-        //            "Failed to get IDXGIFactory");
-
-        //    DXGI_SWAP_CHAIN_DESC tempDesc{0};
-        //    tempDesc.BufferCount = 1;
-        //    tempDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        //    tempDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        //    tempDesc.BufferDesc.Width = 800;
-        //    tempDesc.BufferDesc.Height = 600;
-        //    tempDesc.BufferDesc.RefreshRate = {30, 1};
-        //    tempDesc.OutputWindow = foregroundWindow;
-        //    tempDesc.Windowed = true;
-        //    tempDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-        //    tempDesc.SampleDesc.Count = 1;
-        //    tempDesc.SampleDesc.Quality = 0;
-
-        //    bool windowedSwapChainCreated = false;
-
-        //    ComPtr<IDXGISwapChain> pTempSwapChain;
-        //    TRY([&]() {
-        //        REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc,
-        //        pTempSwapChain.ReleaseAndGetAddressOf()),
-        //                "Failed to create temporary swapchain in windowed mode. Trying in fullscreen mode.");
-        //        windowedSwapChainCreated = true;
-        //    });
-
-        //    if (!windowedSwapChainCreated) {
-        //        tempDesc.Windowed = false;
-        //        REQUIRE(pDXGIFactory->CreateSwapChain(pTempDevice, &tempDesc,
-        //        pTempSwapChain.ReleaseAndGetAddressOf()),
-        //                "Failed to create temporary swapchain");
-        //    }
-
-        // PERFORM_MEMBER_HOOK_REQUIRED(IDXGISwapChain, Present, pTempSwapChain.Get());
-        presentHooked = true;
-        //}
-    }
 
     if (pTexture && name) {
         ComPtr<ID3D11Device> pDevice;
@@ -950,6 +961,7 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
 
                 pExportTexture->GetDevice(::exportContext->p_device.GetAddressOf());
                 ::exportContext->p_device->GetImmediateContext(::exportContext->p_device_context.GetAddressOf());
+
             } catch (std::exception& ex) {
                 LOG(LL_ERR, ex.what());
                 LOG_CALL(LL_DBG, encodingSession.reset());
@@ -961,15 +973,15 @@ void* GameHooks::CreateTexture::Implementation(void* rcx, char* name, const uint
     return result;
 }
 
-void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11DeviceContext> pContext) {
-    REQUIRE(pDevice->CreateDeferredContext(0, pDContext.GetAddressOf()), "Failed to create deferred context");
-    REQUIRE(pDevice->CreateVertexShader(VSFullScreen::g_main, sizeof(VSFullScreen::g_main), NULL,
-                                        pVsFullScreen.GetAddressOf()),
+void eve::PrepareDeferredContext(ID3D11Device* p_device) {
+    REQUIRE(p_device->CreateDeferredContext(0, pDContext.GetAddressOf()), "Failed to create deferred context");
+    REQUIRE(p_device->CreateVertexShader(VSFullScreen::g_main, sizeof(VSFullScreen::g_main), NULL,
+                                         pVsFullScreen.GetAddressOf()),
             "Failed to create g_VSFullScreen vertex shader");
-    REQUIRE(pDevice->CreatePixelShader(PSAccumulate::g_main, sizeof(PSAccumulate::g_main), NULL,
-                                       pPsAccumulate.GetAddressOf()),
+    REQUIRE(p_device->CreatePixelShader(PSAccumulate::g_main, sizeof(PSAccumulate::g_main), NULL,
+                                        pPsAccumulate.GetAddressOf()),
             "Failed to create pixel shader");
-    REQUIRE(pDevice->CreatePixelShader(PSDivide::g_main, sizeof(PSDivide::g_main), NULL, pPsDivide.GetAddressOf()),
+    REQUIRE(p_device->CreatePixelShader(PSDivide::g_main, sizeof(PSDivide::g_main), NULL, pPsDivide.GetAddressOf()),
             "Failed to create pixel shader");
 
     D3D11_BUFFER_DESC clipBufDesc;
@@ -980,7 +992,7 @@ void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11Devi
     clipBufDesc.StructureByteStride = 0;
     clipBufDesc.Usage = D3D11_USAGE::D3D11_USAGE_DYNAMIC;
 
-    REQUIRE(pDevice->CreateBuffer(&clipBufDesc, NULL, pDivideConstantBuffer.GetAddressOf()),
+    REQUIRE(p_device->CreateBuffer(&clipBufDesc, NULL, pDivideConstantBuffer.GetAddressOf()),
             "Failed to create constant buffer for pixel shader");
 
     D3D11_SAMPLER_DESC samplerDesc;
@@ -998,7 +1010,7 @@ void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11Devi
     samplerDesc.MinLOD = -FLT_MAX;
     samplerDesc.MaxLOD = FLT_MAX;
 
-    REQUIRE(pDevice->CreateSamplerState(&samplerDesc, pPsSampler.GetAddressOf()), "Failed to create sampler state");
+    REQUIRE(p_device->CreateSamplerState(&samplerDesc, pPsSampler.GetAddressOf()), "Failed to create sampler state");
 
     D3D11_RASTERIZER_DESC rasterStateDesc;
     rasterStateDesc.AntialiasedLineEnable = FALSE;
@@ -1007,7 +1019,7 @@ void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11Devi
     rasterStateDesc.FillMode = D3D11_FILL_MODE::D3D11_FILL_SOLID;
     rasterStateDesc.MultisampleEnable = FALSE;
     rasterStateDesc.ScissorEnable = FALSE;
-    REQUIRE(pDevice->CreateRasterizerState(&rasterStateDesc, pRasterState.GetAddressOf()),
+    REQUIRE(p_device->CreateRasterizerState(&rasterStateDesc, pRasterState.GetAddressOf()),
             "Failed to create raster state");
 
     D3D11_BLEND_DESC blendDesc;
@@ -1022,7 +1034,7 @@ void eve::prepareDeferredContext(ComPtr<ID3D11Device> pDevice, ComPtr<ID3D11Devi
     blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
-    REQUIRE(pDevice->CreateBlendState(&blendDesc, pAccBlendState.GetAddressOf()),
+    REQUIRE(p_device->CreateBlendState(&blendDesc, pAccBlendState.GetAddressOf()),
             "Failed to create accumulation blend state");
 }
 

@@ -1,8 +1,9 @@
 #include "encoder.h"
 #include "logger.h"
+#include "polyhook2/ErrorLog.hpp"
+#include "reshade.hpp"
 #include "script.h"
 #include "stdafx.h"
-#include "polyhook2/ErrorLog.hpp"
 
 #include <filesystem>
 
@@ -37,13 +38,24 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         if (!config::is_mod_enabled) {
             LOG(LL_NON, "Extended Video Export mod is disabled in the config file. Exiting...");
             return TRUE;
-        } else {
-            LOG(LL_NON, "Extended Video Export mod is enabled. Initializing...");
         }
+
+        LOG(LL_NON, "Extended Video Export mod is enabled. Initializing...");
+
+        if (!reshade::register_addon(hModule)) {
+            LOG(LL_ERR, "Failed to register ReShade addon");
+            return FALSE;
+        }
+
         Logger::instance().level = config::log_level;
         LOG_CALL(LL_DBG, eve::initialize());
         LOG(LL_NFO, "Registering script...");
-        LOG_CALL(LL_DBG, scriptRegister(hModule, eve::ScriptMain));
+        LOG_CALL(LL_NFO, reshade::register_event<reshade::addon_event::init_device>(&eve::OnInitDevice));
+        LOG_CALL(LL_NFO, reshade::register_event<reshade::addon_event::init_swapchain>(&eve::OnInitSwapChain));
+        LOG_CALL(LL_NFO, reshade::register_event<reshade::addon_event::present>(&eve::OnPresent));
+        //LOG_CALL(LL_NFO, reshade::register_event<reshade::addon_event::draw>(&eve::OnDraw));
+        //LOG_CALL(LL_NFO, reshade::register_event<reshade::addon_event::draw_indexed>(&eve::OnDrawIndexed));
+        LOG_CALL(LL_NFO, reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(&eve::OnBindRenderTargets));
         break;
     case DLL_PROCESS_DETACH:
         LOG(LL_NFO, "Unregistering DXGI callback");

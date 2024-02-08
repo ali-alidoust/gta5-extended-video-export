@@ -1,3 +1,6 @@
 [submodule "vcpkg"]
 	path = vcpkg
 	url = https://github.com/microsoft/vcpkg
+[submodule "reshade"]
+	path = reshade
+	url = https://github.com/crosire/reshade.git
